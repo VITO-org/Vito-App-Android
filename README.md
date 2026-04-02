@@ -1,4 +1,6 @@
-# Health Dashboard
+# vito-app-android
+
+Health Dashboard
 
 Aplicacion Android nativa pensada para celulares que lee datos de `Health Connect` y muestra un dashboard simple con:
 
