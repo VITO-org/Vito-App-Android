@@ -1,12 +1,15 @@
 .gradle/
 .idea/
-build/
-local.properties
-
 *.iml
 *.log
-/.idea/
 
+local.properties
+
+build/
 **/build/
 **/.gradle/
 **/local.properties
+
+.cxx/
+captures/
+externalNativeBuild/
