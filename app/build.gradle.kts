@@ -32,4 +32,9 @@ dependencies {
     implementation("androidx.activity:activity-ktx:1.9.0")
     implementation("androidx.health.connect:connect-client:1.1.0-alpha11")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.0")
+    // Supabase (usa la versión más reciente)
+    implementation("io.github.jan-tennert.supabase:postgrest-kt:2.5.0")
+    implementation("io.github.jan-tennert.supabase:gotrue-kt:2.5.0") // Para Auth
+    implementation("io.ktor:ktor-client-android:2.3.11") // Motor de red
+
 }
