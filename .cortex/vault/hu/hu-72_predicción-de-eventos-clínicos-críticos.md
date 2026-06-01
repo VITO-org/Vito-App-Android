@@ -1,7 +1,7 @@
 # HU-72: Predicción de eventos clínicos críticos
 
 **Release:** RELEASE 5
-**Sprint:** Sprint 19 QA+Analisis
+**Sprint:** Sprint 19 QA+Analisis (30 sep - 6 oct)
 **Épica:** Épica 7: Funcionalidades de la IA
 **Desarrolladores:** Emma, Flor Galarza
 

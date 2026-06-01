@@ -1,7 +1,7 @@
 # HU-52: Notificaciones automáticas por WhatsApp
 
 **Release:** RELEASE 3
-**Sprint:** Sprint 12 QA+Analisis
+**Sprint:** Sprint 12 QA+Analisis (12 ago - 18 ago)
 **Épica:** Épica 5: Sistema de Notificaciones
 **Desarrolladores:** Emma
 

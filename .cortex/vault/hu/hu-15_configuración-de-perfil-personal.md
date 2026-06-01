@@ -1,7 +1,7 @@
 # HU-15: Configuración de perfil personal
 
 **Release:** RELEASE 1
-**Sprint:** Sprint 1 QA+Analisis, Sprint 3 Desarrollo
+**Sprint:** Sprint 1 QA+Analisis (26 may - 2 jun), Sprint 3 Desarrollo (10 jun - 16 jun)
 **Épica:** Épica 1: Gestión de Usuarios y Acceso
 **Desarrolladores:** Flor Gonzalez, Cristian, Emma, Flor Galarza
 

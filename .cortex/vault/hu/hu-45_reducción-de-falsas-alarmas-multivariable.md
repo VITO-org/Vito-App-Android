@@ -1,7 +1,7 @@
 # HU-45: Reducción de falsas alarmas multivariable
 
 **Release:** RELEASE 5
-**Sprint:** Sprint 19 QA+Analisis
+**Sprint:** Sprint 19 QA+Analisis (30 sep - 6 oct)
 **Épica:** Épica 4: Sistema de Alertas Inteligentes
 **Desarrolladores:** Flor Galarza, Emma
 

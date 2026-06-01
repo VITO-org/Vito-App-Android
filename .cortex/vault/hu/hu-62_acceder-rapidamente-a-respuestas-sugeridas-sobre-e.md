@@ -1,7 +1,7 @@
 # HU-62: Acceder rapidamente a respuestas sugeridas sobre estado diario
 
 **Release:** RELEASE 4
-**Sprint:** Sprint 16 Desarrollo
+**Sprint:** Sprint 16 Desarrollo (9 sep - 15 sep)
 **Épica:** Épica 6: Inteligencia Artificial Aplicada
 **Desarrolladores:** Flor Gonzalez, Flor Galarza
 

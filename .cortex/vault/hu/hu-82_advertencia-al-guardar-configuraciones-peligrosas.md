@@ -1,7 +1,7 @@
 # HU-82: Advertencia al guardar configuraciones peligrosas
 
 **Release:** RELEASE 3
-**Sprint:** Sprint 12 QA+Analisis
+**Sprint:** Sprint 12 QA+Analisis (12 ago - 18 ago)
 **Épica:** Épica 8: Adaptar Funcionalidades al Perfil Clínico
 **Desarrolladores:** Cristian, Emma
 

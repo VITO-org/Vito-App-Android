@@ -1,7 +1,7 @@
 # HU-14: Registro básico de cuenta
 
 **Release:** RELEASE 1
-**Sprint:** Sprint 1 QA+Analisis, Sprint 2 Desarrollo
+**Sprint:** Sprint 1 QA+Analisis (26 may - 2 jun), Sprint 2 Desarrollo (3 jun - 9 jun)
 **Épica:** Épica 1: Gestión de Usuarios y Acceso
 **Desarrolladores:** Flor Gonzalez, Cristian, Flor Galarza
 

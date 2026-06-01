@@ -1,7 +1,7 @@
 # HU-64: Visualizar reportes automáticos de salud
 
 **Release:** RELEASE 4
-**Sprint:** Sprint 18 Desarrollo
+**Sprint:** Sprint 18 Desarrollo (23 sep - 29 sep)
 **Épica:** Épica 6: Inteligencia Artificial Aplicada
 **Desarrolladores:** Cristian, Flor Galarza
 

@@ -1,7 +1,7 @@
 # HU-65: Realizar check-in emocional diario
 
 **Release:** RELEASE 5
-**Sprint:** Sprint 19 QA+Analisis
+**Sprint:** Sprint 19 QA+Analisis (30 sep - 6 oct)
 **Épica:** Épica 6: Inteligencia Artificial Aplicada
 **Desarrolladores:** Flor Gonzalez, Flor Galarza
 

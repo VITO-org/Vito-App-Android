@@ -1,7 +1,7 @@
 # HU-24: Integración con dispositivos wearables
 
 **Release:** RELEASE 1
-**Sprint:** Sprint 1 QA+Analisis, Sprint 3 Desarrollo
+**Sprint:** Sprint 1 QA+Analisis (26 may - 2 jun), Sprint 3 Desarrollo (10 jun - 16 jun)
 **Épica:** Épica 2: Registro e Integración de Datos
 **Desarrolladores:** Flor Gonzalez, Emma, Cristian, Nico
 

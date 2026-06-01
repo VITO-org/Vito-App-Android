@@ -1,7 +1,7 @@
 # HU-26: Validación y normalización de datos de signos vitales
 
 **Release:** RELEASE 1
-**Sprint:** Sprint 3 Desarrollo
+**Sprint:** Sprint 3 Desarrollo (10 jun - 16 jun)
 **Épica:** Épica 2: Registro e Integración de Datos
 **Desarrolladores:** Nico
 

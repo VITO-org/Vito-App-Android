@@ -1,7 +1,7 @@
 # HU-21: Registro de baseline de salud
 
 **Release:** RELEASE 1
-**Sprint:** Sprint 1 QA+Analisis, Sprint 3 Desarrollo
+**Sprint:** Sprint 1 QA+Analisis (26 may - 2 jun), Sprint 3 Desarrollo (10 jun - 16 jun)
 **Épica:** Épica 2: Registro e Integración de Datos
 **Desarrolladores:** Flor Gonzalez, Cristian, Flor Galarza
 

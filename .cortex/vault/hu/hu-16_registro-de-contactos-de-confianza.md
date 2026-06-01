@@ -1,7 +1,7 @@
 # HU-16: Registro de contactos de confianza
 
 **Release:** RELEASE 3
-**Sprint:** Sprint 12 QA+Analisis
+**Sprint:** Sprint 12 QA+Analisis (12 ago - 18 ago)
 **Épica:** Épica 1: Gestión de Usuarios y Acceso
 **Desarrolladores:** Cristian, Nico
 
