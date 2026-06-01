@@ -131,7 +131,14 @@ vito-app-android/
 │                   ├── HealthDataProvider.kt # Lógica HC pura (sin dep RN)
 │                   └── HealthSummary.kt     # Data class Kotlin ↔ Map bridge
 ├── .gitignore
-└── README.md
+├── README.md
+└── .cortex/
+    └── vault/
+        ├── hu/                          # 38 HUs del backlog (ver Planificación)
+        │   └── INDICE-EPICAS.md         # HUs organizadas por épica y sprint
+        ├── specs/                       # Especificaciones técnicas de cada fase
+        ├── designs/                     # Decisiones de arquitectura (ADRs)
+        └── sessions/                    # Notas de sesiones de trabajo
 ```
 
 ## Prerrequisitos
@@ -305,6 +312,63 @@ Seguí el estilo de commits existente en el repo. Preferí mensajes en español 
 - [ ] Wear OS native module
 - [ ] Autenticación y login
 - [ ] Pantallas de perfil y configuración
+
+## Planificación
+
+### Backlog de producto
+
+Las 38 historias de usuario (HUs) del producto están documentadas en `.cortex/vault/hu/` como archivos markdown individuales. Cada HU incluye: release, sprint, épica, desarrolladores asignados, criterios de aceptación, tareas y Definition of Done.
+
+El archivo [`.cortex/vault/hu/INDICE-EPICAS.md`](.cortex/vault/hu/INDICE-EPICAS.md) contiene la organización completa por épica con fechas y asignaciones.
+
+### Releases
+
+| Release | Épicas | HUs | Sprints |
+|---------|--------|-----|---------|
+| **R1** (may-jun) | Épica 1 (Gestión de Usuarios) + Épica 2 (Registro de Datos) | HU-11 a HU-26 | S1-S4 |
+| **R2** (jun-ago) | Épica 3 (Monitoreo) + Épica 4 (Alertas) + Épica 5 (Notif. push) | HU-31 a HU-51 | S5-S11 |
+| **R3** (ago) | Épica 5 (Notif. WhatsApp) + Épica 8 (Perfil Clínico) + Épica 1 (Contactos) | HU-16,52,54,81,82 | S12 |
+| **R4** (sep) | Épica 6 (IA) + Épica 3 (Reportes/Sugerencias) + Épica 1 (Google/Pass) | HU-12,13,33,34,61-64 | S16-S18 |
+| **R5** (sep-oct) | Épica 4 (Alertas avanzadas) + Épica 6 (Check-in/Voz) + Épica 7 (IA Predictiva) | HU-35,44,45,53,65,66,71,72 | S19 |
+
+### Épicas vs Sprints (timeline)
+
+```
+S1  (26 may - 2 jun)   QA+Analisis
+S2  (3 jun - 9 jun)    Desarrollo     → HU-11, HU-14
+S3  (10 jun - 16 jun)  Desarrollo     → HU-15, HU-21, HU-22, HU-23, HU-24, HU-25, HU-26
+S4  (17 jun - 23 jun)  QA+Estabilizacion
+S5  (24 jun - 30 jun)  Desarrollo     → HU-31, HU-32, HU-36, HU-41, HU-42, HU-43
+S6  (1 jul - 7 jul)    Desarrollo
+S7  (8 jul - 14 jul)   Desarrollo
+S8  (15 jul - 21 jul)  Desarrollo
+S9  (22 jul - 28 jul)  Desarrollo
+S10 (29 jul - 4 ago)   Desarrollo     → HU-51
+S11 (5 ago - 10 ago)   QA+Estabilizacion → HU-37
+S12 (12 ago - 18 ago)  QA+Analisis    → HU-16, HU-52, HU-54, HU-81, HU-82
+S13 (19 ago - 25 ago)  Desarrollo
+S14 (26 ago - 1 sep)   QA+Estabilizacion
+S15 (2 sep - 8 sep)    QA+Analisis
+S16 (9 sep - 15 sep)   Desarrollo     → HU-61, HU-62
+S17 (16 sep - 22 sep)  Desarrollo     → HU-34, HU-63
+S18 (23 sep - 29 sep)  Desarrollo     → HU-12, HU-13, HU-33, HU-64
+S19 (30 sep - 6 oct)   QA+Analisis    → HU-35, HU-44, HU-45, HU-53, HU-65, HU-66, HU-71, HU-72
+S20 (7 oct - 13 oct)   Desarrollo
+S21 (14 oct - 20 oct)  Desarrollo
+S22 (21 oct - 27 oct)  Desarrollo
+S23 (28 oct - 3 nov)   Desarrollo
+S24 (4 nov - 10 nov)   QA+Estabilizacion
+```
+
+### Equipo y asignaciones
+
+| Desarrollador | HUs asignadas |
+|--------------|---------------|
+| **Flor Gonzalez** | 18 HUs: HU-11,14,15,21,22,24,31,36,37,54,62,63,65,66,81,12,33,34 |
+| **Emma** | 22 HUs: HU-11,15,22,24,31,32,37,41,42,44,45,51,52,53,61,63,71,72,82,34,35,64 |
+| **Cristian** | 13 HUs: HU-11,13,14,15,16,21,23,24,32,61,64,81,82 |
+| **Flor Galarza** | 18 HUs: HU-13,14,15,21,23,41,42,43,44,45,53,54,62,64,65,66,71,72 |
+| **Nico** | 7 HUs: HU-16,24,25,26,33,43,81 |
 
 ## Recursos
 
