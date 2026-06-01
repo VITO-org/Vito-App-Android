@@ -1,5 +1,7 @@
 # HU-21: Registro de baseline de salud
 
+> **Estado:** 🔴 No iniciada — Infraestructura base disponible (Health Connect SDK + theme RN) pero sin pantalla de onboarding ni formulario de baseline.
+
 **Release:** RELEASE 1
 **Sprint:** Sprint 1 QA+Analisis (26 may - 2 jun), Sprint 3 Desarrollo (10 jun - 16 jun)
 **Épica:** Épica 2: Registro e Integración de Datos
@@ -33,14 +35,20 @@ Registro de baseline de salud
 ## Acceptance Criteria
 
 - [ ] CA-01: El usuario puede registrar: peso, altura, presión arterial, frecuencia cardíaca, temperatura y oxigenación.
+  - *Health Connect SDK expone WeightRecord y HeightRecord, pero falta implementar su lectura en HealthDataProvider y la UI de onboarding.*
 - [ ] CA-02: El sistema valida rangos fisiológicos plausibles para cada campo.
+  - *Pendiente: crear validador de rangos en TypeScript.*
 - [ ] CA-03: Los datos quedan asociados al perfil clínico del usuario.
+  - *Pendiente: requiere Supabase o almacenamiento local persistente.*
 
 ## Tasks
 
 - [ ] Diseñar una pantalla de baseline.
+  - *Pendiente: crear componente OnboardingBaseline.tsx con formulario.*
 - [ ] Implementar validaciones fisiológicas.
+  - *Pendiente: crear src/utils/physiologicalValidation.ts.*
 - [ ] Persistir datos clínicos iniciales.
+  - *Pendiente: definir si va a Supabase o AsyncStorage.*
 
 ## Definition of Done
 

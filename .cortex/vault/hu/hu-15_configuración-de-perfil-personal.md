@@ -1,5 +1,7 @@
 # HU-15: Configuración de perfil personal
 
+> **Estado:** 🔴 No iniciada — Depende de HU-14 (Registro). Requiere Supabase para persistencia. Tema RN disponible (colors.ts, spacing.ts).
+
 **Release:** RELEASE 1
 **Sprint:** Sprint 1 QA+Analisis (26 may - 2 jun), Sprint 3 Desarrollo (10 jun - 16 jun)
 **Épica:** Épica 1: Gestión de Usuarios y Acceso

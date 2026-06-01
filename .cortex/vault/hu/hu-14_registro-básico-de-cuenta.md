@@ -1,5 +1,7 @@
 # HU-14: Registro básico de cuenta
 
+> **Estado:** 🔴 No iniciada — Depende de HU-11 (Login). Requiere Supabase para backend de auth. Proyecto RN listo para agregar pantalla de registro.
+
 **Release:** RELEASE 1
 **Sprint:** Sprint 1 QA+Analisis (26 may - 2 jun), Sprint 2 Desarrollo (3 jun - 9 jun)
 **Épica:** Épica 1: Gestión de Usuarios y Acceso

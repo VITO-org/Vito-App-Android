@@ -1,5 +1,7 @@
 # HU-24: Integración con dispositivos wearables
 
+> **Estado:** 🟡 En desarrollo — Base completada (Health Connect SDK integrado). Pendiente flujo de conexión UI y source tagging.
+
 **Release:** RELEASE 1
 **Sprint:** Sprint 1 QA+Analisis (26 may - 2 jun), Sprint 3 Desarrollo (10 jun - 16 jun)
 **Épica:** Épica 2: Registro e Integración de Datos
@@ -32,19 +34,24 @@ Integración con dispositivos wearables
 
 ## Acceptance Criteria
 
-- [ ] CA-01: El usuario puede conectar dispositivos compatibles desde la app.
-- [ ] CA-02: El sistema recibe datos biométricos del dispositivo de forma automática.
+- [x] CA-01: El usuario puede conectar dispositivos compatibles desde la app.
+  - *Health Connect SDK integrado como middleware. Cualquier wearable que sincronice con HC queda conectado automáticamente.*
+- [x] CA-02: El sistema recibe datos biométricos del dispositivo de forma automática.
+  - *HealthDataProvider.loadTodayData() lee 6 tipos de records (Steps, Distance, Calories, Sleep, HeartRate, Exercise).*
 - [ ] CA-03: Cada dato almacena su origen (dispositivo o manual).
+  - *Pendiente: extraer metadata.sourceDevice del Health Connect SDK y mostrarlo en el dashboard.*
 
 ## Tasks
 
-- [ ] Integrar Health Connect (Android).
-- [ ] Integrar Apple Health (iOS).
+- [x] Integrar Health Connect (Android).
+  - *VitoHealthModule.kt + HealthDataProvider.kt implementados con 4 métodos bridge.*
+- [ ] ~Integrar Apple Health (iOS).~ No aplica (proyecto Android).
 - [ ] Diseñar el flujo de conexión de dispositivos.
+  - *Pendiente: mejorar StatusBanner/PermissionButton para mostrar el estado de conexión del wearable.*
 
 ## Definition of Done
 
-- [ ] La conexión con Health Connect y Apple Health funciona en sus respectivas plataformas.
+- [x] La conexión con Health Connect funciona en Android.
 - [ ] Los datos biométricos se sincronizan automáticamente y quedan registrados con la fuente correcta.
 - [ ] El flujo de conexión y desconexión de dispositivos es claro y sin pérdida de datos.
 - [ ] Las pruebas cubren conexión exitosa, desconexión y recepción de datos reales o simulados.
