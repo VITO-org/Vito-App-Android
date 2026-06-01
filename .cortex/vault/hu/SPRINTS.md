@@ -1,6 +1,7 @@
 # Organización por Sprints — Vito App
 
 > **Estado global:** 🟡 2.5% completado (1/54 ítems DONE, parcial: HU-24, HU-31)
+> **Hoy:** 31/05/2026 — Sprint 1 en curso (finaliza 2 jun)
 > 54 asignaciones distribuidas en 24 sprints (26 may 2026 → 10 nov 2026)
 
 ### Leyenda de estados
@@ -14,7 +15,7 @@
 
 ---
 
-## 📅 Sprint 1 — QA+Analisis (26 may - 2 jun) ← Finaliza hoy
+## 📅 Sprint 1 — QA+Analisis (26 may - 2 jun) ← En curso (faltan 2 días)
 
 | Estado | HU | Título | Épica | Dev(s) |
 |--------|----|--------|-------|--------|
@@ -27,12 +28,19 @@
 
 ---
 
-## 📅 Sprint 2 — Desarrollo (3 jun - 9 jun) ← Mañana arranca
+## 📅 Sprint 2 — Desarrollo (3 jun - 9 jun) ← Arranca en 3 días
 
 | Estado | HU | Título | Épica | Dev(s) |
 |--------|----|--------|-------|--------|
 | ⚪ | HU-11 | Inicio de sesión (mail) | Épica 1: Gestión de Usuarios | Flor G., Emma, Cristian |
 | ⚪ | HU-14 | Registro básico de cuenta | Épica 1: Gestión de Usuarios | Flor G., Cristian, Flor Ga. |
+
+### 🎯 Foco de S2
+
+| HU | Prioridad | ¿Qué hay que hacer? |
+|----|-----------|---------------------|
+| HU-11 | Alta | Instalar `@supabase/supabase-js`, crear pantalla login, conectar auth con email+pass |
+| HU-14 | Alta | Crear pantalla registro, validar campos, evitar emails duplicados |
 
 ---
 
@@ -319,9 +327,4 @@
 | S23 | Desarrollo | 1 | 1 | 0 |
 | S24 | QA+Estabilizacion | 1 | 1 | 0 |
 
-### 🎯 Próximas a arrancar (Sprint 2 - mañana)
 
-| HU | Estado | ¿Qué falta? |
-|----|--------|-------------|
-| HU-11 | ⚪ TO-DO | Instalar `@supabase/supabase-js`, crear pantalla login, conectar auth |
-| HU-14 | ⚪ TO-DO | Crear pantalla registro, validaciones, integrar con auth de Supabase |
