@@ -1,7 +1,7 @@
 # HU-34: Visualizar sugerencias de Vittito
 
 **Release:** RELEASE 4
-**Sprint:** Sprint 17 Desarrollo (16 sep - 22 sep)
+**Sprint:** Sprint 15 QA+Analisis (2 sep - 8 sep), Sprint 17 Desarrollo (16 sep - 22 sep)
 **Épica:** Épica 3: Monitoreo y Visualización
 **Desarrolladores:** Flor Gonzalez, Emma
 

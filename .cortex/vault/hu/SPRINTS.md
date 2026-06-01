@@ -1,6 +1,6 @@
 # Organización por Sprints — Vito App
 
-> 38 HUs distribuidas en 24 sprints (26 may 2026 → 10 nov 2026)
+> 54 asignaciones distribuidas en 24 sprints (26 may 2026 → 10 nov 2026)
 
 ---
 
@@ -8,11 +8,12 @@
 
 | HU | Título | Épica | Dev(s) |
 |----|--------|-------|--------|
-| HU-11 | Inicio de sesión (mail) | Épica 1: Gestión de Usuarios | Flor G., Emma, Cristian |
+| Setup técnico | Inicialización del proyecto RN + HC native module | — | Flor G., Emma, Cristian, Nico |
 | HU-14 | Registro básico de cuenta | Épica 1: Gestión de Usuarios | Flor G., Cristian, Flor Ga. |
+| HU-11 | Inicio de sesión (mail) | Épica 1: Gestión de Usuarios | Flor G., Emma, Cristian |
 | HU-15 | Configuración de perfil personal | Épica 1: Gestión de Usuarios | Flor G., Cristian, Emma, Flor Ga. |
-| HU-21 | Registro de baseline de salud | Épica 2: Registro de Datos | Flor G., Cristian, Flor Ga. |
-| HU-24 | Integración con wearables | Épica 2: Registro de Datos | Flor G., Emma, Cristian, Nico |
+| HU-21 | Registro de baseline clínico inicial | Épica 2: Registro de Datos | Flor G., Cristian, Flor Ga. |
+| HU-24 | Integración con dispositivos wearables | Épica 2: Registro de Datos | Flor G., Emma, Cristian, Nico |
 
 ---
 
@@ -30,18 +31,19 @@
 | HU | Título | Épica | Dev(s) |
 |----|--------|-------|--------|
 | HU-15 | Configuración de perfil personal | Épica 1: Gestión de Usuarios | Flor G., Cristian, Emma, Flor Ga. |
-| HU-21 | Registro de baseline de salud | Épica 2: Registro de Datos | Flor G., Cristian, Flor Ga. |
-| HU-24 | Integración con wearables | Épica 2: Registro de Datos | Flor G., Emma, Cristian, Nico |
-| HU-22 | Registro manual de signos vitales | Épica 2: Registro de Datos | Flor G., Emma |
-| HU-23 | Registro de síntomas | Épica 2: Registro de Datos | Cristian, Flor Ga. |
-| HU-25 | Sincronización de datos de salud | Épica 2: Registro de Datos | Nico |
-| HU-26 | Validación / normalización de datos | Épica 2: Registro de Datos | Nico |
+| HU-21 | Registro de baseline clínico inicial | Épica 2: Registro de Datos | Flor G., Cristian, Flor Ga. |
+| HU-24 | Integración con dispositivos wearables | Épica 2: Registro de Datos | Flor G., Emma, Cristian, Nico |
 
 ---
 
 ## 📅 Sprint 4 — QA+Estabilizacion (17 jun - 23 jun)
 
-_Sin HUs asignadas_
+| HU | Título | Épica | Dev(s) |
+|----|--------|-------|--------|
+| HU-22 | Registro manual de signos vitales | Épica 2: Registro de Datos | Flor G., Emma |
+| HU-23 | Registro de síntomas | Épica 2: Registro de Datos | Cristian, Flor Ga. |
+| HU-25 | Sincronización de datos de salud | Épica 2: Registro de Datos | Nico |
+| HU-26 | Validación / normalización de datos | Épica 2: Registro de Datos | Nico |
 
 ---
 
@@ -60,19 +62,36 @@ _Sin HUs asignadas_
 
 ## 📅 Sprint 6 — Desarrollo (1 jul - 7 jul)
 
-_Sin HUs asignadas_
+| HU | Título | Épica | Dev(s) |
+|----|--------|-------|--------|
+| HU-31 | Dashboard de signos vitales | Épica 3: Monitoreo | Flor G., Emma |
+| HU-36 | **Menú de navegación principal** ✨ | Épica 3: Monitoreo | **Flor G.** |
+
+---
 
 ## 📅 Sprint 7 — Desarrollo (8 jul - 14 jul)
 
-_Sin HUs asignadas_
+| HU | Título | Épica | Dev(s) |
+|----|--------|-------|--------|
+| HU-32 | Reportes diario/semanal/mensual | Épica 3: Monitoreo | Cristian, Emma |
+| HU-41 | Alerta por hipoxia | Épica 4: Alertas Inteligentes | Flor Ga., Emma |
+
+---
 
 ## 📅 Sprint 8 — Desarrollo (15 jul - 21 jul)
 
-_Sin HUs asignadas_
+| HU | Título | Épica | Dev(s) |
+|----|--------|-------|--------|
+| HU-42 | Alerta por frecuencia cardíaca | Épica 4: Alertas Inteligentes | Flor Ga., Emma |
+| HU-43 | Alerta por presión arterial | Épica 4: Alertas Inteligentes | Flor Ga., Nico |
+
+---
 
 ## 📅 Sprint 9 — Desarrollo (22 jul - 28 jul)
 
-_Sin HUs asignadas_
+| HU | Título | Épica | Dev(s) |
+|----|--------|-------|--------|
+| HU-37 | Alertas activas en dashboard | Épica 3: Monitoreo | Flor G., Emma |
 
 ---
 
@@ -88,7 +107,13 @@ _Sin HUs asignadas_
 
 | HU | Título | Épica | Dev(s) |
 |----|--------|-------|--------|
+| HU-31 | Dashboard de signos vitales | Épica 3: Monitoreo | Flor G., Emma |
+| HU-32 | Reportes diario/semanal/mensual | Épica 3: Monitoreo | Cristian, Emma |
 | HU-37 | Alertas activas en dashboard | Épica 3: Monitoreo | Flor G., Emma |
+| HU-41 | Alerta por hipoxia | Épica 4: Alertas Inteligentes | Flor Ga., Emma |
+| HU-42 | Alerta por frecuencia cardíaca | Épica 4: Alertas Inteligentes | Flor Ga., Emma |
+| HU-43 | Alerta por presión arterial | Épica 4: Alertas Inteligentes | Flor Ga., Nico |
+| HU-51 | Notificaciones push | Épica 5: Notificaciones | Emma |
 
 ---
 
@@ -106,15 +131,32 @@ _Sin HUs asignadas_
 
 ## 📅 Sprint 13 — Desarrollo (19 ago - 25 ago)
 
-_Sin HUs asignadas_
+| HU | Título | Épica | Dev(s) |
+|----|--------|-------|--------|
+| HU-16 | Registro de contactos de confianza | Épica 1: Gestión de Usuarios | Cristian, Nico |
+| HU-54 | Admin. contactos y notificaciones | Épica 5: Notificaciones | Flor G., Flor Ga. |
+
+---
 
 ## 📅 Sprint 14 — QA+Estabilizacion (26 ago - 1 sep)
 
-_Sin HUs asignadas_
+| HU | Título | Épica | Dev(s) |
+|----|--------|-------|--------|
+| HU-52 | Notificaciones por WhatsApp | Épica 5: Notificaciones | Emma |
+| HU-81 | Configurar según perfil de salud | Épica 8: Perfil Clínico | Flor G., Nico |
+| HU-82 | Advertencia configuraciones peligrosas | Épica 8: Perfil Clínico | Cristian, Emma |
+
+---
 
 ## 📅 Sprint 15 — QA+Analisis (2 sep - 8 sep)
 
-_Sin HUs asignadas_
+| HU | Título | Épica | Dev(s) |
+|----|--------|-------|--------|
+| HU-34 | Sugerencias de Vittito | Épica 3: Monitoreo | Flor G., Emma |
+| HU-61 | Asistente desde dashboard | Épica 6: IA Aplicada | Cristian, Emma |
+| HU-62 | Respuestas sugeridas | Épica 6: IA Aplicada | Flor G., Flor Ga. |
+| HU-63 | Recomendaciones personalizadas | Épica 6: IA Aplicada | Flor G., Emma |
+| HU-64 | Reportes automáticos de salud | Épica 6: IA Aplicada | Cristian, Flor Ga. |
 
 ---
 
@@ -164,23 +206,44 @@ _Sin HUs asignadas_
 
 ## 📅 Sprint 20 — Desarrollo (7 oct - 13 oct)
 
-_Sin HUs asignadas_
+| HU | Título | Épica | Dev(s) |
+|----|--------|-------|--------|
+| HU-35 | Comunicarse con Vittito (micrófono) | Épica 3: Monitoreo | Cristian, Emma |
+| HU-65 | Check-in emocional diario | Épica 6: IA Aplicada | Flor G., Flor Ga. |
+| HU-66 | Consultas por voz | Épica 6: IA Aplicada | Flor G., Flor Ga. |
+
+---
 
 ## 📅 Sprint 21 — Desarrollo (14 oct - 20 oct)
 
-_Sin HUs asignadas_
+| HU | Título | Épica | Dev(s) |
+|----|--------|-------|--------|
+| HU-44 | Ajuste automático de umbrales | Épica 4: Alertas Inteligentes | Flor Ga., Emma |
+| HU-71 | Detección de patrones anormales | Épica 7: IA Predictiva | Emma, Flor Ga. |
+
+---
 
 ## 📅 Sprint 22 — Desarrollo (21 oct - 27 oct)
 
-_Sin HUs asignadas_
+| HU | Título | Épica | Dev(s) |
+|----|--------|-------|--------|
+| HU-53 | Notif. por variación de ánimo | Épica 5: Notificaciones | Flor Ga., Emma |
+
+---
 
 ## 📅 Sprint 23 — Desarrollo (28 oct - 3 nov)
 
-_Sin HUs asignadas_
+| HU | Título | Épica | Dev(s) |
+|----|--------|-------|--------|
+| HU-72 | Predicción de eventos críticos | Épica 7: IA Predictiva | Emma, Flor Ga. |
+
+---
 
 ## 📅 Sprint 24 — QA+Estabilizacion (4 nov - 10 nov)
 
-_Sin HUs asignadas_
+| HU | Título | Épica | Dev(s) |
+|----|--------|-------|--------|
+| HU-45 | Reducción de falsas alarmas | Épica 4: Alertas Inteligentes | Flor Ga., Emma |
 
 ---
 
@@ -188,14 +251,27 @@ _Sin HUs asignadas_
 
 | Sprint | Tipo | HUs | Devs involucrados |
 |--------|------|-----|-------------------|
-| S1 | QA+Analisis | 5 | Flor G., Emma, Cristian, Flor Ga., Nico |
+| S1 | QA+Analisis | 5+Setup | Flor G., Emma, Cristian, Flor Ga., Nico |
 | S2 | Desarrollo | 2 | Flor G., Emma, Cristian, Flor Ga. |
-| S3 | Desarrollo | 7 | Flor G., Emma, Cristian, Flor Ga., Nico |
+| S3 | Desarrollo | 3 | Flor G., Cristian, Emma, Flor Ga., Nico |
+| S4 | QA+Estabilizacion | 4 | Flor G., Emma, Cristian, Flor Ga., Nico |
 | S5 | Desarrollo | 6 | Flor G., Emma, Cristian, Flor Ga., Nico |
+| S6 | Desarrollo | 2 | Flor G., Emma |
+| S7 | Desarrollo | 2 | Cristian, Emma, Flor Ga. |
+| S8 | Desarrollo | 2 | Flor Ga., Emma, Nico |
+| S9 | Desarrollo | 1 | Flor G., Emma |
 | S10 | Desarrollo | 1 | Emma |
-| S11 | QA+Estabilizacion | 1 | Flor G., Emma |
+| S11 | QA+Estabilizacion | 7 | Flor G., Emma, Cristian, Flor Ga., Nico |
 | S12 | QA+Analisis | 5 | Cristian, Nico, Emma, Flor G., Flor Ga. |
+| S13 | Desarrollo | 2 | Cristian, Nico, Flor G., Flor Ga. |
+| S14 | QA+Estabilizacion | 3 | Emma, Flor G., Nico, Cristian |
+| S15 | QA+Analisis | 5 | Flor G., Emma, Cristian, Flor Ga. |
 | S16 | Desarrollo | 2 | Cristian, Emma, Flor G., Flor Ga. |
 | S17 | Desarrollo | 2 | Flor G., Emma |
 | S18 | Desarrollo | 4 | Flor G., Cristian, Flor Ga., Nico, Emma |
 | S19 | QA+Analisis | 8 | Cristian, Emma, Flor Ga., Flor G. |
+| S20 | Desarrollo | 3 | Cristian, Emma, Flor G., Flor Ga. |
+| S21 | Desarrollo | 2 | Flor Ga., Emma |
+| S22 | Desarrollo | 1 | Flor Ga., Emma |
+| S23 | Desarrollo | 1 | Emma, Flor Ga. |
+| S24 | QA+Estabilizacion | 1 | Flor Ga., Emma |

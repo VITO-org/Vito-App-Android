@@ -1,7 +1,7 @@
 # HU-53: Notificación por variación del estado de ánimo
 
 **Release:** RELEASE 5
-**Sprint:** Sprint 19 QA+Analisis (30 sep - 6 oct)
+**Sprint:** Sprint 19 QA+Analisis (30 sep - 6 oct), Sprint 22 Desarrollo (21 oct - 27 oct)
 **Épica:** Épica 5: Sistema de Notificaciones
 **Desarrolladores:** Flor Galarza, Emma
 

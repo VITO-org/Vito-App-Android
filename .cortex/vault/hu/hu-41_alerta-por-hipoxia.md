@@ -1,7 +1,7 @@
 # HU-41: Alerta por hipoxia
 
 **Release:** RELEASE 2
-**Sprint:** Sprint 5 Desarrollo (24 jun - 30 jun)
+**Sprint:** Sprint 5 Desarrollo (24 jun - 30 jun), Sprint 7 Desarrollo (8 jul - 14 jul), Sprint 11 QA+Estabilizacion (5 ago - 10 ago)
 **Épica:** Épica 4: Sistema de Alertas Inteligentes
 **Desarrolladores:** Flor Galarza, Emma
 

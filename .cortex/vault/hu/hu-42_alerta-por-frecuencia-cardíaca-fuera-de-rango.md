@@ -1,7 +1,7 @@
 # HU-42: Alerta por frecuencia cardíaca fuera de rango
 
 **Release:** RELEASE 2
-**Sprint:** Sprint 5 Desarrollo (24 jun - 30 jun)
+**Sprint:** Sprint 5 Desarrollo (24 jun - 30 jun), Sprint 8 Desarrollo (15 jul - 21 jul), Sprint 11 QA+Estabilizacion (5 ago - 10 ago)
 **Épica:** Épica 4: Sistema de Alertas Inteligentes
 **Desarrolladores:** Flor Galarza, Emma
 

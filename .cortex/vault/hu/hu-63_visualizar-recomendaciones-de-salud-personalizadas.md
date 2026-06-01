@@ -1,7 +1,7 @@
 # HU-63: Visualizar recomendaciones de salud personalizadas
 
 **Release:** RELEASE 4
-**Sprint:** Sprint 17 Desarrollo (16 sep - 22 sep)
+**Sprint:** Sprint 15 QA+Analisis (2 sep - 8 sep), Sprint 17 Desarrollo (16 sep - 22 sep)
 **Épica:** Épica 6: Inteligencia Artificial Aplicada
 **Desarrolladores:** Flor Gonzalez, Emma
 

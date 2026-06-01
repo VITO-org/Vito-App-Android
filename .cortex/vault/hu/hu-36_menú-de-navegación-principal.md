@@ -1,7 +1,7 @@
 # HU-36: Menú de navegación principal
 
 **Release:** RELEASE 2
-**Sprint:** Sprint 5 Desarrollo (24 jun - 30 jun)
+**Sprint:** Sprint 5 Desarrollo (24 jun - 30 jun), Sprint 6 Desarrollo (1 jul - 7 jul)
 **Épica:** Épica 3: Monitoreo y Visualización
 **Desarrolladores:** Flor Gonzalez
 

@@ -1,7 +1,7 @@
 # HU-23: Registro de síntomas
 
 **Release:** RELEASE 1
-**Sprint:** Sprint 3 Desarrollo (10 jun - 16 jun)
+**Sprint:** Sprint 4 QA+Estabilizacion (17 jun - 23 jun)
 **Épica:** Épica 2: Registro e Integración de Datos
 **Desarrolladores:** Cristian, Flor Galarza
 
