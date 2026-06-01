@@ -135,7 +135,8 @@ vito-app-android/
 └── .cortex/
     └── vault/
         ├── hu/                          # 38 HUs del backlog (ver Planificación)
-        │   └── INDICE-EPICAS.md         # HUs organizadas por épica y sprint
+        │   ├── INDICE-EPICAS.md         # HUs organizadas por épica
+        │   └── SPRINTS.md              # HUs organizadas por sprint con fechas
         ├── specs/                       # Especificaciones técnicas de cada fase
         ├── designs/                     # Decisiones de arquitectura (ADRs)
         └── sessions/                    # Notas de sesiones de trabajo
@@ -319,7 +320,10 @@ Seguí el estilo de commits existente en el repo. Preferí mensajes en español 
 
 Las 38 historias de usuario (HUs) del producto están documentadas en `.cortex/vault/hu/` como archivos markdown individuales. Cada HU incluye: release, sprint, épica, desarrolladores asignados, criterios de aceptación, tareas y Definition of Done.
 
-El archivo [`.cortex/vault/hu/INDICE-EPICAS.md`](.cortex/vault/hu/INDICE-EPICAS.md) contiene la organización completa por épica con fechas y asignaciones.
+Para consultar:
+
+- **Por épica** → [`.cortex/vault/hu/INDICE-EPICAS.md`](.cortex/vault/hu/INDICE-EPICAS.md)
+- **Por sprint** → [`.cortex/vault/hu/SPRINTS.md`](.cortex/vault/hu/SPRINTS.md)
 
 ### Releases
 
