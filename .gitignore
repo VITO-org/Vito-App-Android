@@ -1,15 +1,31 @@
+# OSX
+.DS_Store
+
+# Android (legacy - moved to android/ 2026-05-31)
 .gradle/
 .idea/
 *.iml
 *.log
-
-local.properties
-
 build/
 **/build/
 **/.gradle/
 **/local.properties
-
 .cxx/
 captures/
 externalNativeBuild/
+
+# React Native
+node_modules/
+**/node_modules/
+.expo/
+*.jsbundle
+*.bundle
+metro-.log
+yarn-error.log
+
+# Android Studio
+local.properties
+*.iml
+.idea/
+.gradle/
+

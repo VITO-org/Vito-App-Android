@@ -1,0 +1,168 @@
+session_id: 2026-05-31_migracion-rn-health-connect
+spec_path: /mnt/c/Users/flgo_/Documentos/1-Proyectos GIT/vito-app-android/.cortex/vault/specs/2026-05-31_migracion-rn-health-connect.md
+spec_summary: Migración de Vito Health Connect a React Native con puente nativo para
+  wearables
+start_commit: ab2301cd0b6cca4f8347539e34e5ed3a8f6518ff
+start_branch: main
+opened_at: '2026-05-31T22:46:03.286176Z'
+status: closed
+mode: observed
+checkpoints:
+- timestamp: '2026-05-31T22:47:09.783945Z'
+  source: cortex-code-explorer
+  verified_claims:
+  - MainActivity.kt es el único archivo fuente (309 líneas)
+  - Health Connect usa 6 permisos de lectura (Steps, Distance, HeartRate, Sleep, Exercise,
+    TotalCalories)
+  - 'API calls: 1 aggregate() con 3 métricas + 3 readRecords()'
+  - 'HealthSummary data class con 6 campos: steps, distanceMeters, caloriesKcal, sleepMinutes,
+    averageBpm, exerciseSessions'
+  - 'UI programática: ScrollView > LinearLayout > TextViews/Buttons + 6 metric cards'
+  - minSdk=26, targetSdk=35, compileSdk=35, AGP 8.13.2, Gradle 9.0
+  - 12 permisos en manifiesto (6 Android 14+ + 6 legacy)
+  - Dependencias Supabase declaradas pero NO implementadas en código
+  unverified_claims:
+  - react-native-health-connect (librería RN) puede no soportar todos los tipos de
+    datos actuales
+  - El módulo nativo requerirá Turbo Module o Native Module clásico
+  artifacts_touched:
+  - app/src/main/java/com/vito/healthconnect/MainActivity.kt
+  - app/build.gradle.kts
+  - app/src/main/AndroidManifest.xml
+  - app/src/main/res/values/colors.xml
+  - app/src/main/res/values/strings.xml
+  - app/src/main/res/values/styles.xml
+  - build.gradle.kts
+  - settings.gradle.kts
+  note: Exploración completa del código actual. Proyecto es una app Android nativa
+    (Kotlin) minimalista de un solo archivo que lee Health Connect. Todo el código
+    de Health Connect (~200 líneas) se convertirá en Native Module de RN. El resto
+    (UI, strings, colors) se migrará a componentes RN/TypeScript.
+- timestamp: '2026-05-31T22:49:00.794733Z'
+  source: cortex-code-designer
+  verified_claims:
+  - Estructura de proyecto RN diseñada con /android/app/src/main/java/.../nativeModule/
+    para el bridge Kotlin
+  - 'API nativa definida: 4 métodos (checkAvailability, requestPermissions, getHealthData,
+    openHealthConnectStore)'
+  - Modelo HealthSummary definido como interfaz TypeScript con 6 campos
+  - React Context HealthProvider diseñado para flujo de datos
+  - 'Theme migrado: 5 colores + tamaños de fuente + espaciado desde la app nativa'
+  - 'Data Flow documentado: HealthProvider → Dashboard → MetricCards'
+  - Wearables architecture diseñada como interfaz extensible VitoNativeModule
+  - 5 fases de migración definidas para ejecución progresiva
+  unverified_claims:
+  - Las versiones de dependencias RN no se verificaron contra el template real de
+    npx react-native init
+  - El módulo nativo no se compiló aún — puede haber diferencias con la firma esperada
+    por RN 0.76+
+  artifacts_touched:
+  - .cortex/vault/designs/2026-05-31_migracion-rn-health-connect.md
+  note: 'Design doc completado con arquitectura RN + Native Module, API contracts,
+    data model, migration phases, y plan para wearables future. Pendiente: implementación
+    por fases (P1-P5).'
+- timestamp: '2026-05-31T23:01:52.200929Z'
+  source: cortex-code-implementer
+  verified_claims:
+  - package.json creado con React Native 0.85.3 + React 19.2.3 + TypeScript 5.8
+  - TypeScript configurado (tsconfig.json) con paths para @/*
+  - Metro bundler configurado (babel.config.js, metro.config.js)
+  - Entry point RN creado (index.js, App.tsx, app.json)
+  - 'Módulo nativo VitoHealthModule.kt implementado con 4 @ReactMethod: checkAvailability,
+    requestPermissions, getHealthData, openHealthConnectStore'
+  - HealthDataProvider.kt extraído del MainActivity original con toda la lógica de
+    Health Connect
+  - VitoHealthPackage.kt registrado para autolinking RN
+  - MainActivity.kt actualizado para extender ReactActivity (RN entry)
+  - MainApplication.kt creado siguiendo el patrón RN 0.85.3 con ReactHost
+  - 'HealthSummary model: Kotlin data class + TypeScript interface'
+  - 'TypeScript native module wrapper: VitoHealthNative.ts con guardModule()'
+  - 'React Context: HealthProvider.tsx con HealthContext + useHealth hook'
+  - '3 componentes RN: MetricCard, StatusBanner, PermissionButton, HealthDashboard'
+  - 'Theme migrado: colors.ts, spacing.ts desde colors.xml de la app nativa'
+  - Android build files migrados a Groovy DSL bajo android/ (build.gradle + settings.gradle
+    + app/build.gradle)
+  - 'AndroidManifest.xml fusionado: permisos HC + config RN'
+  - Gradle wrapper movido a android/ (Gradle 9.0 como el template RN 0.85.3)
+  - 12 permisos de Health Connect preservados en el manifest
+  - AndroidManifest incluye intent filters HC obligatorios (ACTION_SHOW_PERMISSIONS_RATIONALE,
+    VIEW_PERMISSION_USAGE)
+  unverified_claims:
+  - No se ejecutó npm install — dependencias RN no instaladas
+  - No se ejecutó npx react-native run-android — build no verificado
+  - No se verificó que VitoHealthModule.compile() funcione con el Gradle wrapper de
+    RN 0.85.3
+  - El launcher de permisos en VitoHealthModule usa activityResultRegistry que requiere
+    verificación en tiempo de ejecución
+  - Wearables architecture (WearModule stub) no implementado — solo diseño arquitectónico
+  artifacts_touched:
+  - package.json
+  - tsconfig.json
+  - index.js
+  - App.tsx
+  - app.json
+  - babel.config.js
+  - metro.config.js
+  - .gitignore
+  - android/build.gradle
+  - android/settings.gradle
+  - android/gradle.properties
+  - android/app/build.gradle
+  - android/app/src/main/AndroidManifest.xml
+  - android/app/src/main/java/com/vito/healthconnect/MainActivity.kt
+  - android/app/src/main/java/com/vito/healthconnect/MainApplication.kt
+  - android/app/src/main/java/com/vito/healthconnect/nativeModule/VitoHealthModule.kt
+  - android/app/src/main/java/com/vito/healthconnect/nativeModule/VitoHealthPackage.kt
+  - android/app/src/main/java/com/vito/healthconnect/nativeModule/HealthDataProvider.kt
+  - android/app/src/main/java/com/vito/healthconnect/nativeModule/HealthSummary.kt
+  - src/types/health.ts
+  - src/services/VitoHealthNative.ts
+  - src/context/HealthProvider.tsx
+  - src/components/MetricCard.tsx
+  - src/components/StatusBanner.tsx
+  - src/components/PermissionButton.tsx
+  - src/components/HealthDashboard.tsx
+  - src/theme/colors.ts
+  - src/theme/spacing.ts
+  - .cortex/vault/specs/2026-05-31_migracion-rn-health-connect.md
+  - .cortex/vault/designs/2026-05-31_migracion-rn-health-connect.md
+  note: 'Migración completa a React Native 0.85.3 con módulo nativo para Health Connect.
+    Pendiente: npm install, build verification, y ejecución de pruebas. Para próxima
+    sesión: conectar wearables stub o implementar Supabase.'
+- timestamp: '2026-05-31T23:02:09.692022Z'
+  source: cortex-SDDwork
+  verified_claims:
+  - Se completaron las 5 fases del plan de migración (P1-P5 del design doc)
+  - 'Exploración: código actual analizado (MainActivity.kt de 309 líneas, 6 métricas
+    de HC, 12 permisos)'
+  - 'Diseño: arquitectura RN 0.85.3 + Native Module documentada en vault/designs/'
+  - 'Implementación: 30+ archivos creados/modificados entre RN y Android nativo'
+  - Módulo nativo VitoHealthModule con 4 métodos expuestos a JS
+  - UI RN con 6 MetricCards replicando la funcionalidad original
+  - Theme RN con colores y espaciado migrados de la app nativa
+  unverified_claims:
+  - npm install no ejecutado — dependencias no instaladas
+  - Build RN no compilado (npx react-native run-android)
+  - Launcher de permisos en VitoHealthModule no testeado en runtime
+  - Wearables stub no implementado — solo diseño arquitectónico
+  artifacts_touched:
+  - package.json
+  - tsconfig.json
+  - index.js
+  - App.tsx
+  - android/ (múltiples archivos)
+  - src/ (múltiples archivos)
+  - .cortex/vault/specs/2026-05-31_migracion-rn-health-connect.md
+  - .cortex/vault/designs/2026-05-31_migracion-rn-health-connect.md
+  - .cortex/vault/sessions/
+  note: 'Migración completa de Android nativo a React Native 0.85.3 + Native Module.
+    El proyecto ahora tiene estructura RN con android/ estándar. Pendiente: npm install
+    + build para verificar compilación. La arquitectura para wearables queda diseñada
+    como VitoNativeModule extensible (HealthConnectModule + futuro WearModule).'
+verification_results: []
+tasks: []
+closed_at: '2026-05-31T23:06:19.868876Z'
+end_commit: ab2301cd0b6cca4f8347539e34e5ed3a8f6518ff
+documenter_decision: closed
+session_note_path: null
+adrs_created: []

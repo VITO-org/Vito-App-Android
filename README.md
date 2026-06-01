@@ -1,48 +1,314 @@
 # Vito Health Connect
 
-App Android nativa en Kotlin para leer datos locales de Health Connect y mostrarlos en pantalla.
+Aplicación móvil de salud y bienestar que integra **Google Health Connect** para leer métricas biométricas (pasos, distancia, calorías, sueño, frecuencia cardíaca y ejercicio).
 
-## Que lee
+## Stack Tecnológico
 
-- Pasos del dia.
-- Distancia del dia.
-- Calorias totales quemadas del dia.
-- Sesiones de sueno registradas del dia.
-- Frecuencia cardiaca promedio del dia.
-- Cantidad de sesiones de ejercicio del dia.
+| Capa | Tecnología | Versión |
+|------|-----------|---------|
+| Framework principal | React Native | 0.85.3 |
+| Lenguaje UI | TypeScript | 5.8.3 |
+| UI Engine | React | 19.2.3 |
+| JS Engine | Hermes | provisto por RN 0.85 |
+| Android SDK | compileSdk / targetSdk 35 | API 35 (Android 15) |
+| Módulos nativos | Kotlin | 1.9.24 |
+| Build System | Gradle (Groovy DSL) | 9.3.1 |
+| Android Gradle Plugin | AGP | 8.13.2 |
+| Health Connect SDK | `androidx.health.connect:connect-client` | 1.1.0-alpha11 |
+| Node.js mínimo | | 22.11.0 |
 
-## Como funciona
+## Arquitectura
 
-Health Connect se lee localmente en el telefono con el SDK nativo:
+### Hybrid Architecture: React Native + Native Modules
 
-1. La app verifica si Health Connect esta disponible.
-2. Pide permisos runtime al usuario.
-3. Usa `HealthConnectClient`.
-4. Usa `aggregate()` para datos acumulativos como pasos, distancia y calorias.
-5. Usa `readRecords()` para registros como sueno, frecuencia cardiaca y ejercicios.
-6. Renderiza el resumen en la pantalla principal.
+La app usa React Native como plataforma principal de UI, con **módulos nativos Android (Kotlin)** para la integración con Health Connect y (en el futuro) Wear OS.
 
-## Requisitos
+```
+┌─────────────────────────────────────────────────┐
+│                 React Native (TS)               │
+│  ┌─────────────┐  ┌──────────────────────────┐  │
+│  │  App.tsx     │  │  Context / Providers     │  │
+│  │  (entry)     │  │  ┌────────────────────┐  │  │
+│  │              │  │  │  HealthProvider    │  │  │
+│  │              │  │  │  (useHealth hook)  │  │  │
+│  └──────┬───────┘  │  └─────────┬──────────┘  │  │
+│         │          └────────────┼─────────────┘  │
+│         ▼                       ▼                 │
+│  ┌──────────────────────────────────────────┐    │
+│  │         Componentes (TSX)                │    │
+│  │  HealthDashboard │ MetricCard │          │    │
+│  │  PermissionButton│ StatusBanner         │    │
+│  └───────────────────────┬──────────────────┘    │
+│                          │                       │
+│  ┌───────────────────────▼──────────────────┐    │
+│  │  VitoHealthNative.ts (TypeScript Bridge) │    │
+│  │  checkAvailability()                     │    │
+│  │  requestPermissions()                    │    │
+│  │  getHealthData()                         │    │
+│  │  openHealthConnectStore()                │    │
+│  └───────────────────────┬──────────────────┘    │
+└──────────────────────────┼────────────────────────┘
+                           │  NativeModules (RN Bridge)
+┌──────────────────────────▼────────────────────────┐
+│              Android Native (Kotlin)               │
+│  ┌──────────────────────────────────────────────┐  │
+│  │  VitoHealthModule.kt (@ReactMethod)          │  │
+│  │  checkAvailability() → Promise<String>       │  │
+│  │  requestPermissions() → Promise<ReadableMap> │  │
+│  │  getHealthData() → Promise<ReadableMap>      │  │
+│  │  openHealthConnectStore() → Promise<Void>    │  │
+│  └──────────────────────┬───────────────────────┘  │
+│                         │                          │
+│  ┌──────────────────────▼───────────────────────┐  │
+│  │  HealthDataProvider.kt (lógica HC pura)      │  │
+│  │  • loadTodayData() → HealthSummary           │  │
+│  │  • getGrantedPermissions()                   │  │
+│  │  • checkSdkStatus() (companion)              │  │
+│  │  • 6 tipos de records: Steps, Distance,      │  │
+│  │    HeartRate, Sleep, Exercise, Calories      │  │
+│  └──────────────────────────────────────────────┘  │
+│                                                     │
+│  ┌──────────────────────────────────────────────┐  │
+│  │           Google Health Connect SDK           │  │
+│  │  androidx.health.connect:connect-client      │  │
+│  └──────────────────────────────────────────────┘  │
+└────────────────────────────────────────────────────┘
+```
 
-- Android Studio con Android SDK instalado.
-- Dispositivo Android con Health Connect disponible.
-- Datos ya sincronizados en Health Connect desde una app fuente, por ejemplo Google Fit, Samsung Health, Fitbit u otra compatible.
+### Flujo de datos
 
-## Ejecutar
+1. `HealthDashboard` monta → `HealthProvider` llama `checkAvailability()` vía native module
+2. Usuario toca **"Conectar Health Connect"** → `requestPermissions()` abre el sistema de permisos de Android
+3. Permisos concedidos → `getHealthData()` → `HealthDataProvider.loadTodayData()` lee los 6 tipos de records de HC
+4. Data viaja: `HealthSummary (Kotlin)` → `ReadableMap` → `HealthSummary (TypeScript)` → `React Context` → Componentes
 
-1. Abrir esta carpeta del proyecto en Android Studio.
-2. Sincronizar Gradle.
-3. Ejecutar en un telefono Android real.
-4. Tocar `Conectar Health Connect`.
-5. Conceder los permisos solicitados.
-6. Tocar `Actualizar datos`.
+### `applicationId`
 
-## Archivos principales
+La app se instala con `com.vito.healthconnect.rn` como `applicationId` para convivir con la versión nativa original (`com.vito.healthconnect`) en el mismo dispositivo. El `namespace` de Android sigue siendo `com.vito.healthconnect` para mantener compatibilidad con el R.class generado por React Native autolinking.
 
-- `app/src/main/AndroidManifest.xml`: declara permisos de Health Connect.
-- `app/src/main/java/com/vito/healthconnect/MainActivity.kt`: contiene el flujo de permisos, lectura y UI.
-- `app/build.gradle.kts`: declara `androidx.health.connect:connect-client`.
+## Estructura del Proyecto
 
-## Nota para Play Store
+```
+vito-app-android/
+├── App.tsx                          # Componente raíz React Native
+├── index.js                         # Entry point RN (AppRegistry)
+├── app.json                         # displayName: "Vito Health Connect"
+├── package.json                     # Dependencias RN/React
+├── tsconfig.json                    # TypeScript strict, path alias @/
+├── metro.config.js                  # Metro bundler config
+├── babel.config.js                  # Babel preset RN
+├── src/
+│   ├── types/
+│   │   └── health.ts                # Interfaces TS: HealthSummary, PermissionResult, etc.
+│   ├── services/
+│   │   └── VitoHealthNative.ts      # Wrapper TS del native module (con guardModule)
+│   ├── context/
+│   │   └── HealthProvider.tsx        # React Context + useHealth() hook
+│   ├── components/
+│   │   ├── HealthDashboard.tsx       # Pantalla principal con todas las métricas
+│   │   ├── MetricCard.tsx            # Card individual para una métrica
+│   │   ├── StatusBanner.tsx          # Banner de estado (disponible/error/warning)
+│   │   └── PermissionButton.tsx     # Botón de acción (conectar/actualizar)
+│   └── theme/
+│       ├── colors.ts                # Paleta (screenBackground, surface, textPrimary, etc.)
+│       └── spacing.ts               # Spacing, fontSize (title, metricLabel, metricValue)
+├── android/
+│   ├── build.gradle                 # Root: AGP 8.13.2, Kotlin 1.9.24, RN gradle plugin
+│   ├── settings.gradle              # RN settings + autolinking
+│   ├── gradle.properties            # newArchEnabled=true, hermesEnabled=true
+│   ├── gradlew / gradlew.bat        # Gradle wrapper (9.3.1)
+│   ├── local.properties             # SDK path (Windows)
+│   └── app/
+│       ├── build.gradle             # applicationId, HC SDK deps, signing
+│       └── src/main/
+│           ├── AndroidManifest.xml  # 12 permisos HC + RN config + intent filters
+│           └── java/com/vito/healthconnect/
+│               ├── MainActivity.kt          # ReactActivity (RN entry)
+│               ├── MainApplication.kt       # ReactApplication + VitoHealthPackage
+│               └── nativeModule/
+│                   ├── VitoHealthModule.kt  # 4 @ReactMethod (bridge RN ↔ HC)
+│                   ├── VitoHealthPackage.kt # ReactPackage registration
+│                   ├── HealthDataProvider.kt # Lógica HC pura (sin dep RN)
+│                   └── HealthSummary.kt     # Data class Kotlin ↔ Map bridge
+├── .gitignore
+└── README.md
+```
 
-Si se publica la app, Google Play exige declarar el uso de cada tipo de dato de Health Connect y justificar el caso de uso. En desarrollo local alcanza con los permisos del manifest y la autorizacion del usuario en el telefono.
+## Prerrequisitos
+
+### Windows
+
+| Herramienta | Versión | Instalación |
+|------------|---------|-------------|
+| Node.js | ≥ 22.11.0 | [nodejs.org](https://nodejs.org) |
+| Java JDK | 17 (LTS) | `winget install EclipseAdoptium.Temurin.17.JDK` |
+| Android Studio | Hedgehog+ | [developer.android.com/studio](https://developer.android.com/studio) |
+| Android SDK | API 35 (Android 15) | SDK Manager en Android Studio |
+| Gradle | 9.3.1 (wrapper) | automático via `gradlew` |
+| Google Health Connect | cualquier versión | [Play Store](https://play.google.com/store/apps/details?id=com.google.android.apps.healthdata) |
+| Dispositivo físico o emulador | Android 14+ | AVD Manager o USB |
+
+### Variables de entorno (Windows)
+
+```
+JAVA_HOME = C:\Program Files\Java\jdk-17
+ANDROID_HOME = %LOCALAPPDATA%\Android\Sdk
+PATH += %ANDROID_HOME%\platform-tools
+PATH += %ANDROID_HOME%\emulator
+```
+
+> **Nota WSL2:** Si trabajás desde WSL, el `gradlew` ya tiene soporte para detectar Windows JDK (`java.exe`) y convertir paths con `wslpath -w`. Sin embargo, es más simple ejecutar `npx react-native run-android` desde **PowerShell/cmd de Windows** directamente.
+
+## Setup Inicial
+
+```powershell
+# 1. Clonar el repo (si no lo tenés)
+git clone <repo-url>
+cd vito-app-android
+
+# 2. Instalar dependencias
+npm install
+
+# 3. Verificar que el SDK de Android está configurado
+#    El archivo android/local.properties debe apuntar a tu SDK:
+#    sdk.dir=C:\\Users\\<tu-user>\\AppData\\Local\\Android\\Sdk
+
+# 4. Conectar un dispositivo físico (recomendado) o iniciar un emulador
+#    - Físico: USB + depuración USB activada (Ajustes → Opciones de desarrollador)
+#    - Emulador: Android Studio → Device Manager → Play
+adb devices
+#    Deberías ver: <id> device
+
+# 5. (Opcional) Si ya tenés la app nativa instalada, la RN se convive
+#    porque usa applicationId diferente: com.vito.healthconnect.rn
+```
+
+## Cómo ejecutar la app
+
+```powershell
+# Arrancar Metro Bundler (en una terminal)
+npx react-native start
+
+# En otra terminal, compilar e instalar
+npx react-native run-android
+```
+
+Si Metro ya está corriendo y solo querés rebuild + install:
+
+```powershell
+cd android
+./gradlew assembleDebug
+cd ..
+# Instalar el APK generado:
+adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+### Probar Health Connect
+
+1. Abrí la app **Vito Health Connect** en tu dispositivo
+2. La app verifica automáticamente si Health Connect está disponible
+3. Presioná **"Conectar Health Connect"** para solicitar permisos
+4. En la pantalla de permisos de Health Connect, activá los 6 tipos de datos
+5. Una vez concedidos, la app cargará automáticamente los datos del día
+
+### Qué métricas se leen
+
+| Métrica | Fuente (Health Connect) | Unidad |
+|---------|------------------------|--------|
+| Pasos | `StepsRecord.COUNT_TOTAL` | número |
+| Distancia | `DistanceRecord.DISTANCE_TOTAL` | metros → km |
+| Calorías | `TotalCaloriesBurnedRecord.ENERGY_TOTAL` | kcal |
+| Sueño | `SleepSessionRecord` | minutos → Xh Ym |
+| Pulso medio | `HeartRateRecord.samples` | bpm |
+| Ejercicios | `ExerciseSessionRecord` | cantidad de sesiones |
+
+## Resolución de problemas
+
+### Error: `JAVA_HOME is set to an invalid directory`
+
+```powershell
+# Verificar versión instalada
+dir "C:\Program Files\Java\"
+
+# Fijar JAVA_HOME al JDK 17
+[System.Environment]::SetEnvironmentVariable("JAVA_HOME", "C:\Program Files\Java\jdk-17", "Machine")
+# Cerrar y reabrir la terminal
+```
+
+### Error: `adb" no se reconoce como un comando`
+
+```powershell
+$env:Path += ";$env:LOCALAPPDATA\Android\Sdk\platform-tools"
+# Para hacerlo permanente (admin):
+[System.Environment]::SetEnvironmentVariable("Path", "$env:Path;$env:LOCALAPPDATA\Android\Sdk\platform-tools", "Machine")
+```
+
+### Error: `INSTALL_FAILED_UPDATE_INCOMPATIBLE`
+
+La app original de Vito (`com.vito.healthconnect`) está instalada con otra firma. La versión RN usa `com.vito.healthconnect.rn` justamente para evitar este conflicto. Si ves este error, verificá que el `applicationId` en `android/app/build.gradle` sea `com.vito.healthconnect.rn`.
+
+### Error: `SDK location not found`
+
+Asegurate que `android/local.properties` exista con:
+
+```properties
+sdk.dir=C:\\Users\\<TU_USER>\\AppData\\Local\\Android\\Sdk
+```
+
+### Error: Metro `EADDRINUSE: address already in use :::8081`
+
+Ya hay una instancia de Metro corriendo. Usá esa misma o cerrá el proceso anterior:
+
+```powershell
+# Encontrar el proceso en el puerto 8081
+netstat -ano | findstr :8081
+taskkill /PID <PID> /F
+```
+
+### Error de compilación: `cannot find symbol BuildConfig`
+
+El autolinking de RN genera código que referencia `com.vito.healthconnect.BuildConfig`. Si el `namespace` se cambió, el BuildConfig se genera en el nuevo namespace. Mantené `namespace "com.vito.healthconnect"` y solo cambiá `applicationId` si necesitás otro identificador.
+
+## Convenciones de desarrollo
+
+### TypeScript
+
+- **strict mode** habilitado en `tsconfig.json`
+- Path alias `@/` → `src/`
+- Tipos compartidos en `src/types/`
+- Props de componentes tipadas con interfaces
+
+### Estructura de componentes
+
+- Cada componente en su propio archivo `.tsx`
+- Estilos co-locados con `StyleSheet.create()` al final del archivo
+- Sin CSS modules, sin styled-components — solo `StyleSheet`
+
+### Módulos nativos
+
+- Todo el código Kotlin de Health Connect está en `nativeModule/`
+- `HealthDataProvider.kt` **no depende de React Native** — es Kotlin/Android puro, reutilizable
+- `VitoHealthModule.kt` es solo el bridge: recibe llamadas de RN, delega en `HealthDataProvider`
+- Para agregar un nuevo módulo nativo (ej: Wear OS), crear `WearModule.kt` + `WearPackage.kt` y registrarlo en `MainApplication.kt`
+
+### Commits
+
+Seguí el estilo de commits existente en el repo. Preferí mensajes en español o inglés consistentes con el historial.
+
+## Roadmap
+
+- [x] Migración a React Native 0.85.3 + TypeScript 5.8
+- [x] Native module para Health Connect (4 métodos bridge)
+- [x] Dashboard con 6 métricas biométricas
+- [x] Build Groovy DSL funcional (Gradle 9.3.1, AGP 8.13.2)
+- [ ] Migrar Supabase de Kotlin a `@supabase/supabase-js`
+- [ ] Wear OS native module
+- [ ] Autenticación y login
+- [ ] Pantallas de perfil y configuración
+
+## Recursos
+
+- [React Native 0.85 docs](https://reactnative.dev/docs/0.85/getting-started)
+- [Health Connect SDK](https://developer.android.com/health-connect)
+- [Health Connect permissions](https://developer.android.com/health-connect/design/health-connect-permissions)
+- [Native Modules (New Arch)](https://reactnative.dev/docs/the-new-architecture/pillars-turbomodules)
