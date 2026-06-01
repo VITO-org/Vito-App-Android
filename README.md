@@ -24,20 +24,20 @@ Aplicación móvil de salud y bienestar que integra **Google Health Connect** pa
 La app usa React Native como plataforma principal de UI, con **módulos nativos Android (Kotlin)** para la integración con Health Connect y (en el futuro) Wear OS.
 
 ```
-┌─────────────────────────────────────────────────┐
-│                 React Native (TS)               │
-│  ┌─────────────┐  ┌──────────────────────────┐  │
+┌──────────────────────────────────────────────────┐
+│                 React Native (TS)                │
+│  ┌──────────────┐  ┌──────────────────────────┐  │
 │  │  App.tsx     │  │  Context / Providers     │  │
 │  │  (entry)     │  │  ┌────────────────────┐  │  │
 │  │              │  │  │  HealthProvider    │  │  │
 │  │              │  │  │  (useHealth hook)  │  │  │
 │  └──────┬───────┘  │  └─────────┬──────────┘  │  │
 │         │          └────────────┼─────────────┘  │
-│         ▼                       ▼                 │
+│         ▼                       ▼                │
 │  ┌──────────────────────────────────────────┐    │
 │  │         Componentes (TSX)                │    │
 │  │  HealthDashboard │ MetricCard │          │    │
-│  │  PermissionButton│ StatusBanner         │    │
+│  │  PermissionButton│ StatusBanner          │    │
 │  └───────────────────────┬──────────────────┘    │
 │                          │                       │
 │  ┌───────────────────────▼──────────────────┐    │
@@ -47,9 +47,9 @@ La app usa React Native como plataforma principal de UI, con **módulos nativos 
 │  │  getHealthData()                         │    │
 │  │  openHealthConnectStore()                │    │
 │  └───────────────────────┬──────────────────┘    │
-└──────────────────────────┼────────────────────────┘
+└──────────────────────────┼───────────────────────┘
                            │  NativeModules (RN Bridge)
-┌──────────────────────────▼────────────────────────┐
+┌──────────────────────────▼─────────────────────────┐
 │              Android Native (Kotlin)               │
 │  ┌──────────────────────────────────────────────┐  │
 │  │  VitoHealthModule.kt (@ReactMethod)          │  │
@@ -67,9 +67,9 @@ La app usa React Native como plataforma principal de UI, con **módulos nativos 
 │  │  • 6 tipos de records: Steps, Distance,      │  │
 │  │    HeartRate, Sleep, Exercise, Calories      │  │
 │  └──────────────────────────────────────────────┘  │
-│                                                     │
+│                                                    │
 │  ┌──────────────────────────────────────────────┐  │
-│  │           Google Health Connect SDK           │  │
+│  │           Google Health Connect SDK          │  │
 │  │  androidx.health.connect:connect-client      │  │
 │  └──────────────────────────────────────────────┘  │
 └────────────────────────────────────────────────────┘
