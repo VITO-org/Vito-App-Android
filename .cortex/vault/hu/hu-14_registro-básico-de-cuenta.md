@@ -2,10 +2,10 @@
 
 > **Estado:** 🔴 No iniciada — Depende de HU-11 (Login). Requiere Supabase para backend de auth. Proyecto RN listo para agregar pantalla de registro.
 
-**Release:** RELEASE 1
-**Sprint:** Sprint 1 QA+Analisis (26 may - 2 jun), Sprint 2 Desarrollo (3 jun - 9 jun)
+**Release:** R5
+**Sprint:** S22
 **Épica:** Épica 1: Gestión de Usuarios y Acceso
-**Desarrolladores:** Flor Gonzalez, Cristian, Flor Galarza
+**Desarrolladores:** Flor González, Cristian
 
 ---
 

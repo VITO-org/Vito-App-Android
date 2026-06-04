@@ -3,6 +3,7 @@ package com.vito.healthconnect.nativeModule
 import android.content.Intent
 import android.util.Log
 import androidx.activity.ComponentActivity
+import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.health.connect.client.PermissionController
 import com.facebook.react.bridge.*
@@ -26,6 +27,8 @@ class VitoHealthModule(reactContext: ReactApplicationContext) :
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var healthDataProvider: HealthDataProvider? = null
     private var isRequestingPermissions = false
+    private var permissionLauncher: ActivityResultLauncher<Set<String>>? = null
+    private var pendingPermissionsPromise: Promise? = null
 
     override fun getName(): String = "VitoHealthModule"
 
@@ -53,8 +56,34 @@ class VitoHealthModule(reactContext: ReactApplicationContext) :
     }
 
     /**
+     * Returns a single shared ActivityResultLauncher for Health Connect permissions,
+     * registering it once with a stable key to avoid leaking launchers.
+     */
+    private fun getOrCreatePermissionLauncher(activity: ComponentActivity): ActivityResultLauncher<Set<String>> {
+        val existing = permissionLauncher
+        if (existing != null) return existing
+
+        val launcher = activity.activityResultRegistry.register(
+            "hc_permissions",
+            PermissionController.createRequestPermissionResultContract()
+        ) { grantedPermissions ->
+            isRequestingPermissions = false
+            val promise = pendingPermissionsPromise
+            pendingPermissionsPromise = null
+            if (promise != null) {
+                val allGranted = grantedPermissions.containsAll(HealthDataProvider.REQUIRED_PERMISSIONS)
+                val partialGranted = grantedPermissions.isNotEmpty()
+                promise.resolve(buildResultMap(allGranted, partialGranted && !allGranted))
+            }
+        }
+        permissionLauncher = launcher
+        return launcher
+    }
+
+    /**
      * Solicita permisos de Health Connect al usuario.
-     * Lanza un ActivityResultLauncher para pedir los permisos runtime.
+     * Usa un único ActivityResultLauncher (creado lazy una vez) en vez de
+     * registrar uno nuevo por cada invocación, evitando fugas de memoria.
      *
      * Retorna: { granted: boolean, partiallyGranted: boolean }
      */
@@ -76,34 +105,28 @@ class VitoHealthModule(reactContext: ReactApplicationContext) :
             return
         }
 
-        isRequestingPermissions = true
-
         val activityForResult = activity as? ComponentActivity
         if (activityForResult == null) {
-            isRequestingPermissions = false
             promise.reject("NO_COMPAT_ACTIVITY", "La actividad actual no es ComponentActivity.")
             return
         }
+
+        isRequestingPermissions = true
+
+        // Store the promise before entering the coroutine so the callback can resolve it
+        pendingPermissionsPromise = promise
 
         scope.launch {
             try {
                 val granted = healthDataProvider!!.getGrantedPermissions()
                 if (granted.containsAll(HealthDataProvider.REQUIRED_PERMISSIONS)) {
                     isRequestingPermissions = false
+                    pendingPermissionsPromise = null
                     promise.resolve(buildResultMap(true, false))
                     return@launch
                 }
 
-                // Necesitamos ejecutar el launcher en el UI thread
-                val launcher = activityForResult.activityResultRegistry.register(
-                    "hc_permissions_${System.currentTimeMillis()}",
-                    PermissionController.createRequestPermissionResultContract()
-                ) { grantedPermissions ->
-                    isRequestingPermissions = false
-                    val allGranted = grantedPermissions.containsAll(HealthDataProvider.REQUIRED_PERMISSIONS)
-                    val partialGranted = grantedPermissions.isNotEmpty()
-                    promise.resolve(buildResultMap(allGranted, partialGranted && !allGranted))
-                }
+                val launcher = getOrCreatePermissionLauncher(activityForResult)
 
                 // Lanzamos en el main thread
                 reactApplicationContext.runOnUiQueueThread {
@@ -111,6 +134,7 @@ class VitoHealthModule(reactContext: ReactApplicationContext) :
                 }
             } catch (e: Exception) {
                 isRequestingPermissions = false
+                pendingPermissionsPromise = null
                 Log.e(TAG, "Error requesting permissions", e)
                 promise.reject("PERMISSION_ERROR", "Error al solicitar permisos: ${e.message}")
             }
@@ -161,10 +185,14 @@ class VitoHealthModule(reactContext: ReactApplicationContext) :
     }
 
     /**
-     * Cleanup opcional al desmontar el módulo.
+     * Cleanup al desmontar el módulo: cancela corrutinas,
+     * limpia el launcher de permisos y la promesa pendiente.
      */
     override fun invalidate() {
         super.invalidate()
+        permissionLauncher?.unregister()
+        permissionLauncher = null
+        pendingPermissionsPromise = null
         scope.cancel()
     }
 

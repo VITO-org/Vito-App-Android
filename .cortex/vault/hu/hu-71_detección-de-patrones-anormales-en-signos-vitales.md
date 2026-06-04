@@ -1,9 +1,9 @@
 # HU-71: Detección de patrones anormales en signos vitales
 
-**Release:** RELEASE 5
-**Sprint:** Sprint 19 QA+Analisis (30 sep - 6 oct), Sprint 21 Desarrollo (14 oct - 20 oct)
+**Release:** R4
+**Sprint:** S18
 **Épica:** Épica 7: Funcionalidades de la IA
-**Desarrolladores:** Emma, Flor Galarza
+**Desarrolladores:** Flor Galarza, Emma, Nico
 
 ---
 

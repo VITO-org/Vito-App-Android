@@ -1,9 +1,9 @@
 # HU-31: Visualizar signos vitales en un dashboard
 
-**Release:** RELEASE 2
-**Sprint:** Sprint 5 Desarrollo (24 jun - 30 jun), Sprint 6 Desarrollo (1 jul - 7 jul), Sprint 11 QA+Estabilizacion (5 ago - 10 ago)
-**Épica:** Épica 3: Monitoreo y Visualización
-**Desarrolladores:** Flor Gonzalez, Emma
+**Release:** R2
+**Sprint:** S7
+**Épica:** Épica 3: Monitoreo y Visualización (Dashboard)
+**Desarrolladores:** Flor González, Cristian
 
 ---
 

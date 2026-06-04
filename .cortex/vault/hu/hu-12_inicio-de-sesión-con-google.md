@@ -1,9 +1,9 @@
 # HU-12: Inicio de sesión con Google
 
-**Release:** RELEASE 4
-**Sprint:** Sprint 18 Desarrollo (23 sep - 29 sep)
+**Release:** R5
+**Sprint:** S23
 **Épica:** Épica 1: Gestión de Usuarios y Acceso
-**Desarrolladores:** Flor Gonzalez
+**Desarrolladores:** Flor González, Cristian
 
 ---
 

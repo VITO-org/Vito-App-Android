@@ -1,9 +1,9 @@
 # HU-35: Comunicarse con Vittito por micrófono
 
-**Release:** RELEASE 5
-**Sprint:** Sprint 19 QA+Analisis (30 sep - 6 oct), Sprint 20 Desarrollo (7 oct - 13 oct)
-**Épica:** Épica 3: Monitoreo y Visualización
-**Desarrolladores:** Cristian, Emma
+**Release:** R5
+**Sprint:** S23
+**Épica:** Épica 3: Monitoreo y Visualización (Dashboard)
+**Desarrolladores:** Flor González, Cristian
 
 ---
 

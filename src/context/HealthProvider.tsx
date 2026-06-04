@@ -11,9 +11,10 @@ import {
   checkAvailability,
   requestPermissions,
   getHealthData,
-  openHealthConnectStore,
   HealthModuleNotAvailableError,
 } from '../services/VitoHealthNative';
+
+type ErrorSeverity = 'error' | 'warning';
 
 interface HealthContextValue {
   /** Current health summary, null before first successful load. */
@@ -24,6 +25,8 @@ interface HealthContextValue {
   loading: boolean;
   /** Last error message, if any. */
   error: string | null;
+  /** Severity of the current error (if any). */
+  errorSeverity: ErrorSeverity | null;
   /** True if HC permissions have been granted. */
   permissionsGranted: boolean;
   /** Request permissions and load data. */
@@ -43,6 +46,7 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
   const [hcStatus, setHcStatus] = useState<HealthConnectStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorSeverity, setErrorSeverity] = useState<ErrorSeverity | null>(null);
   const [permissionsGranted, setPermissionsGranted] = useState(false);
 
   // Check Health Connect availability on mount
@@ -54,8 +58,10 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
       } catch (e) {
         if (e instanceof HealthModuleNotAvailableError) {
           setError('El módulo nativo de Health Connect no está disponible en esta plataforma.');
+          setErrorSeverity('warning');
         } else {
           setError('Error al verificar disponibilidad de Health Connect.');
+          setErrorSeverity('error');
         }
         setHcStatus('unavailable');
       }
@@ -65,19 +71,22 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
   const loadHealthData = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setErrorSeverity(null);
     try {
       const data = await getHealthData();
       setSummary(data);
     } catch (e) {
-      setError('Error al leer datos: ' + (e as Error).message);
+      const message = e instanceof Error ? e.message : String(e ?? 'unknown error');
+      setError('Error al leer datos: ' + message);
+      setErrorSeverity('error');
     } finally {
       setLoading(false);
     }
   }, []);
 
   const requestPermissionsAndLoad = useCallback(async () => {
-    setLoading(true);
     setError(null);
+    setErrorSeverity(null);
     try {
       const result = await requestPermissions();
       if (result.granted || result.partiallyGranted) {
@@ -85,13 +94,17 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
         await loadHealthData();
         if (result.partiallyGranted) {
           setError('Permisos parciales concedidos. Cargando datos disponibles...');
+          setErrorSeverity('warning');
         }
       } else {
         setError('No se concedieron permisos. Habilítalos en Health Connect.');
+        setErrorSeverity('error');
         setPermissionsGranted(false);
       }
     } catch (e) {
-      setError('Error al solicitar permisos: ' + (e as Error).message);
+      const message = e instanceof Error ? e.message : String(e ?? 'unknown error');
+      setError('Error al solicitar permisos: ' + message);
+      setErrorSeverity('error');
     } finally {
       setLoading(false);
     }
@@ -110,6 +123,7 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
     hcStatus,
     loading,
     error,
+    errorSeverity,
     permissionsGranted,
     requestPermissionsAndLoad,
     refreshData,

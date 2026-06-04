@@ -2,10 +2,10 @@
 
 > **Estado:** 🔴 No iniciada — Depende de HU-14 (Registro). Requiere Supabase para persistencia. Tema RN disponible (colors.ts, spacing.ts).
 
-**Release:** RELEASE 1
-**Sprint:** Sprint 1 QA+Analisis (26 may - 2 jun), Sprint 3 Desarrollo (10 jun - 16 jun)
+**Release:** R5
+**Sprint:** S23
 **Épica:** Épica 1: Gestión de Usuarios y Acceso
-**Desarrolladores:** Flor Gonzalez, Cristian, Emma, Flor Galarza
+**Desarrolladores:** Flor González, Cristian
 
 ---
 

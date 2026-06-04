@@ -1,9 +1,9 @@
 # HU-22: Registro manual de signos vitales
 
-**Release:** RELEASE 1
-**Sprint:** Sprint 4 QA+Estabilizacion (17 jun - 23 jun)
+**Release:** R1
+**Sprint:** S3
 **Épica:** Épica 2: Registro e Integración de Datos
-**Desarrolladores:** Flor Gonzalez, Emma
+**Desarrolladores:** Emma, Nico
 
 ---
 

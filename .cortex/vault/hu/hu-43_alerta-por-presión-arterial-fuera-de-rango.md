@@ -1,9 +1,9 @@
 # HU-43: Alerta por presión arterial fuera de rango
 
-**Release:** RELEASE 2
-**Sprint:** Sprint 5 Desarrollo (24 jun - 30 jun), Sprint 8 Desarrollo (15 jul - 21 jul), Sprint 11 QA+Estabilizacion (5 ago - 10 ago)
+**Release:** R2
+**Sprint:** S10
 **Épica:** Épica 4: Sistema de Alertas Inteligentes
-**Desarrolladores:** Flor Galarza, Nico
+**Desarrolladores:** Emma, Nico
 
 ---
 

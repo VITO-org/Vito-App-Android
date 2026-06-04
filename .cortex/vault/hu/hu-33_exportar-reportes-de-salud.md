@@ -1,9 +1,9 @@
 # HU-33: Exportar reportes de salud
 
-**Release:** RELEASE 4
-**Sprint:** Sprint 18 Desarrollo (23 sep - 29 sep)
-**Épica:** Épica 3: Monitoreo y Visualización
-**Desarrolladores:** Flor Gonzalez, Nico, Emma
+**Release:** R4
+**Sprint:** S18
+**Épica:** Épica 3: Monitoreo y Visualización (Dashboard)
+**Desarrolladores:** Emma, Nico, Flor González
 
 ---
 

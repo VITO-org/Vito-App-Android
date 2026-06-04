@@ -1,9 +1,9 @@
 # HU-51: Notificaciones push de app móvil
 
-**Release:** RELEASE 2
-**Sprint:** Sprint 10 Desarrollo (29 jul - 4 ago), Sprint 11 QA+Estabilizacion (5 ago - 10 ago)
+**Release:** R3
+**Sprint:** S12
 **Épica:** Épica 5: Sistema de Notificaciones
-**Desarrolladores:** Emma
+**Desarrolladores:** Emma, Nico
 
 ---
 

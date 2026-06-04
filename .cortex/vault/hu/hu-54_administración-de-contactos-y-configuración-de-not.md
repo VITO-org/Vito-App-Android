@@ -1,9 +1,9 @@
 # HU-54: Administración de contactos y configuración de notificaciones
 
-**Release:** RELEASE 3
-**Sprint:** Sprint 12 QA+Analisis (12 ago - 18 ago), Sprint 13 Desarrollo (19 ago - 25 ago)
+**Release:** R3
+**Sprint:** S13
 **Épica:** Épica 5: Sistema de Notificaciones
-**Desarrolladores:** Flor Gonzalez, Flor Galarza
+**Desarrolladores:** Emma, Flor González
 
 ---
 

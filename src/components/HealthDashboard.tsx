@@ -5,6 +5,7 @@ import {MetricCard} from './MetricCard';
 import {StatusBanner} from './StatusBanner';
 import {PermissionButton} from './PermissionButton';
 import {colors, fontSize, spacing} from '../theme';
+import {openHealthConnectStore} from '../services/VitoHealthNative';
 
 /**
  * Formats sleep minutes into "Xh Ym" format.
@@ -24,6 +25,7 @@ export const HealthDashboard: React.FC = () => {
     hcStatus,
     loading,
     error,
+    errorSeverity,
     permissionsGranted,
     requestPermissionsAndLoad,
     refreshData,
@@ -36,7 +38,11 @@ export const HealthDashboard: React.FC = () => {
     isWarning?: boolean;
   } => {
     if (error) {
-      return {text: error, isWarning: !error.includes('Error') && !error.includes('No se concedieron')};
+      return {
+        text: error,
+        isError: errorSeverity === 'error',
+        isWarning: errorSeverity === 'warning',
+      };
     }
     if (!hcStatus) {
       return {text: 'Verificando Health Connect...'};
@@ -92,10 +98,7 @@ export const HealthDashboard: React.FC = () => {
       {needsUpdate && (
         <PermissionButton
           title="Abrir Play Store"
-          onPress={() => {
-            // Abre Play Store - implementado en módulo nativo
-            // Por ahora placeholder
-          }}
+          onPress={openHealthConnectStore}
         />
       )}
 

@@ -1,9 +1,9 @@
 # HU-61: Interactuar con asistente virtual desde dashboard
 
-**Release:** RELEASE 4
-**Sprint:** Sprint 15 QA+Analisis (2 sep - 8 sep), Sprint 16 Desarrollo (9 sep - 15 sep)
+**Release:** R4
+**Sprint:** S15
 **Épica:** Épica 6: Inteligencia Artificial Aplicada
-**Desarrolladores:** Cristian, Emma
+**Desarrolladores:** Flor Galarza, Emma
 
 ---
 

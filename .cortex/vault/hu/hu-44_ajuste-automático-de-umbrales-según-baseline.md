@@ -1,7 +1,7 @@
 # HU-44: Ajuste automático de umbrales según baseline
 
-**Release:** RELEASE 5
-**Sprint:** Sprint 19 QA+Analisis (30 sep - 6 oct), Sprint 21 Desarrollo (14 oct - 20 oct)
+**Release:** R5
+**Sprint:** S19
 **Épica:** Épica 4: Sistema de Alertas Inteligentes
 **Desarrolladores:** Flor Galarza, Emma
 

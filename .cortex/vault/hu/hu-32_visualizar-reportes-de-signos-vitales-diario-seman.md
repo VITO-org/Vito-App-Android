@@ -1,9 +1,9 @@
 # HU-32: Visualizar reportes de signos vitales diario, semanal y mensual
 
-**Release:** RELEASE 2
-**Sprint:** Sprint 5 Desarrollo (24 jun - 30 jun), Sprint 7 Desarrollo (8 jul - 14 jul), Sprint 11 QA+Estabilizacion (5 ago - 10 ago)
-**Épica:** Épica 3: Monitoreo y Visualización
-**Desarrolladores:** Cristian, Emma
+**Release:** R2
+**Sprint:** S8
+**Épica:** Épica 3: Monitoreo y Visualización (Dashboard)
+**Desarrolladores:** Flor González, Cristian
 
 ---
 

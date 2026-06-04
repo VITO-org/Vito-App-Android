@@ -1,9 +1,9 @@
 # HU-66: Registrar consultas mediante voz
 
-**Release:** RELEASE 5
-**Sprint:** Sprint 19 QA+Analisis (30 sep - 6 oct), Sprint 20 Desarrollo (7 oct - 13 oct)
+**Release:** R4
+**Sprint:** S17
 **Épica:** Épica 6: Inteligencia Artificial Aplicada
-**Desarrolladores:** Flor Gonzalez, Flor Galarza
+**Desarrolladores:** Flor González, Cristian
 
 ---
 

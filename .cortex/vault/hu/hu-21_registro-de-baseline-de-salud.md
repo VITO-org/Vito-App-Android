@@ -2,10 +2,10 @@
 
 > **Estado:** 🔴 No iniciada — Infraestructura base disponible (Health Connect SDK + theme RN) pero sin pantalla de onboarding ni formulario de baseline.
 
-**Release:** RELEASE 1
-**Sprint:** Sprint 1 QA+Analisis (26 may - 2 jun), Sprint 3 Desarrollo (10 jun - 16 jun)
+**Release:** R2
+**Sprint:** S6
 **Épica:** Épica 2: Registro e Integración de Datos
-**Desarrolladores:** Flor Gonzalez, Cristian, Flor Galarza
+**Desarrolladores:** Emma, Nico, Flor Galarza
 
 ---
 

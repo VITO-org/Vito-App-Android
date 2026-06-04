@@ -1,9 +1,9 @@
 # HU-37: Visualizar alertas activas en el dashboard
 
-**Release:** RELEASE 2
-**Sprint:** Sprint 9 Desarrollo (22 jul - 28 jul), Sprint 11 QA+Estabilizacion (5 ago - 10 ago)
-**Épica:** Épica 3: Monitoreo y Visualización
-**Desarrolladores:** Flor Gonzalez, Emma
+**Release:** R2
+**Sprint:** S11
+**Épica:** Épica 3: Monitoreo y Visualización (Dashboard)
+**Desarrolladores:** Flor González, Cristian
 
 ---
 

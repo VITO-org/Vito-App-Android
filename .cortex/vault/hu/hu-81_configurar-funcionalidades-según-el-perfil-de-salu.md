@@ -1,9 +1,9 @@
 # HU-81: Configurar funcionalidades según el perfil de salud del usuario
 
-**Release:** RELEASE 3
-**Sprint:** Sprint 12 QA+Analisis (12 ago - 18 ago), Sprint 14 QA+Estabilizacion (26 ago - 1 sep)
+**Release:** R5
+**Sprint:** S21
 **Épica:** Épica 8: Adaptar Funcionalidades al Perfil Clínico
-**Desarrolladores:** Flor Gonzalez, Nico
+**Desarrolladores:** Emma, Flor González
 
 ---
 

@@ -2,10 +2,10 @@
 
 > **Estado:** 🟡 En desarrollo — Base completada (Health Connect SDK integrado). Pendiente flujo de conexión UI y source tagging.
 
-**Release:** RELEASE 1
-**Sprint:** Sprint 1 QA+Analisis (26 may - 2 jun), Sprint 3 Desarrollo (10 jun - 16 jun)
+**Release:** R1
+**Sprint:** S4
 **Épica:** Épica 2: Registro e Integración de Datos
-**Desarrolladores:** Flor Gonzalez, Emma, Cristian, Nico
+**Desarrolladores:** Emma, Nico
 
 ---
 
