@@ -2,6 +2,26 @@
 
 Aplicación móvil de salud y bienestar que integra **Google Health Connect** para leer métricas biométricas (pasos, distancia, calorías, sueño, frecuencia cardíaca y ejercicio).
 
+## Índice
+
+- [Stack Tecnológico](#stack-tecnológico)
+- [Arquitectura](#arquitectura)
+- [Estructura del Proyecto](#estructura-del-proyecto)
+- [Prerrequisitos](#prerrequisitos)
+- [Setup Inicial](#setup-inicial)
+- [Conectar el teléfono para probar la app](#conectar-el-teléfono-para-probar-la-app)
+- [Cómo ejecutar la app](#cómo-ejecutar-la-app)
+  - [Probar Health Connect](#probar-health-connect)
+- [Resolución de problemas](#resolución-de-problemas)
+- [Convenciones de desarrollo](#convenciones-de-desarrollo)
+- [Roadmap](#roadmap)
+- [Planificación](#planificación)
+  - [Historias de Usuario (HUs)](#backlog-de-producto)
+  - [Sprints](#timeline-completo-s1s24)
+  - [Releases](#releases)
+  - [Equipo](#equipo-y-asignaciones)
+- [Recursos](#recursos)
+
 ## Stack Tecnológico
 
 | Capa | Tecnología | Versión |
@@ -190,6 +210,50 @@ adb devices
 # 5. (Opcional) Si ya tenés la app nativa instalada, la RN se convive
 #    porque usa applicationId diferente: com.vito.healthconnect.rn
 ```
+
+## Conectar el teléfono para probar la app
+
+Podés conectar tu dispositivo Android por **USB** o por **WiFi** (ADB inalámbrico).
+
+### USB (recomendado para primera vez)
+
+1. Activá **Opciones de desarrollador** en el teléfono:
+   Ajustes → Acerca del teléfono → tocar **Número de compilación** 7 veces
+2. Activá **Depuración USB**: Ajustes → Sistema → Opciones de desarrollador → Depuración USB
+3. Conectá el teléfono por USB a la PC
+4. Aceptá el mensaje "Permitir depuración USB" en el teléfono
+5. Verificá la conexión:
+   ```powershell
+   adb devices
+   # Deberías ver: <id> device
+   ```
+
+### WiFi (ADB inalámbrico — Android 11+)
+
+1. En el teléfono, activá **Opciones de desarrollador** y **Depuración USB** (igual que en USB)
+2. Activá **Depuración inalámbrica**: Ajustes → Sistema → Opciones de desarrollador → Depuración inalámbrica
+3. Tocá **Vincular dispositivo con código de pareamiento** → anotá la IP, puerto y código de 6 dígitos
+4. En la PC, vinculate con el código:
+   ```powershell
+   adb pair <IP>:<PUERTO_PAREO>
+   # Ingresá el código de 6 dígitos cuando lo pida
+   ```
+5. Una vez vinculado, conectate al puerto de servicio que muestra el teléfono:
+   ```powershell
+   adb connect <IP>:<PUERTO_SERVICIO>
+   ```
+6. Verificá la conexión:
+   ```powershell
+   adb devices
+   ```
+7. Si la conexión se pierde (p. ej. al suspender el teléfono), repetí el `adb connect`.
+
+> **Nota WSL2:** Si usás WSL, `adb.exe` está en Windows. Usá la ruta completa:
+> `/mnt/c/Users/<tu-user>/AppData/Local/Android/Sdk/platform-tools/adb.exe`
+> o agregala al PATH de WSL:
+> ```bash
+> export PATH="$PATH:/mnt/c/Users/<tu-user>/AppData/Local/Android/Sdk/platform-tools"
+> ```
 
 ## Cómo ejecutar la app
 
