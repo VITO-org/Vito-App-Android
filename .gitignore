@@ -29,3 +29,14 @@ local.properties
 .idea/
 .gradle/
 
+# Kotlin compiler caches
+android/.kotlin/
+
+# Build reports
+**/build/reports/
+
+# Cortex AI cache (transient)
+.cortex/memory/
+.cortex/sessions/
+.cortex/vault/.cortex_index.json
+

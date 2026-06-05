@@ -147,7 +147,7 @@ export const HealthDashboard: React.FC = () => {
 const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
-    backgroundColor: colors.screenBackground,
+    backgroundColor: colors.background,
   },
   container: {
     paddingHorizontal: spacing.screenPaddingHorizontal,

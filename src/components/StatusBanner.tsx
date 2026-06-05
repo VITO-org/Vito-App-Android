@@ -47,7 +47,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   text: {
-    fontSize: fontSize.status,
+    fontSize: fontSize.caption,
     textAlign: 'center',
   },
 });
