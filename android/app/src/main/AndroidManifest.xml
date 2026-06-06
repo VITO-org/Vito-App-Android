@@ -56,6 +56,16 @@
                 <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
+
+            <!-- Deep link para OAuth callback de Supabase -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="com.vito.healthconnect.rn"
+                    android:host="auth/callback" />
+            </intent-filter>
         </activity>
 
         <!-- Requerido para Health Connect en versiones modernas -->
