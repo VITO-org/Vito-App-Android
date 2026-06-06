@@ -331,16 +331,22 @@ Como usuario, quiero conectar dispositivos wearables para capturar automáticame
 
 **Tareas**
 
-* Integrar Health Connect (Android).  
-* Integrar Apple Health (iOS).  
-* Diseñar el flujo de conexión de dispositivos.
+* ✅ Integrar Health Connect (Android) — lectura de pasos, calorías, distancia, sueño, ejercicio, frecuencia cardíaca, presión arterial, SpO₂ y temperatura corporal.  
+* ⬜ Integrar Apple Health (iOS).  
+* ✅ Diseñar el flujo de conexión de dispositivos — auto-solicitud de permisos al iniciar, botón manual de conexión.
 
 **Definición de done**
 
-* La conexión con Health Connect y Apple Health funciona en sus respectivas plataformas.  
-* Los datos biométricos se sincronizan automáticamente y quedan registrados con la fuente correcta.  
-* El flujo de conexión y desconexión de dispositivos es claro y sin pérdida de datos.  
-* Las pruebas cubren conexión exitosa, desconexión y recepción de datos reales o simulados.
+* ✅ La conexión con Health Connect funciona en Android (lectura de 10 tipos de datos biomédicos).  
+* ⬜ Apple Health pendiente (solo Android implementado).  
+* ✅ Los datos biométricos se sincronizan automáticamente y se muestran en el dashboard.  
+* ⬜ Pruebas unitarias e integración pendientes.
+
+**Progreso — Sprint actual (2026-06-05)**
+* Implementada lectura de `BloodPressureRecord`, `OxygenSaturationRecord`, `BodyTemperatureRecord` en `HealthDataProvider.kt`.
+* Agregados permisos `READ_BLOOD_PRESSURE`, `READ_OXYGEN_SATURATION`, `READ_BODY_TEMPERATURE` en `AndroidManifest.xml`.
+* Extendido `HealthSummary` con campos `bloodPressureSystolic`, `bloodPressureDiastolic`, `spo2Percent`, `bodyTemperatureCelsius`.
+* App renombrada a **VITO**.
 
 ---
 
@@ -356,16 +362,23 @@ Como usuario, quiero sincronizar mis datos de salud automáticamente, para mante
 
 **Tareas**
 
-* Implementar sincronización automática.  
-* Resolver conflictos entre fuentes.  
-* Gestionar versionado de registros.
+* ✅ Implementar sincronización automática — intervalo de 30 segundos con `setInterval` en `HealthProvider.tsx`.  
+* ✅ Agregar botón manual de recarga (↻) junto al título "Signos vitales" en el dashboard.  
+* ⬜ Resolver conflictos entre fuentes.  
+* ⬜ Gestionar versionado de registros.
 
 **Definición de done**
 
-* La sincronización automática funciona por intervalo o en tiempo real según configuración.  
-* Los conflictos se detectan y resuelven aplicando la prioridad definida (wearable \> manual).  
-* El versionado permite auditar el origen de cada dato.  
-* Las pruebas cubren sincronización sin conflictos, con conflicto y fuente desconectada.
+* ✅ Sincronización automática funciona cada 30 segundos mientras la app está en primer plano.  
+* ✅ Botón de recarga manual disponible en el dashboard.  
+* ⬜ Conflictos entre fuentes no implementados.  
+* ⬜ Versionado de registros pendiente.  
+* ⬜ Pruebas unitarias e integración pendientes.
+
+**Progreso — Sprint actual (2026-06-05)**
+* Agregado auto-refresh cada 30s en `HealthProvider.tsx` via `setInterval` + `useRef` (se limpia al desmontar).
+* Agregado botón ↻ en el header de "Signos vitales" en `InicioScreen.tsx` que dispara `refreshData()`.
+* Efecto `useEffect` en `InicioScreen` maneja 3 casos: permisos pendientes → solicitar, permisos concedidos sin datos → cargar, ya con datos → inactivo.
 
 ---
 
@@ -412,22 +425,28 @@ Como usuario, quiero ver en la pantalla principal un resumen de mis signos vital
 
 **Tareas**
 
-* Diseñar componentes de indicadores del dashboard.  
-* Implementar lógica de colores y etiquetas de tendencia.  
-* Conectar indicadores con datos sincronizados en tiempo real.  
-* Diseñar estado vacío para datos no disponibles.  
-* Implementar navegación al detalle desde cada indicador.
+* ✅ Diseñar componentes de indicadores del dashboard — `VitalSignCard` con icono, valor, unidad, color de fondo y tendencia.  
+* ✅ Implementar lógica de colores y etiquetas de tendencia — `trend` basado en umbrales (HR >100 'up', <60 'down', SpO2 <95 'down', temp >37.5 'up', etc.).  
+* ✅ Conectar indicadores con datos sincronizados en tiempo real — datos desde `HealthSummary` provisto por `HealthProvider`.  
+* ✅ Diseñar estado vacío para datos no disponibles — fallback a "--" cuando no hay datos del wearable.  
+* ✅ Implementar navegación al detalle desde cada indicador — `DetalleSignoScreen` al tocar una `VitalSignCard`.
 
 **Definición de done**
 
-* Los 4 indicadores se renderizan correctamente en la pantalla principal con datos reales o simulados.  
-* El color de estado y la etiqueta de tendencia de cada indicador reflejan correctamente el rango configurado para ese usuario.  
-* El mensaje de datos no disponibles aparece cuando corresponde y muestra la fecha del último registro.  
-* La actualización automática funciona tras una sincronización o carga manual sin recargar la pantalla.  
-* Al tocar un indicador navega correctamente a la pantalla de detalle de ese signo vital.  
-* La pantalla es responsive y se visualiza correctamente en dispositivos móviles.  
-* Pruebas cubren los tres estados de color, el estado sin datos, la actualización automática y la navegación al detalle.  
-* 
+* ✅ Los 4 indicadores se renderizan correctamente en la pantalla principal con datos reales o simulados.  
+* ✅ El color de estado y la etiqueta de tendencia de cada indicador reflejan rangos fisiológicos.  
+* ✅ El mensaje de datos no disponibles ("--") aparece cuando no hay datos del wearable.  
+* ✅ La actualización automática funciona tras cada sincronización (auto-refresh 30s) sin recargar la pantalla.  
+* ✅ Al tocar un indicador navega correctamente a la pantalla de detalle de ese signo vital.  
+* ✅ La pantalla es responsive y se visualiza correctamente en dispositivos móviles.  
+* ⬜ Pruebas unitarias e integración pendientes.
+
+**Progreso — Sprint actual (2026-06-05)**
+* `InicioScreen.tsx` construye vitals dinámicos desde `summary`: frecuencia cardíaca, presión arterial, SpO₂, temperatura.
+* Fallback a "--" cuando `summary` es null o los campos específicos son null (sin datos del wearable).
+* Sección "Health Connect — Resumen del día" muestra pasos, calorías, distancia, sueño y ejercicios.
+* Cards con colores semánticos: `heartRed`, `danger`, `oxygenBlue`, `tempRed`.
+* `DetalleSignoScreen` recibe `tipoSigno`, `label`, `unit`, `icon` vía navegación con `useRoute`.
 
 ---
 

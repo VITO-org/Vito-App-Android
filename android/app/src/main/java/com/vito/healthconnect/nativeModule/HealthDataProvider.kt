@@ -4,9 +4,12 @@ import android.content.Intent
 import android.net.Uri
 import android.util.Log
 import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.records.BloodPressureRecord
+import androidx.health.connect.client.records.BodyTemperatureRecord
 import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
+import androidx.health.connect.client.records.OxygenSaturationRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
@@ -44,6 +47,9 @@ class HealthDataProvider(
             androidx.health.connect.client.permission.HealthPermission.getReadPermission(SleepSessionRecord::class),
             androidx.health.connect.client.permission.HealthPermission.getReadPermission(ExerciseSessionRecord::class),
             androidx.health.connect.client.permission.HealthPermission.getReadPermission(TotalCaloriesBurnedRecord::class),
+            androidx.health.connect.client.permission.HealthPermission.getReadPermission(BloodPressureRecord::class),
+            androidx.health.connect.client.permission.HealthPermission.getReadPermission(OxygenSaturationRecord::class),
+            androidx.health.connect.client.permission.HealthPermission.getReadPermission(BodyTemperatureRecord::class),
         )
 
         /**
@@ -145,6 +151,52 @@ class HealthDataProvider(
             .takeIf { samples -> samples.isNotEmpty() }
             ?.average()
 
+        // Leer presión arterial
+        val bloodPressureRecords = try {
+            healthConnectClient.readRecords(
+                ReadRecordsRequest(
+                    recordType = BloodPressureRecord::class,
+                    timeRangeFilter = timeRange,
+                ),
+            ).records
+        } catch (e: Exception) {
+            Log.w(TAG, "Error leyendo presión arterial, continuando...", e)
+            emptyList()
+        }
+        val latestBp = bloodPressureRecords.maxByOrNull { it.time }
+        val bloodPressureSystolic = latestBp?.systolic?.inMillimetersOfMercury
+        val bloodPressureDiastolic = latestBp?.diastolic?.inMillimetersOfMercury
+
+        // Leer saturación de oxígeno
+        val spo2Records = try {
+            healthConnectClient.readRecords(
+                ReadRecordsRequest(
+                    recordType = OxygenSaturationRecord::class,
+                    timeRangeFilter = timeRange,
+                ),
+            ).records
+        } catch (e: Exception) {
+            Log.w(TAG, "Error leyendo SpO2, continuando...", e)
+            emptyList()
+        }
+        val latestSpo2 = spo2Records.maxByOrNull { it.time }
+        val spo2Percent = latestSpo2?.percentage?.value
+
+        // Leer temperatura corporal
+        val temperatureRecords = try {
+            healthConnectClient.readRecords(
+                ReadRecordsRequest(
+                    recordType = BodyTemperatureRecord::class,
+                    timeRangeFilter = timeRange,
+                ),
+            ).records
+        } catch (e: Exception) {
+            Log.w(TAG, "Error leyendo temperatura, continuando...", e)
+            emptyList()
+        }
+        val latestTemp = temperatureRecords.maxByOrNull { it.time }
+        val bodyTemperatureCelsius = latestTemp?.temperature?.inCelsius
+
         return HealthSummary(
             steps = aggregate[StepsRecord.COUNT_TOTAL] ?: 0L,
             distanceMeters = aggregate[DistanceRecord.DISTANCE_TOTAL]?.inMeters ?: 0.0,
@@ -154,6 +206,10 @@ class HealthDataProvider(
             },
             averageBpm = averageBpm,
             exerciseSessions = exercises.size,
+            bloodPressureSystolic = bloodPressureSystolic,
+            bloodPressureDiastolic = bloodPressureDiastolic,
+            spo2Percent = spo2Percent,
+            bodyTemperatureCelsius = bodyTemperatureCelsius,
         )
     }
 
