@@ -1,6 +1,6 @@
 // ──────────────────────────────────────────────
 // Tipos de datos del dominio VITO
-// Generado desde SupabaseModels.kt (branch conexion-supabase)
+// Versión HU-92: datos orientados a ML
 // ──────────────────────────────────────────────
 
 // ─── ENUMS ───
@@ -8,8 +8,6 @@ export type RolUsuario = 'paciente' | 'familiar' | 'medico';
 export type SexoBiologico = 'M' | 'F' | 'otro';
 export type OptInStatus = 'pendiente' | 'activo' | 'rechazado';
 export type CanalNotif = 'app' | 'whatsapp' | 'email';
-export type FuenteDato = 'manual' | 'wearable' | 'api';
-export type TipoMetrica = 'FREC_CARDIACA' | 'BP_SISTOLICA' | 'BP_DIASTOLICA' | 'SPO2' | 'TEMPERATURA';
 
 // ─── TABLA: usuario ───
 export interface Usuario {
@@ -28,7 +26,7 @@ export type UsuarioInsert = Omit<Usuario, 'id' | 'created_at' | 'updated_at'> & 
   updated_at?: string;
 };
 
-// ─── TABLA: perfil_usuario ───
+// ─── TABLA: perfil_usuario (con peso_kg, altura_cm) ───
 export interface PerfilUsuario {
   id: string;
   user_id: string;
@@ -42,22 +40,26 @@ export interface PerfilUsuario {
   telefono: string | null;
   direccion: string | null;
   avatar_url: string | null;
+  peso_kg: number | null;
+  altura_cm: number | null;
 }
 export type PerfilUsuarioInsert = Omit<PerfilUsuario, 'id'> & { id?: string };
 
-// ─── TABLA: signo_vital ───
-export interface SignoVital {
+// ─── TABLA: datos_reloj (cada 30 seg desde smartwatch) ───
+export interface DatosReloj {
   id: string;
   id_usuario: string;
-  tipo_metrica: TipoMetrica;
-  valor: number;
-  unidad: string | null;
-  fuente: FuenteDato;
-  id_dispositivo: string | null;
-  is_outlier: boolean;
+  bp_sistolica: number | null;
+  bp_diastolica: number | null;
+  frec_cardiaca_bpm: number | null;
+  spo2_pct: number | null;
+  temperatura: number | null;
+  nivel_estres: number | null;
+  actividad_pasos: number | null;
+  horas_sueno: number | null;
   recorded_at: string | null;
 }
-export type SignoVitalInsert = Omit<SignoVital, 'id'> & { id?: string };
+export type DatosRelojInsert = Omit<DatosReloj, 'id'> & { id?: string };
 
 // ─── TABLA: baseline_clinico ───
 export interface BaselineClinico {
@@ -75,21 +77,6 @@ export interface BaselineClinico {
   updated_at: string | null;
 }
 export type BaselineClinicoInsert = Omit<BaselineClinico, 'id'> & { id?: string };
-
-// ─── TABLA: datos_clinicos_config ───
-export interface DatosClinicosConfig {
-  id: string;
-  id_usuario: string;
-  peso_kg: number | null;
-  altura_cm: number | null;
-  bp_sistolica: number | null;
-  bp_diastolica: number | null;
-  frec_cardiaca_bpm: number | null;
-  spo2_pct: number | null;
-  temperatura: number | null;
-  recorded_at: string | null;
-}
-export type DatosClinicosConfigInsert = Omit<DatosClinicosConfig, 'id'> & { id?: string };
 
 // ─── TABLA: contacto_confianza ───
 export interface ContactoConfianza {
@@ -135,6 +122,59 @@ export interface SintomaRecord {
   recorded_at: string | null;
 }
 
+// ─── TABLA: factores_riesgo_cardiaco (formulario opcional ML) ───
+export interface FactoresRiesgoCardiaco {
+  id_usuario: string;
+  diabetes: boolean | null;
+  antecedentes_familiares: boolean | null;
+  fumador: boolean | null;
+  obesidad: boolean | null;
+  consumo_alcohol: boolean | null;
+  tipo_dieta: 'saludable' | 'normal' | 'no saludable' | null;
+  problemas_cardiacos_previos: boolean | null;
+  uso_medicacion: boolean | null;
+  updated_at: string | null;
+}
+export type FactoresRiesgoCardiacoInsert = Omit<FactoresRiesgoCardiaco, 'updated_at'> & {
+  updated_at?: string;
+};
+
+// ─── TABLA: promedio_semanal_ml (features para ML) ───
+export interface PromedioSemanalML {
+  id: string;
+  id_usuario: string;
+  semana_inicio: string;
+  bp_sistolica_prom: number | null;
+  bp_diastolica_prom: number | null;
+  frec_cardiaca_prom: number | null;
+  spo2_prom: number | null;
+  nivel_estres_prom: number | null;
+  pasos_diarios_prom: number | null;
+  horas_sueno_prom: number | null;
+  total_lecturas: number | null;
+  created_at: string | null;
+}
+export type PromedioSemanalMLInsert = Omit<PromedioSemanalML, 'id' | 'created_at'> & {
+  id?: string;
+  created_at?: string;
+};
+
+// ─── TABLA: prediccion_riesgo (resultados del modelo ML) ───
+export interface PrediccionRiesgo {
+  id: string;
+  id_usuario: string;
+  riesgo: 'bajo' | 'medio' | 'alto';
+  score: number | null;
+  modelo_version: string | null;
+  factores_mas_influyentes: Record<string, number> | null;
+  datos_entrada: string | null;
+  created_at: string | null;
+}
+export type PrediccionRiesgoInsert = Omit<PrediccionRiesgo, 'id' | 'created_at'> & {
+  id?: string;
+  created_at?: string;
+};
+
 // ─── Application-level types ───
 
 export interface HealthSummaryForSync {
@@ -144,13 +184,4 @@ export interface HealthSummaryForSync {
   sleepMinutes: number;
   averageBpm: number | null;
   exerciseSessions: number;
-}
-
-export interface SignoVitalInput {
-  idUsuario: string;
-  tipoMetrica: TipoMetrica;
-  valor: number;
-  unidad?: string;
-  fuente?: FuenteDato;
-  idDispositivo?: string;
 }

@@ -1270,3 +1270,56 @@ Como sistema, quiero advertir cuando se intenten guardar rangos o umbrales médi
 * Riesgo cardiovascular visible en dashboard.
 * Tests unitarios del módulo de predicción.
 
+---
+
+### **HU-92 — Diseño de modelo de datos orientado a ML** {#hu-92-—-diseño-de-modelo-de-datos-orientado-a-ml}
+
+**Goal:** Estructurar la base de datos en Supabase para almacenar los datos del smartwatch, los factores de riesgo del usuario y las predicciones del modelo ML.
+
+**User Story:** Como sistema, quiero tener una base de datos con tablas orientadas a ML, para que el pipeline de entrenamiento y predicción pueda consumir datos estructurados.
+
+**Cambios en la BD:**
+
+| Acción | Detalle |
+|--------|---------|
+| Renombrar | `datos_clinicos_config` → `datos_reloj` |
+| Eliminar | `signo_vital` (reemplazada por `datos_reloj` + `promedio_semanal_ml`) |
+| Agregar columnas | `perfil_usuario`: `peso_kg`, `altura_cm` |
+| Agregar columnas | `datos_reloj`: `nivel_estres`, `actividad_pasos`, `horas_sueno` |
+| Nueva tabla | `factores_riesgo_cardiaco` (formulario opcional) |
+| Nueva tabla | `promedio_semanal_ml` (promedios semanales para features ML) |
+| Nueva tabla | `prediccion_riesgo` (resultados del modelo) |
+
+**Tablas nuevas:**
+
+| Tabla | Columnas |
+|-------|----------|
+| `factores_riesgo_cardiaco` | diabetes, antecedentes_familiares, fumador, obesidad, consumo_alcohol, tipo_dieta, problemas_cardiacos_previos, uso_medicacion |
+| `promedio_semanal_ml` | bp_sistolica_prom, bp_diastolica_prom, frec_cardiaca_prom, spo2_prom, nivel_estres_prom, pasos_diarios_prom, horas_sueno_prom, total_lecturas |
+| `prediccion_riesgo` | riesgo (bajo/medio/alto), score, modelo_version, factores_mas_influyentes, datos_entrada |
+
+**Arquitectura:**
+```
+perfil_usuario (edad, sexo, peso, altura)
+      ├── datos_reloj (cada 30s) ──► pipeline Python ──► promedio_semanal_ml
+      └── factores_riesgo_cardiaco
+                │
+                ▼ modelo TFLite ──► prediccion_riesgo
+```
+
+**Criterios de aceptación**
+
+* CA-01: `datos_reloj` almacena lecturas del smartwatch (PA, FC, SpO2, estrés, pasos, sueño).
+* CA-02: `promedio_semanal_ml` se alimenta desde el pipeline Python con promedios semanales.
+* CA-03: `factores_riesgo_cardiaco` guarda datos del formulario opcional.
+* CA-04: `prediccion_riesgo` guarda resultados del modelo con score y factores influyentes.
+* CA-05: `perfil_usuario` contiene peso_kg y altura_cm; `datos_reloj` no los tiene.
+* CA-06: `signo_vital` fue eliminada del schema.
+
+**Definición de done**
+
+* Schema actualizado en Supabase.
+* `schema.sql` documenta la versión final de la BD.
+* `models.ts` exporta las interfaces de todas las tablas nuevas.
+* HU-92 marcada como done.
+
