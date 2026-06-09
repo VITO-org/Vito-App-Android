@@ -36,7 +36,6 @@ android/.kotlin/
 **/build/reports/
 
 # ML Trainer
-ml-trainer/data/
 ml-trainer/models/
 
 # Cortex AI cache (transient)
