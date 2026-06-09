@@ -1211,3 +1211,62 @@ Como sistema, quiero advertir cuando se intenten guardar rangos o umbrales médi
 * Tests con valores límite, dentro de rango y fuera de rango para cada condición.  
 * Revisión clínica de los límites aprobada por el equipo médico.
 
+---
+
+## **Épica 9: Inteligencia Artificial y Ciencia de Datos** {#épica-9:-inteligencia-artificial-y-ciencia-de-datos}
+
+### **HU-91 — Predicción de Riesgo Cardiovascular con ML** {#hu-91-—-predicción-de-riesgo-cardiovascular-con-ml}
+
+**Goal:** Desarrollar un modelo de Machine Learning que prediga el riesgo (alto / medio / bajo) de que una persona desarrolle una enfermedad cardíaca en su vida, basado en datos del perfil del usuario, hábitos y signos vitales del smartwatch. El modelo corre on-device en Android mediante TFLite.
+
+**User Story:** Como sistema, quiero clasificar el riesgo cardiovascular de cada usuario en alto/medio/bajo, para que tanto el usuario como el profesional clínico puedan tomar acciones preventivas.
+
+**Inputs del modelo:**
+
+| Tipo | Fuente | Campos |
+|------|--------|--------|
+| Perfil del usuario | Registro inicial | Edad, Sexo, Colesterol, BMI, Triglicéridos |
+| Signos vitales (promedio semanal) | Smartwatch | Presión arterial, Frecuencia cardíaca, Nivel de estrés, Horas de sueño, Horas de actividad física, Horas sedentarias, Ejercicio por semana |
+| Antecedentes y hábitos | Formulario opcional | Diabetes, Antecedentes familiares, Fumador, Obesidad, Consumo de alcohol, Dieta, Problemas cardíacos previos, Uso de medicación |
+
+**Output:** Riesgo **Alto** / **Medio** / **Bajo** con probabilidad asociada (0-100%).
+
+**Criterios de aceptación**
+
+* CA-01: Dados los datos de entrada (perfil + smartwatch + formulario opcional), el modelo devuelve una clasificación de riesgo cardiovascular (alto/medio/bajo) con su probabilidad asociada.
+* CA-02: El modelo alcanza al menos 75% de precisión en el conjunto de prueba.
+* CA-03: La inferencia completa en dispositivo tarda menos de 500ms.
+* CA-04: El modelo exportado a TFLite ocupa menos de 10MB.
+* CA-05: Los resultados se muestran en una pantalla/card dentro de la app.
+* CA-06: Los datos del smartwatch (presión arterial, FC, estrés, sueño, actividad física) y los datos del perfil (edad, sexo, colesterol, BMI, triglicéridos) se combinan como features para la predicción; ninguno es excluyente.
+* CA-07: Las features opcionales del formulario (antecedentes familiares, diabetes, fumador, obesidad, alcohol, dieta, problemas previos, medicación) pueden faltar sin que el modelo falle — se imputan con valores por defecto.
+
+**Tareas**
+
+* [x] Adquirir dataset de signos vitales para entrenamiento (heart_attack_prediction_dataset.csv).
+* [x] Crear estructura del proyecto ML (ml-trainer/).
+* [ ] Realizar EDA y feature engineering.
+* [ ] Etiquetar dataset con clases de riesgo (alto/medio/bajo) según umbrales clínicos.
+* [ ] Entrenar modelo clasificador (Random Forest / XGBoost como baseline).
+* [ ] Evaluar métricas (precisión, recall, F1).
+* [ ] Exportar modelo a formato TFLite.
+* [ ] Integrar TFLite en native module Kotlin.
+* [ ] Crear bridge React Native para inferencia on-device.
+* [ ] Mostrar resultado de riesgo en UI.
+
+**Artefactos**
+
+* `ml-trainer/` — Pipeline completo de entrenamiento en Python.
+* `ml-trainer/data/heart_attack_prediction_dataset.csv` — Dataset con 26 variables.
+* `android/.../RiskPredictor.kt` — Módulo nativo de inferencia TFLite.
+* `src/services/RiskService.ts` — Bridge React Native.
+
+**Definición de done**
+
+* Dataset etiquetado y listo para entrenamiento.
+* Modelo entrenado con métricas documentadas (≥75% precisión).
+* Modelo exportado a TFLite (<10MB, <500ms inferencia).
+* Inferencia on-device funcionando desde la app.
+* Riesgo cardiovascular visible en dashboard.
+* Tests unitarios del módulo de predicción.
+
