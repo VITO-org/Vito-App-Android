@@ -1,6 +1,6 @@
 ---
 id: HU-91
-title: Definición de features para entrenamiento de modelos
+title: Predicción de Riesgo Cardiovascular con ML
 épica: Épica 9: Inteligencia Artificial y Ciencia de Datos
 sprint: S2
 inicio: 03/06/2026
@@ -11,18 +11,69 @@ devs: Flor Galarza · Emma · Nico
 estado: doing
 ---
 
-# HU-91: Definición de features para entrenamiento de modelos
+# HU-91: Predicción de Riesgo Cardiovascular con ML
 
-**Como** sistema  
-**Quiero** tener definido qué datos de salud se recolectan y cómo se estructuran como features  
-**Para** que el conjunto de datos sea útil para entrenar futuros modelos de predicción
+## Goal
 
-## Criterios de aceptación
+Desarrollar un modelo de Machine Learning que prediga el riesgo (alto / medio / bajo) de que una persona desarrolle una enfermedad cardíaca en su vida, basado en signos vitales y datos clínicos. El modelo corre on-device en Android mediante TFLite.
 
-- [ ] Lista completa de features documentada (frecuencia cardíaca, SpO2, PA, temperatura, actividad, estado de ánimo)
-- [ ] Cada feature tiene tipo de dato, unidad y frecuencia de captura
-- [ ] Formato estandarizado para pipeline ML
+## User Story
 
-## Dependencias
+> **Como** sistema
+> **Quiero** clasificar el riesgo cardiovascular de cada usuario en alto/medio/bajo
+> **Para** que tanto el usuario como el profesional clínico puedan tomar acciones preventivas
 
-- Ninguna (sprint inicial de análisis)
+## Requirements
+
+1. Predicción de riesgo cardiovascular en 3 clases (alto / medio / bajo).
+2. El modelo debe correr on-device (TFLite) sin depender de conexión a internet.
+3. Integración con la app Android vía native module Kotlin.
+4. El resultado debe mostrarse en el dashboard del usuario.
+
+## Constraints
+
+1. Compatibilidad con Android 14+ (API 34+).
+2. La app debe mantener la arquitectura React Native + Native Modules.
+3. Los datos sensibles deben manejarse de forma segura.
+4. El modelo debe ser liviano para correr en dispositivo móvil.
+
+## Acceptance Criteria
+
+- [ ] CA-01: Dado un conjunto de signos vitales de entrada, el modelo devuelve una clasificación (alto/medio/bajo) con una probabilidad asociada.
+- [ ] CA-02: El modelo alcanza al menos 75% de precisión en el conjunto de prueba.
+- [ ] CA-03: La inferencia completa en dispositivo tarda menos de 500ms.
+- [ ] CA-04: El modelo exportado a TFLite ocupa menos de 10MB.
+- [ ] CA-05: Los resultados se muestran en una pantalla/card dentro de la app.
+
+## Tasks
+
+- [x] Adquirir dataset de signos vitales para entrenamiento.
+- [x] Crear estructura del proyecto ML (ml-trainer/).
+- [ ] Realizar EDA y feature engineering.
+- [ ] Etiquetar dataset con clases de riesgo (alto/medio/bajo).
+- [ ] Entrenar modelo clasificador.
+- [ ] Evaluar métricas (precisión, recall, F1).
+- [ ] Exportar modelo a formato TFLite.
+- [ ] Integrar TFLite en native module Kotlin.
+- [ ] Crear bridge React Native para inferencia on-device.
+- [ ] Mostrar resultado de riesgo en UI.
+
+## Files in Scope
+
+- `ml-trainer/` — Pipeline completo de entrenamiento
+- `ml-trainer/data/heart_attack_prediction_dataset.csv` — Dataset
+- `android/app/src/main/java/com/vito/healthconnect/nativeModule/RiskPredictor.kt` — Native inference
+- `android/app/src/main/java/com/vito/healthconnect/nativeModule/VitoHealthModule.kt` — Bridge RN
+
+## Definition of Done
+
+- [ ] Dataset etiquetado y listo para entrenamiento.
+- [ ] Modelo entrenado con métricas documentadas.
+- [ ] Modelo exportado a TFLite.
+- [ ] Inferencia on-device funcionando desde la app.
+- [ ] Riesgo cardiovascular visible en dashboard.
+- [ ] Tests unitarios del módulo de predicción.
+
+## Tags
+
+hu-hu-91, release-release-1, epic-épica-9, dev-flor-galarza, dev-emma, dev-nico
