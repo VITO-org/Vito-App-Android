@@ -39,11 +39,13 @@ Desarrollar un modelo de Machine Learning que prediga el riesgo (alto / medio / 
 
 ## Acceptance Criteria
 
-- [ ] CA-01: Dado un conjunto de signos vitales de entrada, el modelo devuelve una clasificación (alto/medio/bajo) con una probabilidad asociada.
+- [ ] CA-01: El modelo recibe como entrada datos del perfil del usuario (edad, sexo, colesterol, presión arterial, frecuencia cardíaca, diabetes, antecedentes familiares, fumador, obesidad, consumo de alcohol, horas de ejercicio, dieta, problemas cardíacos previos, uso de medicación, nivel de estrés, horas sedentarias, BMI, triglicéridos, días de actividad física, horas de sueño) y devuelve una clasificación de riesgo cardiovascular (alto/medio/bajo) con una probabilidad asociada.
 - [ ] CA-02: El modelo alcanza al menos 75% de precisión en el conjunto de prueba.
 - [ ] CA-03: La inferencia completa en dispositivo tarda menos de 500ms.
 - [ ] CA-04: El modelo exportado a TFLite ocupa menos de 10MB.
 - [ ] CA-05: Los resultados se muestran en una pantalla/card dentro de la app.
+- [ ] CA-06: Los datos del smartwatch (presión arterial, FC, estrés, sueño, actividad física) y los datos del perfil (edad, sexo, colesterol, BMI, triglicéridos) se combinan como features para la predicción; ninguno es excluyente.
+- [ ] CA-07: Las features opcionales del formulario (antecedentes familiares, diabetes, fumador, obesidad, alcohol, dieta, problemas previos, medicación) pueden faltar sin que el modelo falle — se imputan con valores por defecto.
 
 ## Tasks
 
