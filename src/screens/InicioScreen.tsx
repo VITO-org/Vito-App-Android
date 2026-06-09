@@ -3,6 +3,7 @@ import {View, Text, ScrollView, StyleSheet, TouchableOpacity} from 'react-native
 import {useNavigation} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useHealth} from '../context/HealthProvider';
+import {useSupabase} from '../context/SupabaseProvider';
 import Card from '../components/Card';
 import VitalSignCard from '../components/VitalSignCard';
 import PrimaryButton from '../components/PrimaryButton';
@@ -37,7 +38,13 @@ const InicioScreen: React.FC = () => {
     requestPermissionsAndLoad,
     refreshData,
   } = useHealth();
+  const {session, profile} = useSupabase();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+
+  const userName =
+    profile?.nombre
+      ? profile.nombre
+      : session?.user?.email?.split('@')[0] ?? 'Usuario';
 
   // Gestión automática de Health Connect:
   // - Si HC disponible y sin permisos → solicitar permisos + cargar datos
@@ -131,7 +138,7 @@ const InicioScreen: React.FC = () => {
         <View style={styles.headerLeft}>
           <VITOMascot size={40} showAntenna={false} />
           <View style={styles.headerText}>
-            <Text style={styles.greeting}>¡Hola, Juan!</Text>
+            <Text style={styles.greeting}>¡Hola, {userName}!</Text>
             <Text style={styles.subtitle}>Todo está bajo control</Text>
           </View>
         </View>

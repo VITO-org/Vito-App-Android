@@ -1,4 +1,5 @@
 import 'react-native-url-polyfill/auto';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 
 // ⚠️ Credenciales del proyecto Supabase compartido
@@ -12,5 +13,6 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false, // React Native
+    storage: AsyncStorage,      // Persiste la sesión en el dispositivo
   },
 });
