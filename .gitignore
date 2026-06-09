@@ -35,6 +35,10 @@ android/.kotlin/
 # Build reports
 **/build/reports/
 
+# ML Trainer
+ml-trainer/data/
+ml-trainer/models/
+
 # Cortex AI cache (transient)
 .cortex/memory/
 .cortex/sessions/
