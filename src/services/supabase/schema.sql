@@ -147,3 +147,21 @@ CREATE TABLE sintoma_records (
   descripcion TEXT,
   recorded_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- 12. DATOS_RELOJ (lecturas automáticas desde wearable / smartwatch)
+CREATE TABLE datos_reloj (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id_usuario UUID NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
+  bp_sistolica INTEGER,
+  bp_diastolica INTEGER,
+  frec_cardiaca_bpm INTEGER,
+  spo2_pct NUMERIC(4,1),
+  temperatura NUMERIC(4,1),
+  nivel_estres INTEGER,
+  actividad_pasos INTEGER,
+  horas_sueno NUMERIC(4,1),
+  recorded_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_datos_reloj_usuario_fecha
+  ON datos_reloj(id_usuario, recorded_at DESC);

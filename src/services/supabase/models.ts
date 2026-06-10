@@ -135,6 +135,22 @@ export interface SintomaRecord {
   recorded_at: string | null;
 }
 
+// ─── TABLA: datos_reloj (lecturas de wearable) ───
+export interface DatoReloj {
+  id: string;
+  id_usuario: string;
+  bp_sistolica: number | null;
+  bp_diastolica: number | null;
+  frec_cardiaca_bpm: number | null;
+  spo2_pct: number | null;
+  temperatura: number | null;
+  nivel_estres: number | null;
+  actividad_pasos: number | null;
+  horas_sueno: number | null;
+  recorded_at: string | null;
+}
+export type DatoRelojInsert = Omit<DatoReloj, 'id'> & { id?: string };
+
 // ─── Application-level types ───
 
 export interface HealthSummaryForSync {

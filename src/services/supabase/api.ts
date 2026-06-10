@@ -11,6 +11,8 @@ import type {
   Patologia,
   CatalogoSintoma,
   SintomaRecord,
+  DatoReloj,
+  DatoRelojInsert,
   RolUsuario,
   TipoMetrica,
 } from './models';
@@ -361,4 +363,69 @@ export async function syncHealthSummaryToSupabase(
 
   if (signos.length === 0) return [];
   return insertSignosVitalesBatch(signos);
+}
+
+// ═══════════════════════════════════════════
+// DATOS_RELOJ (lecturas de wearable)
+// ═══════════════════════════════════════════
+
+/**
+ * Insertar una lectura del reloj/wearable.
+ */
+export async function insertDatoReloj(dato: DatoRelojInsert): Promise<DatoReloj> {
+  const { data, error } = await supabase
+    .from('datos_reloj')
+    .insert(dato)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as DatoReloj;
+}
+
+/**
+ * Insertar un lote de lecturas del wearable (ej. al sincronizar).
+ */
+export async function insertDatosRelojBatch(datos: DatoRelojInsert[]): Promise<DatoReloj[]> {
+  const { data, error } = await supabase
+    .from('datos_reloj')
+    .insert(datos)
+    .select();
+  if (error) throw error;
+  return (data as DatoReloj[]) ?? [];
+}
+
+/**
+ * Obtener lecturas del reloj para un usuario, ordenadas por fecha descendente.
+ */
+export async function getDatosReloj(
+  userId: string,
+  options?: {
+    from?: string;
+    to?: string;
+    limit?: number;
+    latest?: boolean;
+  },
+): Promise<DatoReloj[]> {
+  let query = supabase
+    .from('datos_reloj')
+    .select('*')
+    .eq('id_usuario', userId)
+    .order('recorded_at', { ascending: false });
+
+  if (options?.from) query = query.gte('recorded_at', options.from);
+  if (options?.to) query = query.lte('recorded_at', options.to);
+  if (options?.latest) query = query.limit(1);
+  else if (options?.limit) query = query.limit(options.limit);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data as DatoReloj[]) ?? [];
+}
+
+/**
+ * Eliminar una lectura del reloj por ID.
+ */
+export async function deleteDatoReloj(id: string): Promise<void> {
+  const { error } = await supabase.from('datos_reloj').delete().eq('id', id);
+  if (error) throw error;
 }
