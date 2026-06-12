@@ -322,6 +322,7 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: spacing.screenPaddingHorizontal,
     paddingTop: spacing.screenPaddingTop,
+    flexGrow: 1,
   },
 
   // ── Header ──
