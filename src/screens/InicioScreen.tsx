@@ -203,7 +203,7 @@ const InicioScreen: React.FC = () => {
             {errorSeverity === 'error' ? 'Error' : 'Aviso'}
           </Text>
           <Text style={styles.warningText}>{error}</Text>
-          {!permissionsGranted && hcStatus === 'available' && (
+          {hcStatus === 'available' && !loading && (
             <PrimaryButton
               variant="secondary"
               title="Conceder permisos"
@@ -246,6 +246,23 @@ const InicioScreen: React.FC = () => {
           />
         ))}
       </View>
+
+      {/* ─️ Aviso si falta presión arterial ── */}
+      {summary && summary.bloodPressureSystolic == null && (
+        <Card style={styles.warningCard}>
+          <Text style={styles.warningTitle}>📊 Presión arterial no disponible</Text>
+          <Text style={styles.warningText}>
+            Puede faltar el permiso en Health Connect. Presioná abajo para
+            solicitarlo y luego sincronizá los datos de tu reloj.
+          </Text>
+          <PrimaryButton
+            variant="secondary"
+            title="Solicitar permiso de presión arterial"
+            onPress={requestPermissionsAndLoad}
+            style={{marginTop: 8}}
+          />
+        </Card>
+      )}
 
       {/* ── Health Connect data ── */}
       {summary && (
