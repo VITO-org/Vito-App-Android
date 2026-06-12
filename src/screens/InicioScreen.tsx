@@ -1,5 +1,5 @@
-import React, {useEffect} from 'react';
-import {View, Text, ScrollView, StyleSheet, TouchableOpacity} from 'react-native';
+import React, {useEffect, useCallback, useState} from 'react';
+import {View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useHealth} from '../context/HealthProvider';
@@ -41,10 +41,20 @@ const InicioScreen: React.FC = () => {
   const {session, profile} = useSupabase();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
-  const userName =
-    profile?.nombre
-      ? profile.nombre
-      : session?.user?.email?.split('@')[0] ?? 'Usuario';
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await refreshData();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshData]);
+
+  const userName = profile?.nombre
+    ? profile.nombre
+    : session?.user?.email?.split('@')[0] ?? 'Usuario';
 
   // Gestión automática de Health Connect:
   // - Si HC disponible y sin permisos → solicitar permisos + cargar datos
@@ -132,7 +142,17 @@ const InicioScreen: React.FC = () => {
   }
 
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
+    <ScrollView
+      style={styles.scroll}
+      contentContainerStyle={styles.container}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={colors.primary}
+          colors={[colors.primary]}
+        />
+      }>
       {/* ── Header: saludo + notificaciones ── */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
@@ -390,15 +410,17 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   refreshButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   refreshIcon: {
-    fontSize: 18,
+    fontSize: 20,
     color: colors.primary,
     fontWeight: '700',
   },
