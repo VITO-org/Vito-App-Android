@@ -11,7 +11,7 @@
     "clean": "cd android && ./gradlew clean && cd .."
   },
   "dependencies": {
-    "@react-native-async-storage/async-storage": "^2.1.2",
+    "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native/new-app-screen": "0.85.3",
     "@react-navigation/bottom-tabs": "^7.16.2",
     "@react-navigation/native": "^7.2.5",
