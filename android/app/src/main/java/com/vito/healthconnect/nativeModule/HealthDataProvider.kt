@@ -254,3 +254,4 @@ class HealthDataProvider(
         return healthConnectClient.permissionController.getGrantedPermissions()
     }
 }
+
