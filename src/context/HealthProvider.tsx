@@ -35,6 +35,8 @@ interface HealthContextValue {
   errorSeverity: ErrorSeverity | null;
   /** True if HC permissions have been granted. */
   permissionsGranted: boolean;
+  /** Timestamp of the last successful data sync, null if never synced. */
+  lastSync: Date | null;
   /** Request permissions and load data. */
   requestPermissionsAndLoad: () => Promise<void>;
   /** Refresh health data (requires permissions already granted). */
@@ -54,6 +56,7 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
   const [error, setError] = useState<string | null>(null);
   const [errorSeverity, setErrorSeverity] = useState<ErrorSeverity | null>(null);
   const [permissionsGranted, setPermissionsGranted] = useState(false);
+  const [lastSync, setLastSync] = useState<Date | null>(null);
   const {getUserId} = useSupabase();
 
   // Referencia para el intervalo de auto-refresh
@@ -85,6 +88,7 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
     try {
       const data = await getHealthData();
       setSummary(data);
+      setLastSync(new Date());
 
       // Sincronizar automáticamente con Supabase (datos_reloj)
       const userId = getUserId();
@@ -178,6 +182,7 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
     error,
     errorSeverity,
     permissionsGranted,
+    lastSync,
     requestPermissionsAndLoad,
     refreshData,
   };

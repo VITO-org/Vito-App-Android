@@ -35,6 +35,7 @@ const InicioScreen: React.FC = () => {
     errorSeverity,
     hcStatus,
     permissionsGranted,
+    lastSync,
     requestPermissionsAndLoad,
     refreshData,
   } = useHealth();
@@ -312,17 +313,88 @@ const InicioScreen: React.FC = () => {
         <Text style={styles.sectionTitle}>Última actividad</Text>
       </View>
 
-      <Card>
-        <View style={styles.activityRow}>
-          <View style={styles.activityInfo}>
-            <Text style={styles.activityTitle}>Medicación registrada</Text>
-            <Text style={styles.activityTime}>Hoy 08:30</Text>
-          </View>
-          <View style={styles.activityCheck}>
-            <Text style={styles.checkIcon}>✓</Text>
-          </View>
-        </View>
-      </Card>
+      {(() => {
+        if (!lastSync) {
+          return (
+            <Card>
+              <View style={styles.activityRow}>
+                <View style={styles.activityInfo}>
+                  <Text style={styles.activityTitle}>Sin actividad registrada</Text>
+                  <Text style={styles.activityTime}>
+                    {loading
+                      ? 'Cargando datos...'
+                      : 'Conectá Health Connect para ver tu actividad'}
+                  </Text>
+                </View>
+              </View>
+            </Card>
+          );
+        }
+
+        const items: {title: string; detail: string}[] = [
+          {
+            title: 'Sincronización Health Connect',
+            detail: lastSync.toLocaleDateString('es-ES', {
+              weekday: 'long',
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
+          },
+        ];
+
+        if (summary) {
+          if (summary.steps > 0) {
+            items.push({
+              title: '👣 Pasos registrados',
+              detail: `${summary.steps.toLocaleString('es-ES')} pasos`,
+            });
+          }
+          if (summary.caloriesKcal > 0) {
+            items.push({
+              title: '🔥 Calorías quemadas',
+              detail: `${summary.caloriesKcal.toFixed(0)} kcal`,
+            });
+          }
+          if (summary.distanceMeters > 0) {
+            items.push({
+              title: '📏 Distancia recorrida',
+              detail: `${(summary.distanceMeters / 1000).toFixed(2)} km`,
+            });
+          }
+          if (summary.sleepMinutes > 0) {
+            items.push({
+              title: '😴 Sueño registrado',
+              detail: `${Math.floor(summary.sleepMinutes / 60)}h ${summary.sleepMinutes % 60}m`,
+            });
+          }
+          if (summary.averageBpm != null) {
+            items.push({
+              title: '❤️ Frecuencia cardíaca',
+              detail: `${Math.round(summary.averageBpm)} lpm promedio`,
+            });
+          }
+        }
+
+        return (
+          <Card>
+            {items.map((item, i) => (
+              <View
+                key={i}
+                style={[styles.activityRow, i === items.length - 1 && styles.activityRowLast]}>
+                <View style={styles.activityInfo}>
+                  <Text style={styles.activityTitle}>{item.title}</Text>
+                  <Text style={styles.activityTime}>{item.detail}</Text>
+                </View>
+                {i === 0 && (
+                  <View style={styles.activityCheck}>
+                    <Text style={styles.checkIcon}>✓</Text>
+                  </View>
+                )}
+              </View>
+            ))}
+          </Card>
+        );
+      })()}
 
       <View style={{height: 24}} />
       </>
@@ -498,6 +570,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  activityRowLast: {
+    borderBottomWidth: 0,
   },
   activityInfo: {},
   activityTitle: {

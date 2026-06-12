@@ -92,6 +92,7 @@ class HealthDataProvider(
      */
     suspend fun loadTodayData(): HealthSummary {
         val timeRange = todayTimeRange()
+        Log.d(TAG, "=== loadTodayData ===")
 
         // Aggregate: pasos, distancia, calorías
         val aggregate = healthConnectClient.aggregate(
@@ -152,20 +153,53 @@ class HealthDataProvider(
             ?.average()
 
         // Leer presión arterial
+        Log.d(TAG, "Cargando presión arterial...")
+        Log.d(TAG, "TimeRange (hoy): $timeRange")
         val bloodPressureRecords = try {
-            healthConnectClient.readRecords(
+            val records = healthConnectClient.readRecords(
                 ReadRecordsRequest(
                     recordType = BloodPressureRecord::class,
                     timeRangeFilter = timeRange,
                 ),
             ).records
+            Log.d(TAG, "Registros BP hoy: ${records.size}")
+            if (records.isNotEmpty()) {
+                val r = records.first()
+                Log.d(TAG, "Primer BP hoy - systolic: ${r.systolic?.inMillimetersOfMercury}, diastolic: ${r.diastolic?.inMillimetersOfMercury}, time: ${r.time}")
+            }
+            records
         } catch (e: Exception) {
-            Log.w(TAG, "Error leyendo presión arterial, continuando...", e)
+            Log.w(TAG, "Error leyendo BP hoy, continuando...", e)
             emptyList()
         }
-        val latestBp = bloodPressureRecords.maxByOrNull { it.time }
+        // También buscar en últimos 7 días (Health Sync puede tener delay)
+        val weekTimeRange = TimeRangeFilter.between(
+            Instant.now().minus(java.time.Duration.ofDays(7)),
+            Instant.now()
+        )
+        val bpRecordsWeek = try {
+            val records = healthConnectClient.readRecords(
+                ReadRecordsRequest(
+                    recordType = BloodPressureRecord::class,
+                    timeRangeFilter = weekTimeRange,
+                ),
+            ).records
+            Log.d(TAG, "Registros BP últimos 7 días: ${records.size}")
+            if (records.isNotEmpty()) {
+                val r = records.last()
+                Log.d(TAG, "Último BP 7d - systolic: ${r.systolic?.inMillimetersOfMercury}, diastolic: ${r.diastolic?.inMillimetersOfMercury}, time: ${r.time}")
+            }
+            records
+        } catch (e: Exception) {
+            Log.w(TAG, "Error leyendo BP 7d, continuando...", e)
+            emptyList()
+        }
+        // Usar el más reciente entre ambos rangos
+        val allBpRecords = bloodPressureRecords + bpRecordsWeek
+        val latestBp = allBpRecords.maxByOrNull { it.time }
         val bloodPressureSystolic = latestBp?.systolic?.inMillimetersOfMercury
         val bloodPressureDiastolic = latestBp?.diastolic?.inMillimetersOfMercury
+        Log.d(TAG, "BP final (combinado) - systolic: $bloodPressureSystolic, diastolic: $bloodPressureDiastolic")
 
         // Leer saturación de oxígeno
         val spo2Records = try {
