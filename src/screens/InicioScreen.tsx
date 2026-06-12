@@ -1,5 +1,5 @@
-import React, {useEffect, useCallback, useState, useMemo} from 'react';
-import {View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, Dimensions, Platform} from 'react-native';
+import React, {useEffect, useCallback, useState} from 'react';
+import {View, Text, FlatList, StyleSheet, TouchableOpacity, Dimensions} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useHealth} from '../context/HealthProvider';
@@ -51,11 +51,6 @@ const InicioScreen: React.FC = () => {
       setRefreshing(false);
     }
   }, [refreshData]);
-
-  const contentMinHeight = useMemo(
-    () => Dimensions.get('window').height + 200,
-    [],
-  );
 
   const userName = profile?.nombre
     ? profile.nombre
@@ -147,21 +142,15 @@ const InicioScreen: React.FC = () => {
   }
 
   return (
-    <ScrollView
+    <FlatList
       style={styles.scroll}
       contentContainerStyle={styles.container}
-      nestedScrollEnabled={true}
-      overScrollMode="always"
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          colors={[colors.primary]}
-          progressBackgroundColor={colors.surface}
-          enabled={true}
-        />
-      }>
-      <View style={{minHeight: contentMinHeight}}>
+      refreshing={refreshing}
+      onRefresh={onRefresh}
+      data={[{}]}
+      keyExtractor={() => 'content'}
+      renderItem={() => (
+      <>
       {/* ── Header: saludo + notificaciones ── */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
@@ -319,8 +308,9 @@ const InicioScreen: React.FC = () => {
       </Card>
 
       <View style={{height: 24}} />
-      </View>
-    </ScrollView>
+      </>
+    )}
+  />
   );
 };
 
