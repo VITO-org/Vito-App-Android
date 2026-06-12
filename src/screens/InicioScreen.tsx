@@ -1,5 +1,5 @@
-import React, {useEffect, useCallback, useState} from 'react';
-import {View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, Dimensions} from 'react-native';
+import React, {useEffect, useCallback, useState, useMemo} from 'react';
+import {View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, Dimensions, Platform} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useHealth} from '../context/HealthProvider';
@@ -10,8 +10,6 @@ import PrimaryButton from '../components/PrimaryButton';
 import VITOMascot from '../components/VITOMascot';
 import {colors, spacing, fontSize} from '../theme';
 import {TipoSignoVital} from '../data/mockReportes';
-
-const {height: SCREEN_HEIGHT} = Dimensions.get('window');
 
 type RootStackParamList = {
   MainTabs: undefined;
@@ -53,6 +51,11 @@ const InicioScreen: React.FC = () => {
       setRefreshing(false);
     }
   }, [refreshData]);
+
+  const contentMinHeight = useMemo(
+    () => Dimensions.get('window').height + 200,
+    [],
+  );
 
   const userName = profile?.nombre
     ? profile.nombre
@@ -147,14 +150,18 @@ const InicioScreen: React.FC = () => {
     <ScrollView
       style={styles.scroll}
       contentContainerStyle={styles.container}
+      nestedScrollEnabled={true}
+      overScrollMode="always"
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
           onRefresh={onRefresh}
-          tintColor={colors.primary}
           colors={[colors.primary]}
+          progressBackgroundColor={colors.surface}
+          enabled={true}
         />
       }>
+      <View style={{minHeight: contentMinHeight}}>
       {/* ── Header: saludo + notificaciones ── */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
@@ -312,6 +319,7 @@ const InicioScreen: React.FC = () => {
       </Card>
 
       <View style={{height: 24}} />
+      </View>
     </ScrollView>
   );
 };
@@ -324,8 +332,7 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: spacing.screenPaddingHorizontal,
     paddingTop: spacing.screenPaddingTop,
-    paddingBottom: 60,
-    minHeight: SCREEN_HEIGHT + 1,
+    paddingBottom: 100,
   },
 
   // ── Header ──
