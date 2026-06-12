@@ -1,5 +1,5 @@
 import React, {useEffect, useCallback, useState} from 'react';
-import {View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl} from 'react-native';
+import {View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, Dimensions} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useHealth} from '../context/HealthProvider';
@@ -10,6 +10,8 @@ import PrimaryButton from '../components/PrimaryButton';
 import VITOMascot from '../components/VITOMascot';
 import {colors, spacing, fontSize} from '../theme';
 import {TipoSignoVital} from '../data/mockReportes';
+
+const {height: SCREEN_HEIGHT} = Dimensions.get('window');
 
 type RootStackParamList = {
   MainTabs: undefined;
@@ -322,7 +324,8 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: spacing.screenPaddingHorizontal,
     paddingTop: spacing.screenPaddingTop,
-    flexGrow: 1,
+    paddingBottom: 60,
+    minHeight: SCREEN_HEIGHT + 1,
   },
 
   // ── Header ──
