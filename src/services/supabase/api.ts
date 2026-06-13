@@ -1,18 +1,17 @@
 import { supabase } from './client';
 import type {
-  Usuario,
   PerfilUsuario,
-  SignoVital,
-  SignoVitalInsert,
   BaselineClinico,
-  DatosClinicosConfig,
-  ContactoConfianza,
-  ContactoConfianzaInsert,
-  Patologia,
-  CatalogoSintoma,
-  SintomaRecord,
+  DatosReloj,
+  DatosRelojInsert,
+  FactoresRiesgoCardiaco,
+  FactoresRiesgoCardiacoInsert,
+  PromedioSemanalML,
+  PrediccionRiesgo,
+  SintomasUsuario,
+  SintomasUsuarioInsert,
+  CatSintoma,
   RolUsuario,
-  TipoMetrica,
 } from './models';
 
 // ═══════════════════════════════════════════
@@ -103,46 +102,45 @@ export async function upsertProfile(
 }
 
 // ═══════════════════════════════════════════
-// SIGNOS VITALES
+// DATOS RELOJ (smartwatch — cada 30 seg)
 // ═══════════════════════════════════════════
 
-export async function insertSignoVital(signo: SignoVitalInsert): Promise<SignoVital> {
+export async function insertDatosReloj(dato: DatosRelojInsert): Promise<DatosReloj> {
   const { data, error } = await supabase
-    .from('signo_vital')
-    .insert(signo)
+    .from('datos_reloj')
+    .insert(dato)
     .select()
     .single();
   if (error) throw error;
-  return data as SignoVital;
+  return data as DatosReloj;
 }
 
-export async function insertSignosVitalesBatch(signos: SignoVitalInsert[]): Promise<SignoVital[]> {
+export async function insertDatosRelojBatch(datos: DatosRelojInsert[]): Promise<DatosReloj[]> {
   const { data, error } = await supabase
-    .from('signo_vital')
-    .insert(signos)
+    .from('datos_reloj')
+    .insert(datos)
     .select();
   if (error) throw error;
-  return (data as SignoVital[]) ?? [];
+  return (data as DatosReloj[]) ?? [];
 }
 
-export async function getSignosVitales(
+export async function getDatosReloj(
   userId: string,
-  options?: { tipoMetrica?: TipoMetrica; from?: string; to?: string; limit?: number },
-): Promise<SignoVital[]> {
+  options?: { from?: string; to?: string; limit?: number },
+): Promise<DatosReloj[]> {
   let query = supabase
-    .from('signo_vital')
+    .from('datos_reloj')
     .select('*')
     .eq('id_usuario', userId)
     .order('recorded_at', { ascending: false });
 
-  if (options?.tipoMetrica) query = query.eq('tipo_metrica', options.tipoMetrica);
   if (options?.from) query = query.gte('recorded_at', options.from);
   if (options?.to) query = query.lte('recorded_at', options.to);
   if (options?.limit) query = query.limit(options.limit);
 
   const { data, error } = await query;
   if (error) throw error;
-  return (data as SignoVital[]) ?? [];
+  return (data as DatosReloj[]) ?? [];
 }
 
 // ═══════════════════════════════════════════
@@ -172,157 +170,123 @@ export async function upsertBaseline(
 }
 
 // ═══════════════════════════════════════════
-// CONFIGURACIÓN CLÍNICA
+// FACTORES DE RIESGO CARDÍACO (ML)
 // ═══════════════════════════════════════════
 
-export async function getDatosClinicosConfig(userId: string): Promise<DatosClinicosConfig | null> {
+export async function upsertFactoresRiesgoCardiaco(
+  factores: FactoresRiesgoCardiacoInsert,
+): Promise<FactoresRiesgoCardiaco> {
   const { data, error } = await supabase
-    .from('datos_clinicos_config')
+    .from('factores_riesgo_cardiaco')
+    .upsert(factores, { onConflict: 'id_usuario' })
+    .select()
+    .single();
+  if (error) throw error;
+  return data as FactoresRiesgoCardiaco;
+}
+
+export async function getFactoresRiesgoCardiaco(
+  userId: string,
+): Promise<FactoresRiesgoCardiaco | null> {
+  const { data, error } = await supabase
+    .from('factores_riesgo_cardiaco')
     .select('*')
     .eq('id_usuario', userId)
     .maybeSingle();
   if (error) throw error;
-  return data as DatosClinicosConfig | null;
-}
-
-export async function upsertDatosClinicosConfig(
-  config: Partial<DatosClinicosConfig> & { id_usuario: string },
-): Promise<DatosClinicosConfig> {
-  const { data, error } = await supabase
-    .from('datos_clinicos_config')
-    .upsert(config, { onConflict: 'id_usuario' })
-    .select()
-    .single();
-  if (error) throw error;
-  return data as DatosClinicosConfig;
+  return data as FactoresRiesgoCardiaco | null;
 }
 
 // ═══════════════════════════════════════════
-// CONTACTOS DE CONFIANZA
+// SÍNTOMAS USUARIO (texto libre, sin catálogo)
 // ═══════════════════════════════════════════
 
-export async function getContactos(pacienteId: string): Promise<ContactoConfianza[]> {
+export async function insertSintomaUsuario(
+  sintoma: SintomasUsuarioInsert,
+): Promise<SintomasUsuario> {
   const { data, error } = await supabase
-    .from('contacto_confianza')
-    .select('*')
-    .eq('paciente_id', pacienteId)
-    .order('es_primario', { ascending: false });
-  if (error) throw error;
-  return (data as ContactoConfianza[]) ?? [];
-}
-
-export async function createContacto(
-  contacto: ContactoConfianzaInsert,
-): Promise<ContactoConfianza> {
-  const { data, error } = await supabase
-    .from('contacto_confianza')
-    .insert(contacto)
+    .from('sintomas_usuario')
+    .insert(sintoma)
     .select()
     .single();
   if (error) throw error;
-  return data as ContactoConfianza;
+  return data as SintomasUsuario;
 }
 
-export async function updateContacto(
-  id: string,
-  changes: Partial<ContactoConfianza>,
-): Promise<ContactoConfianza> {
-  const { data, error } = await supabase
-    .from('contacto_confianza')
-    .update(changes)
-    .eq('id', id)
-    .select()
-    .single();
-  if (error) throw error;
-  return data as ContactoConfianza;
-}
-
-export async function deleteContacto(id: string): Promise<void> {
-  const { error } = await supabase.from('contacto_confianza').delete().eq('id', id);
-  if (error) throw error;
-}
-
-// ═══════════════════════════════════════════
-// PATOLOGÍAS Y SÍNTOMAS
-// ═══════════════════════════════════════════
-
-export async function getPatologias(): Promise<Patologia[]> {
-  const { data, error } = await supabase.from('patologia').select('*').order('nombre');
-  if (error) throw error;
-  return (data as Patologia[]) ?? [];
-}
-
-export async function getCatalogoSintomas(patologiaId?: string): Promise<CatalogoSintoma[]> {
-  let query = supabase.from('catalogo_sintoma').select('*').order('name');
-  if (patologiaId) query = query.eq('id_patologia', patologiaId);
-  const { data, error } = await query;
-  if (error) throw error;
-  return (data as CatalogoSintoma[]) ?? [];
-}
-
-export async function insertSintomaRecord(record: {
-  id_usuario: string;
-  id_sintoma: string;
-  intensidad?: number;
-  descripcion?: string;
-}): Promise<SintomaRecord> {
-  const { data, error } = await supabase
-    .from('sintoma_records')
-    .insert(record)
-    .select()
-    .single();
-  if (error) throw error;
-  return data as SintomaRecord;
-}
-
-export async function getSintomaRecords(
+export async function getSintomasUsuario(
   userId: string,
-  options?: { from?: string; to?: string; limit?: number },
-): Promise<SintomaRecord[]> {
+  options?: { from?: string; to?: string; limit?: number; categoria?: CatSintoma },
+): Promise<SintomasUsuario[]> {
   let query = supabase
-    .from('sintoma_records')
+    .from('sintomas_usuario')
     .select('*')
     .eq('id_usuario', userId)
     .order('recorded_at', { ascending: false });
 
+  if (options?.categoria) query = query.eq('categoria', options.categoria);
   if (options?.from) query = query.gte('recorded_at', options.from);
   if (options?.to) query = query.lte('recorded_at', options.to);
   if (options?.limit) query = query.limit(options.limit);
 
   const { data, error } = await query;
   if (error) throw error;
-  return (data as SintomaRecord[]) ?? [];
+  return (data as SintomasUsuario[]) ?? [];
 }
 
 // ═══════════════════════════════════════════
-// PATOLOGÍAS DEL PACIENTE
+// PREDICCIÓN DE RIESGO (resultado ML)
 // ═══════════════════════════════════════════
 
-export async function addPatologiaPaciente(
-  idUsuario: string,
-  idPatologia: string,
-  fechaDiagnosticado?: string,
-) {
+export async function getUltimaPrediccionRiesgo(
+  userId: string,
+): Promise<PrediccionRiesgo | null> {
   const { data, error } = await supabase
-    .from('patologia_paciente')
-    .insert({
-      id_usuario: idUsuario,
-      id_patologia: idPatologia,
-      fecha_diagnosticado: fechaDiagnosticado ?? null,
-    })
-    .select()
-    .single();
+    .from('prediccion_riesgo')
+    .select('*')
+    .eq('id_usuario', userId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
   if (error) throw error;
-  return data;
+  return data as PrediccionRiesgo | null;
 }
 
-export async function getPatologiasPaciente(userId: string) {
-  const { data, error } = await supabase
-    .from('patologia_paciente')
-    .select('*, patologia(*)')
-    .eq('id_usuario', userId);
+export async function getHistorialPredicciones(
+  userId: string,
+  options?: { limit?: number },
+): Promise<PrediccionRiesgo[]> {
+  let query = supabase
+    .from('prediccion_riesgo')
+    .select('*')
+    .eq('id_usuario', userId)
+    .order('created_at', { ascending: false });
+
+  if (options?.limit) query = query.limit(options.limit);
+
+  const { data, error } = await query;
   if (error) throw error;
-  return data;
+  return (data as PrediccionRiesgo[]) ?? [];
+}
+
+// ═══════════════════════════════════════════
+// PROMEDIO SEMANAL ML (solo lectura — lo llena pipeline Python)
+// ═══════════════════════════════════════════
+
+export async function getPromedioSemanalML(
+  userId: string,
+  options?: { limit?: number },
+): Promise<PromedioSemanalML[]> {
+  let query = supabase
+    .from('promedio_semanal_ml')
+    .select('*')
+    .eq('id_usuario', userId)
+    .order('semana_inicio', { ascending: false });
+
+  if (options?.limit) query = query.limit(options.limit);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data as PromedioSemanalML[]) ?? [];
 }
 
 // ═══════════════════════════════════════════
@@ -330,7 +294,7 @@ export async function getPatologiasPaciente(userId: string) {
 // ═══════════════════════════════════════════
 
 /**
- * Convierte el resumen de Health Connect en signos vitales y los inserta.
+ * Convierte el resumen de Health Connect en un registro de datos_reloj.
  */
 export async function syncHealthSummaryToSupabase(
   userId: string,
@@ -342,23 +306,16 @@ export async function syncHealthSummaryToSupabase(
     averageBpm: number | null;
     exerciseSessions: number;
   },
-): Promise<SignoVital[]> {
+): Promise<DatosReloj> {
   const now = new Date().toISOString();
-  const signos: SignoVitalInsert[] = [];
 
-  if (summary.averageBpm != null) {
-    signos.push({
-      id_usuario: userId,
-      tipo_metrica: 'FREC_CARDIACA',
-      valor: summary.averageBpm,
-      unidad: 'bpm',
-      fuente: 'wearable',
-      id_dispositivo: null,
-      is_outlier: false,
-      recorded_at: now,
-    });
-  }
+  const dato: DatosRelojInsert = {
+    id_usuario: userId,
+    frec_cardiaca_bpm: summary.averageBpm,
+    actividad_pasos: summary.steps,
+    horas_sueno: summary.sleepMinutes > 0 ? summary.sleepMinutes / 60 : null,
+    recorded_at: now,
+  };
 
-  if (signos.length === 0) return [];
-  return insertSignosVitalesBatch(signos);
+  return insertDatosReloj(dato);
 }

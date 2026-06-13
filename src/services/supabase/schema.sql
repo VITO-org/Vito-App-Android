@@ -1,7 +1,7 @@
 -- Schema SQL para Supabase
--- Versión final — HU-92: Diseño de datos orientado a ML
+-- Versión post-migración HU-92: datos orientados a ML
 -- Proyecto: VITO Health Connect
--- Copiar y pegar en SQL Editor del panel de Supabase
+-- Schema de referencia: refleja el estado actual de la BD en Supabase
 -- Proyecto: https://supabase.com/dashboard/project/rkgbedehkfpiylaubjbo
 
 -- ============================================
@@ -9,32 +9,12 @@
 -- ============================================
 CREATE TYPE rol_usuario AS ENUM ('paciente', 'familiar', 'medico');
 CREATE TYPE sexo_biologico AS ENUM ('M', 'F', 'otro');
-CREATE TYPE opt_in_status AS ENUM ('pendiente', 'activo', 'rechazado');
-CREATE TYPE canal_notif AS ENUM ('app', 'whatsapp', 'email');
+CREATE TYPE tipo_patologia AS ENUM ('ninguna', 'diabetes', 'hipertension', 'alzheimer', 'otra');
+CREATE TYPE cat_sintoma    AS ENUM ('fisico', 'emocional');
+CREATE TYPE origen_sintoma AS ENUM ('chat_ia', 'manual');
 
 -- ============================================
--- 1. PATOLOGIA
--- ============================================
-CREATE TABLE patologia (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  nombre VARCHAR(100) NOT NULL,
-  codigo VARCHAR(20) UNIQUE,
-  descripcion TEXT,
-  module_key VARCHAR(50)
-);
-
--- ============================================
--- 2. CATALOGO_SINTOMA
--- ============================================
-CREATE TABLE catalogo_sintoma (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name VARCHAR(100) NOT NULL,
-  categoria VARCHAR(50),
-  id_patologia UUID REFERENCES patologia(id)
-);
-
--- ============================================
--- 3. USUARIO (tabla pública vinculada a auth.users)
+-- 1. USUARIO (tabla pública vinculada a auth.users)
 -- ============================================
 CREATE TABLE usuario (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -48,18 +28,7 @@ CREATE TABLE usuario (
 );
 
 -- ============================================
--- 4. PATOLOGIA_PACIENTE
--- ============================================
-CREATE TABLE patologia_paciente (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  id_usuario UUID NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
-  id_patologia UUID NOT NULL REFERENCES patologia(id),
-  fecha_diagnosticado DATE,
-  notas TEXT
-);
-
--- ============================================
--- 5. PERFIL_USUARIO (con peso_kg y altura_cn para ML)
+-- 2. PERFIL_USUARIO (con patologia, peso_kg, altura_cm)
 -- ============================================
 CREATE TABLE perfil_usuario (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -75,29 +44,13 @@ CREATE TABLE perfil_usuario (
   direccion TEXT,
   avatar_url TEXT,
   peso_kg DECIMAL(5,2),
-  altura_cm DECIMAL(5,2)
+  altura_cm DECIMAL(5,2),
+  patologia tipo_patologia DEFAULT 'ninguna',
+  patologia_descripcion TEXT
 );
 
 -- ============================================
--- 6. CONTACTO_CONFIANZA
--- ============================================
-CREATE TABLE contacto_confianza (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  paciente_id UUID NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
-  nombre VARCHAR(150) NOT NULL,
-  rol VARCHAR(50),
-  telefono VARCHAR(30),
-  email VARCHAR(255),
-  es_primario BOOLEAN DEFAULT FALSE,
-  opt_in_status opt_in_status DEFAULT 'pendiente',
-  opt_in_expires_at TIMESTAMPTZ,
-  not_psicologica BOOLEAN DEFAULT FALSE,
-  not_mood BOOLEAN DEFAULT FALSE,
-  not_canal canal_notif DEFAULT 'app'
-);
-
--- ============================================
--- 7. PASSWORD_RESET_TOKENS
+-- 3. PASSWORD_RESET_TOKENS
 -- ============================================
 CREATE TABLE password_reset_tokens (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -108,7 +61,7 @@ CREATE TABLE password_reset_tokens (
 );
 
 -- ============================================
--- 8. DATOS_RELOJ (cada 30 seg desde el smartwatch)
+-- 4. DATOS_RELOJ (cada 30 seg desde el smartwatch)
 -- ============================================
 CREATE TABLE datos_reloj (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -128,7 +81,7 @@ CREATE INDEX idx_datos_reloj_usuario_fecha
   ON datos_reloj(id_usuario, recorded_at DESC);
 
 -- ============================================
--- 9. BASELINE_CLINICO
+-- 5. BASELINE_CLINICO
 -- ============================================
 CREATE TABLE baseline_clinico (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -146,19 +99,24 @@ CREATE TABLE baseline_clinico (
 );
 
 -- ============================================
--- 10. SINTOMA_RECORDS
+-- 6. SINTOMAS_USUARIO (texto libre, sin catálogo)
+--     La IA inserta aquí lo que detecta en la conversación.
+--     Categoriza en fisico/emocional.
 -- ============================================
-CREATE TABLE sintoma_records (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  id_usuario UUID NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
-  id_sintoma UUID NOT NULL REFERENCES catalogo_sintoma(id),
-  intensidad INTEGER CHECK (intensidad BETWEEN 1 AND 10),
-  descripcion TEXT,
+CREATE TABLE sintomas_usuario (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id_usuario  UUID NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
+  descripcion TEXT NOT NULL,
+  categoria   cat_sintoma NOT NULL,
+  origen      origen_sintoma NOT NULL DEFAULT 'chat_ia',
   recorded_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE INDEX idx_sintomas_usuario_fecha
+  ON sintomas_usuario(id_usuario, recorded_at DESC);
+
 -- ============================================
--- 11. FACTORES_RIESGO_CARDIACO (formulario opcional ML)
+-- 7. FACTORES_RIESGO_CARDIACO (formulario opcional ML)
 -- ============================================
 CREATE TABLE factores_riesgo_cardiaco (
   id_usuario UUID PRIMARY KEY REFERENCES usuario(id) ON DELETE CASCADE,
@@ -174,7 +132,7 @@ CREATE TABLE factores_riesgo_cardiaco (
 );
 
 -- ============================================
--- 12. PROMEDIO_SEMANAL_ML (agregación para features ML)
+-- 8. PROMEDIO_SEMANAL_ML (agregación para features ML)
 --     Alimentado desde el pipeline Python
 -- ============================================
 CREATE TABLE promedio_semanal_ml (
@@ -197,7 +155,7 @@ CREATE INDEX idx_promedio_semanal_usuario
   ON promedio_semanal_ml(id_usuario, semana_inicio DESC);
 
 -- ============================================
--- 13. PREDICCION_RIESGO (resultados del modelo ML)
+-- 9. PREDICCION_RIESGO (resultados del modelo ML)
 -- ============================================
 CREATE TABLE prediccion_riesgo (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

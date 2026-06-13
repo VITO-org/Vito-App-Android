@@ -6,8 +6,9 @@
 // ─── ENUMS ───
 export type RolUsuario = 'paciente' | 'familiar' | 'medico';
 export type SexoBiologico = 'M' | 'F' | 'otro';
-export type OptInStatus = 'pendiente' | 'activo' | 'rechazado';
-export type CanalNotif = 'app' | 'whatsapp' | 'email';
+export type TipoPatologia = 'ninguna' | 'diabetes' | 'hipertension' | 'alzheimer' | 'otra';
+export type CatSintoma = 'fisico' | 'emocional';
+export type OrigenSintoma = 'chat_ia' | 'manual';
 
 // ─── TABLA: usuario ───
 export interface Usuario {
@@ -26,7 +27,7 @@ export type UsuarioInsert = Omit<Usuario, 'id' | 'created_at' | 'updated_at'> & 
   updated_at?: string;
 };
 
-// ─── TABLA: perfil_usuario (con peso_kg, altura_cm) ───
+// ─── TABLA: perfil_usuario (con patologia, peso_kg, altura_cm) ───
 export interface PerfilUsuario {
   id: string;
   user_id: string;
@@ -42,6 +43,8 @@ export interface PerfilUsuario {
   avatar_url: string | null;
   peso_kg: number | null;
   altura_cm: number | null;
+  patologia: TipoPatologia | null;
+  patologia_descripcion: string | null;
 }
 export type PerfilUsuarioInsert = Omit<PerfilUsuario, 'id'> & { id?: string };
 
@@ -78,49 +81,19 @@ export interface BaselineClinico {
 }
 export type BaselineClinicoInsert = Omit<BaselineClinico, 'id'> & { id?: string };
 
-// ─── TABLA: contacto_confianza ───
-export interface ContactoConfianza {
-  id: string;
-  paciente_id: string;
-  nombre: string;
-  rol: string | null;
-  telefono: string | null;
-  email: string | null;
-  es_primario: boolean;
-  opt_in_status: OptInStatus;
-  opt_in_expires_at: string | null;
-  not_psicologica: boolean;
-  not_mood: boolean;
-  not_canal: CanalNotif;
-}
-export type ContactoConfianzaInsert = Omit<ContactoConfianza, 'id'> & { id?: string };
-
-// ─── TABLA: patologia ───
-export interface Patologia {
-  id: string;
-  nombre: string;
-  codigo: string | null;
-  descripcion: string | null;
-  module_key: string | null;
-}
-
-// ─── TABLA: catalogo_sintoma ───
-export interface CatalogoSintoma {
-  id: string;
-  name: string;
-  categoria: string | null;
-  id_patologia: string | null;
-}
-
-// ─── TABLA: sintoma_records ───
-export interface SintomaRecord {
+// ─── TABLA: sintomas_usuario (texto libre, sin catálogo) ───
+export interface SintomasUsuario {
   id: string;
   id_usuario: string;
-  id_sintoma: string;
-  intensidad: number | null;
-  descripcion: string | null;
+  descripcion: string;
+  categoria: CatSintoma;
+  origen: OrigenSintoma;
   recorded_at: string | null;
 }
+export type SintomasUsuarioInsert = Omit<SintomasUsuario, 'id' | 'recorded_at'> & {
+  id?: string;
+  recorded_at?: string;
+};
 
 // ─── TABLA: factores_riesgo_cardiaco (formulario opcional ML) ───
 export interface FactoresRiesgoCardiaco {
