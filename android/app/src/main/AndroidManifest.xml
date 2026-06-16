@@ -10,6 +10,9 @@
     <uses-permission android:name="android.permission.health.READ_SLEEP" />
     <uses-permission android:name="android.permission.health.READ_EXERCISE" />
     <uses-permission android:name="android.permission.health.READ_TOTAL_CALORIES_BURNED" />
+    <uses-permission android:name="android.permission.health.READ_BLOOD_PRESSURE" />
+    <uses-permission android:name="android.permission.health.READ_OXYGEN_SATURATION" />
+    <uses-permission android:name="android.permission.health.READ_BODY_TEMPERATURE" />
 
     <!-- Permisos para Android 13 e inferiores (App Health Connect de la Play Store) -->
     <uses-permission android:name="androidx.health.permission.Steps.READ" />
@@ -18,6 +21,9 @@
     <uses-permission android:name="androidx.health.permission.Sleep.READ" />
     <uses-permission android:name="androidx.health.permission.Exercise.READ" />
     <uses-permission android:name="androidx.health.permission.TotalCaloriesBurned.READ" />
+    <uses-permission android:name="androidx.health.permission.BloodPressure.READ" />
+    <uses-permission android:name="androidx.health.permission.OxygenSaturation.READ" />
+    <uses-permission android:name="androidx.health.permission.BodyTemperature.READ" />
 
     <queries>
         <package android:name="com.google.android.apps.healthdata" />
@@ -49,6 +55,16 @@
             <intent-filter>
                 <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
                 <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+
+            <!-- Deep link para OAuth callback de Supabase -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="com.vito.healthconnect.rn"
+                    android:host="auth/callback" />
             </intent-filter>
         </activity>
 

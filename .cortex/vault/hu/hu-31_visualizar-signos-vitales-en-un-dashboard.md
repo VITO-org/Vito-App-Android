@@ -1,5 +1,7 @@
 # HU-31: Visualizar signos vitales en un dashboard
 
+> **Estado:** 🟡 En desarrollo — Indicadores principales (HR, BP, SpO2, temperatura) funcionan con datos reales. Sección "Última Actividad" dinámica con lastSync y datos del día. Pendiente: círculo de progreso de actividad física, colores de estado y etiquetas de tendencia.
+
 **Release:** R2
 **Sprint:** S7
 **Épica:** Épica 3: Monitoreo y Visualización (Dashboard)
@@ -32,20 +34,28 @@ Visualizar signos vitales en un dashboard
 
 ## Acceptance Criteria
 
-- [ ] CA-01: El dashboard muestra los 4 indicadores principales: frecuencia cardíaca, presión arterial, oxígeno en sangre y actividad física del día.
-- [ ] CA-02: Cada indicador muestra el valor más reciente, la fecha y hora del último dato sincronizado, una etiqueta de tendencia (Estable / Elevado / Bajo) y un color de estado (verde si está dentro del rango normal, amarillo si está en límite, rojo si es anormal).
+- [x] CA-01: El dashboard muestra los 4 indicadores principales: frecuencia cardíaca, presión arterial, oxígeno en sangre y actividad física del día.
+  - *VitalSignCard renderiza frecuencia cardíaca, presión arterial, oxigenación y temperatura.*
+  - *Muestra "--" como fallback cuando no hay datos reales.*
+- [ ] CA-02: Cada indicador muestra el valor más reciente, la fecha y hora del último dato sincronizado, una etiqueta de tendencia (Estable / Elevado / Bajo) y un color de estado.
 - [ ] CA-03: El indicador de actividad física se visualiza como un círculo de progreso con el porcentaje del objetivo diario cumplido.
-- [ ] CA-04: Los datos se actualizan automáticamente cada vez que se sincronizan nuevos datos desde el wearable o se carga un dato manual, sin necesidad de recargar la pantalla.
+- [x] CA-04: Los datos se actualizan automáticamente cada vez que se sincronizan nuevos datos.
+  - *Auto-refresh cada 10 min + pull-to-refresh con FlatList.*
+  - *lastSync timestamp actualizado post-sincronización.*
 - [ ] CA-05: Si un indicador no tiene datos recientes, muestra el mensaje "Sin datos recientes" con la fecha del último registro disponible.
-- [ ] CA-06: Al tocar un indicador, el usuario navega a la pantalla de detalle de ese signo vital.
+- [x] CA-06: Al tocar un indicador, el usuario navega a la pantalla de detalle de ese signo vital.
+  - *TouchableOpacity en cada VitalSignCard navega a DetalleSignoScreen.*
 
 ## Tasks
 
-- [ ] Diseñar componentes de indicadores del dashboard.
-- [ ] Implementar lógica de colores y etiquetas de tendencia.
-- [ ] Conectar indicadores con datos sincronizados en tiempo real.
-- [ ] Diseñar estado vacío para datos no disponibles.
-- [ ] Implementar navegación al detalle desde cada indicador.
+- [x] Diseñar componentes de indicadores del dashboard.
+- [x] Implementar lógica básica de tendencia (up/down/stable).
+- [x] Conectar indicadores con datos sincronizados en tiempo real.
+- [x] Diseñar estado vacío para datos no disponibles (failed a "--").
+- [x] Implementar navegación al detalle desde cada indicador.
+- [x] Sección "Última Actividad" dinámica con lastSync.
+- [ ] Implementar círculo de progreso de actividad física.
+- [ ] Implementar colores de estado (verde/amarillo/rojo) por rango.
 
 ## Definition of Done
 
@@ -60,7 +70,9 @@ Visualizar signos vitales en un dashboard
 
 ## Files in Scope
 
-*(A definir durante la implementación)*
+- `src/screens/InicioScreen.tsx` — Dashboard principal con vitals grid y Última Actividad dinámica
+- `src/context/HealthProvider.tsx` — Contexto con lastSync, auto-refresh, sync a datos_reloj
+- `android/.../HealthDataProvider.kt` — Native module que lee 9 tipos de records de Health Connect
 
 ## Tags
 

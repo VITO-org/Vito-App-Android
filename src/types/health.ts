@@ -9,6 +9,14 @@ export interface HealthSummary {
   sleepMinutes: number;
   averageBpm: number | null;
   exerciseSessions: number;
+  /** Presión arterial sistólica en mmHg (opcional, depende del dispositivo). */
+  bloodPressureSystolic: number | null;
+  /** Presión arterial diastólica en mmHg (opcional). */
+  bloodPressureDiastolic: number | null;
+  /** Saturación de oxígeno en porcentaje (opcional). */
+  spo2Percent: number | null;
+  /** Temperatura corporal en °C (opcional). */
+  bodyTemperatureCelsius: number | null;
 }
 
 /**

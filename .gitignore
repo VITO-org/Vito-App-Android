@@ -35,8 +35,12 @@ android/.kotlin/
 # Build reports
 **/build/reports/
 
+# ML Trainer
+ml-trainer/models/
+
 # Cortex AI cache (transient)
 .cortex/memory/
 .cortex/sessions/
 .cortex/vault/.cortex_index.json
 
+*.deb

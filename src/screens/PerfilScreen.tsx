@@ -1,16 +1,18 @@
 import React from 'react';
-import {View, Text, ScrollView, StyleSheet} from 'react-native';
+import {View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert} from 'react-native';
 import Card from '../components/Card';
 import VITOMascot from '../components/VITOMascot';
+import {useSupabase} from '../context/SupabaseProvider';
 import {colors, spacing, fontSize} from '../theme';
 
 interface PerfilOptionProps {
   icon: string;
   label: string;
+  onPress?: () => void;
 }
 
-const PerfilOption: React.FC<PerfilOptionProps> = ({icon, label}) => (
-  <View style={styles.optionRow}>
+const PerfilOption: React.FC<PerfilOptionProps> = ({icon, label, onPress}) => (
+  <TouchableOpacity style={styles.optionRow} onPress={onPress} activeOpacity={0.6}>
     <View style={styles.optionLeft}>
       <View style={styles.optionIcon}>
         <Text style={styles.optionEmoji}>{icon}</Text>
@@ -18,7 +20,7 @@ const PerfilOption: React.FC<PerfilOptionProps> = ({icon, label}) => (
       <Text style={styles.optionLabel}>{label}</Text>
     </View>
     <Text style={styles.chevron}>›</Text>
-  </View>
+  </TouchableOpacity>
 );
 
 const OPTS: PerfilOptionProps[] = [
@@ -30,16 +32,43 @@ const OPTS: PerfilOptionProps[] = [
 ];
 
 const PerfilScreen: React.FC = () => {
+  const {session, profile, signOut} = useSupabase();
+
+  const displayName =
+    profile?.nombre
+      ? profile.nombre + (profile.apellido ? ` ${profile.apellido}` : '')
+      : session?.user?.email?.split('@')[0] ?? 'Usuario';
+
+  const email = session?.user?.email ?? '';
+
+  const handleSignOut = () => {
+    Alert.alert(
+      'Cerrar sesión',
+      '¿Estás seguro de que querés cerrar sesión?',
+      [
+        {text: 'Cancelar', style: 'cancel'},
+        {
+          text: 'Cerrar sesión',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await signOut();
+            } catch {
+              // El RootNavigator detecta session=null y redirige al Login automáticamente
+            }
+          },
+        },
+      ],
+    );
+  };
+
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
       {/* Avatar + nombre */}
       <View style={styles.profileHeader}>
         <VITOMascot size={72} />
-        <Text style={styles.userName}>Juan Pérez</Text>
-        <Text style={styles.userAge}>68 años</Text>
-        <View style={styles.editBadge}>
-          <Text style={styles.editText}>Editar perfil</Text>
-        </View>
+        <Text style={styles.userName}>{displayName}</Text>
+        {email ? <Text style={styles.userEmail}>{email}</Text> : null}
       </View>
 
       {/* Opciones */}
@@ -52,7 +81,13 @@ const PerfilScreen: React.FC = () => {
         ))}
       </Card>
 
-      <View style={{height: 24}} />
+      {/* Cerrar sesión */}
+      <TouchableOpacity style={styles.logoutButton} onPress={handleSignOut} activeOpacity={0.7}>
+        <Text style={styles.logoutIcon}>🚪</Text>
+        <Text style={styles.logoutText}>Cerrar sesión</Text>
+      </TouchableOpacity>
+
+      <View style={{height: 32}} />
     </ScrollView>
   );
 };
@@ -78,23 +113,10 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     marginTop: 12,
   },
-  userAge: {
-    fontSize: fontSize.body,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  editBadge: {
-    marginTop: 10,
-    paddingHorizontal: 18,
-    paddingVertical: 6,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.primary,
-  },
-  editText: {
+  userEmail: {
     fontSize: fontSize.caption,
-    fontWeight: '600',
-    color: colors.primary,
+    color: colors.textSecondary,
+    marginTop: 4,
   },
 
   // ── Opciones ──
@@ -133,6 +155,28 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: colors.border,
+  },
+
+  // ── Cerrar sesión ──
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 24,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.danger,
+    backgroundColor: colors.dangerLight,
+  },
+  logoutIcon: {
+    fontSize: 16,
+    marginRight: 8,
+  },
+  logoutText: {
+    fontSize: fontSize.body,
+    fontWeight: '600',
+    color: colors.danger,
   },
 });
 
