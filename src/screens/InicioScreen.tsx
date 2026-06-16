@@ -1,8 +1,9 @@
-import React, {useEffect} from 'react';
-import {View, Text, ScrollView, StyleSheet, TouchableOpacity} from 'react-native';
+import React, {useEffect, useCallback, useState} from 'react';
+import {View, Text, FlatList, StyleSheet, TouchableOpacity, Dimensions} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useHealth} from '../context/HealthProvider';
+import {useSupabase} from '../context/SupabaseProvider';
 import Card from '../components/Card';
 import VitalSignCard from '../components/VitalSignCard';
 import PrimaryButton from '../components/PrimaryButton';
@@ -34,10 +35,27 @@ const InicioScreen: React.FC = () => {
     errorSeverity,
     hcStatus,
     permissionsGranted,
+    lastSync,
     requestPermissionsAndLoad,
     refreshData,
   } = useHealth();
+  const {session, profile} = useSupabase();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await refreshData();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshData]);
+
+  const userName = profile?.nombre
+    ? profile.nombre
+    : session?.user?.email?.split('@')[0] ?? 'Usuario';
 
   // Gestión automática de Health Connect:
   // - Si HC disponible y sin permisos → solicitar permisos + cargar datos
@@ -125,13 +143,21 @@ const InicioScreen: React.FC = () => {
   }
 
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
+    <FlatList
+      style={styles.scroll}
+      contentContainerStyle={styles.container}
+      refreshing={refreshing}
+      onRefresh={onRefresh}
+      data={[{}]}
+      keyExtractor={() => 'content'}
+      renderItem={() => (
+      <>
       {/* ── Header: saludo + notificaciones ── */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <VITOMascot size={40} showAntenna={false} />
           <View style={styles.headerText}>
-            <Text style={styles.greeting}>¡Hola, Juan!</Text>
+            <Text style={styles.greeting}>¡Hola, {userName}!</Text>
             <Text style={styles.subtitle}>Todo está bajo control</Text>
           </View>
         </View>
@@ -178,7 +204,7 @@ const InicioScreen: React.FC = () => {
             {errorSeverity === 'error' ? 'Error' : 'Aviso'}
           </Text>
           <Text style={styles.warningText}>{error}</Text>
-          {!permissionsGranted && hcStatus === 'available' && (
+          {hcStatus === 'available' && !loading && (
             <PrimaryButton
               variant="secondary"
               title="Conceder permisos"
@@ -221,6 +247,23 @@ const InicioScreen: React.FC = () => {
           />
         ))}
       </View>
+
+      {/* ─️ Aviso si falta presión arterial ── */}
+      {summary && summary.bloodPressureSystolic == null && (
+        <Card style={styles.warningCard}>
+          <Text style={styles.warningTitle}>📊 Presión arterial no disponible</Text>
+          <Text style={styles.warningText}>
+            Puede faltar el permiso en Health Connect. Presioná abajo para
+            solicitarlo y luego sincronizá los datos de tu reloj.
+          </Text>
+          <PrimaryButton
+            variant="secondary"
+            title="Solicitar permiso de presión arterial"
+            onPress={requestPermissionsAndLoad}
+            style={{marginTop: 8}}
+          />
+        </Card>
+      )}
 
       {/* ── Health Connect data ── */}
       {summary && (
@@ -270,20 +313,93 @@ const InicioScreen: React.FC = () => {
         <Text style={styles.sectionTitle}>Última actividad</Text>
       </View>
 
-      <Card>
-        <View style={styles.activityRow}>
-          <View style={styles.activityInfo}>
-            <Text style={styles.activityTitle}>Medicación registrada</Text>
-            <Text style={styles.activityTime}>Hoy 08:30</Text>
-          </View>
-          <View style={styles.activityCheck}>
-            <Text style={styles.checkIcon}>✓</Text>
-          </View>
-        </View>
-      </Card>
+      {(() => {
+        if (!lastSync) {
+          return (
+            <Card>
+              <View style={styles.activityRow}>
+                <View style={styles.activityInfo}>
+                  <Text style={styles.activityTitle}>Sin actividad registrada</Text>
+                  <Text style={styles.activityTime}>
+                    {loading
+                      ? 'Cargando datos...'
+                      : 'Conectá Health Connect para ver tu actividad'}
+                  </Text>
+                </View>
+              </View>
+            </Card>
+          );
+        }
+
+        const items: {title: string; detail: string}[] = [
+          {
+            title: 'Sincronización Health Connect',
+            detail: lastSync.toLocaleDateString('es-ES', {
+              weekday: 'long',
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
+          },
+        ];
+
+        if (summary) {
+          if (summary.steps > 0) {
+            items.push({
+              title: '👣 Pasos registrados',
+              detail: `${summary.steps.toLocaleString('es-ES')} pasos`,
+            });
+          }
+          if (summary.caloriesKcal > 0) {
+            items.push({
+              title: '🔥 Calorías quemadas',
+              detail: `${summary.caloriesKcal.toFixed(0)} kcal`,
+            });
+          }
+          if (summary.distanceMeters > 0) {
+            items.push({
+              title: '📏 Distancia recorrida',
+              detail: `${(summary.distanceMeters / 1000).toFixed(2)} km`,
+            });
+          }
+          if (summary.sleepMinutes > 0) {
+            items.push({
+              title: '😴 Sueño registrado',
+              detail: `${Math.floor(summary.sleepMinutes / 60)}h ${summary.sleepMinutes % 60}m`,
+            });
+          }
+          if (summary.averageBpm != null) {
+            items.push({
+              title: '❤️ Frecuencia cardíaca',
+              detail: `${Math.round(summary.averageBpm)} lpm promedio`,
+            });
+          }
+        }
+
+        return (
+          <Card>
+            {items.map((item, i) => (
+              <View
+                key={i}
+                style={[styles.activityRow, i === items.length - 1 && styles.activityRowLast]}>
+                <View style={styles.activityInfo}>
+                  <Text style={styles.activityTitle}>{item.title}</Text>
+                  <Text style={styles.activityTime}>{item.detail}</Text>
+                </View>
+                {i === 0 && (
+                  <View style={styles.activityCheck}>
+                    <Text style={styles.checkIcon}>✓</Text>
+                  </View>
+                )}
+              </View>
+            ))}
+          </Card>
+        );
+      })()}
 
       <View style={{height: 24}} />
-    </ScrollView>
+      </>
+    )}
+  />
   );
 };
 
@@ -295,6 +411,7 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: spacing.screenPaddingHorizontal,
     paddingTop: spacing.screenPaddingTop,
+    paddingBottom: 100,
   },
 
   // ── Header ──
@@ -383,15 +500,17 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   refreshButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   refreshIcon: {
-    fontSize: 18,
+    fontSize: 20,
     color: colors.primary,
     fontWeight: '700',
   },
@@ -451,6 +570,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  activityRowLast: {
+    borderBottomWidth: 0,
   },
   activityInfo: {},
   activityTitle: {

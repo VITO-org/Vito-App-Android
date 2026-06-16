@@ -14,10 +14,13 @@ import {
   getHealthData,
   HealthModuleNotAvailableError,
 } from '../services/VitoHealthNative';
+import {useSupabase} from './SupabaseProvider';
+import {insertDatoReloj} from '../services/supabase/api';
+import type {DatoRelojInsert} from '../services/supabase/models';
 
 type ErrorSeverity = 'error' | 'warning';
 
-const AUTO_REFRESH_INTERVAL_MS = 30_000; // 30 segundos
+const AUTO_REFRESH_INTERVAL_MS = 600_000; // 10 minutos
 
 interface HealthContextValue {
   /** Current health summary, null before first successful load. */
@@ -32,6 +35,8 @@ interface HealthContextValue {
   errorSeverity: ErrorSeverity | null;
   /** True if HC permissions have been granted. */
   permissionsGranted: boolean;
+  /** Timestamp of the last successful data sync, null if never synced. */
+  lastSync: Date | null;
   /** Request permissions and load data. */
   requestPermissionsAndLoad: () => Promise<void>;
   /** Refresh health data (requires permissions already granted). */
@@ -51,6 +56,8 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
   const [error, setError] = useState<string | null>(null);
   const [errorSeverity, setErrorSeverity] = useState<ErrorSeverity | null>(null);
   const [permissionsGranted, setPermissionsGranted] = useState(false);
+  const [lastSync, setLastSync] = useState<Date | null>(null);
+  const {getUserId} = useSupabase();
 
   // Referencia para el intervalo de auto-refresh
   const autoRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -81,6 +88,33 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
     try {
       const data = await getHealthData();
       setSummary(data);
+      setLastSync(new Date());
+
+      // Sincronizar automáticamente con Supabase (datos_reloj)
+      const userId = getUserId();
+      if (userId) {
+        try {
+          const redondear = (v: number | null): number | null =>
+            v != null ? Math.round(v) : null;
+
+          const lectura: DatoRelojInsert = {
+            id_usuario: userId,
+            bp_sistolica: redondear(data.bloodPressureSystolic),
+            bp_diastolica: redondear(data.bloodPressureDiastolic),
+            frec_cardiaca_bpm: redondear(data.averageBpm),
+            spo2_pct: data.spo2Percent ?? null,
+            temperatura: data.bodyTemperatureCelsius ?? null,
+            nivel_estres: null,
+            actividad_pasos: redondear(data.steps),
+            horas_sueno: data.sleepMinutes != null ? data.sleepMinutes / 60 : null,
+            recorded_at: new Date().toISOString(),
+          };
+          await insertDatoReloj(lectura);
+        } catch (syncErr) {
+          // No bloquear la UI si falla la sincronización
+          console.warn('HealthProvider: error al sincronizar con datos_reloj', syncErr);
+        }
+      }
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e ?? 'unknown error');
       setError('Error al leer datos: ' + message);
@@ -88,7 +122,7 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [getUserId]);
 
   const requestPermissionsAndLoad = useCallback(async () => {
     setError(null);
@@ -148,6 +182,7 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
     error,
     errorSeverity,
     permissionsGranted,
+    lastSync,
     requestPermissionsAndLoad,
     refreshData,
   };

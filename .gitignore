@@ -43,3 +43,4 @@ ml-trainer/models/
 .cortex/sessions/
 .cortex/vault/.cortex_index.json
 
+*.deb
