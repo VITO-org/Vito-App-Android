@@ -1,0 +1,17 @@
+{
+  "servers": {
+    "cortex": {
+      "type": "stdio",
+      "command": "cortex",
+      "args": [
+        "mcp-server",
+        "--stdio",
+        "--project-root",
+        "${workspaceFolder}"
+      ],
+      "env": {
+        "PYTHONWARNINGS": "ignore"
+      }
+    }
+  }
+}

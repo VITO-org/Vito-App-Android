@@ -1211,3 +1211,115 @@ Como sistema, quiero advertir cuando se intenten guardar rangos o umbrales médi
 * Tests con valores límite, dentro de rango y fuera de rango para cada condición.  
 * Revisión clínica de los límites aprobada por el equipo médico.
 
+---
+
+## **Épica 9: Inteligencia Artificial y Ciencia de Datos** {#épica-9:-inteligencia-artificial-y-ciencia-de-datos}
+
+### **HU-91 — Predicción de Riesgo Cardiovascular con ML** {#hu-91-—-predicción-de-riesgo-cardiovascular-con-ml}
+
+**Goal:** Desarrollar un modelo de Machine Learning que prediga el riesgo (alto / medio / bajo) de que una persona desarrolle una enfermedad cardíaca en su vida, basado en datos del perfil del usuario, hábitos y signos vitales del smartwatch. El modelo corre on-device en Android mediante TFLite.
+
+**User Story:** Como sistema, quiero clasificar el riesgo cardiovascular de cada usuario en alto/medio/bajo, para que tanto el usuario como el profesional clínico puedan tomar acciones preventivas.
+
+**Inputs del modelo:**
+
+| Tipo | Fuente | Campos |
+|------|--------|--------|
+| Perfil del usuario | Registro inicial | Edad, Sexo, Colesterol, BMI, Triglicéridos |
+| Signos vitales (promedio semanal) | Smartwatch | Presión arterial, Frecuencia cardíaca, Nivel de estrés, Horas de sueño, Horas de actividad física, Horas sedentarias, Ejercicio por semana |
+| Antecedentes y hábitos | Formulario opcional | Diabetes, Antecedentes familiares, Fumador, Obesidad, Consumo de alcohol, Dieta, Problemas cardíacos previos, Uso de medicación |
+
+**Output:** Riesgo **Alto** / **Medio** / **Bajo** con probabilidad asociada (0-100%).
+
+**Criterios de aceptación**
+
+* CA-01: Dados los datos de entrada (perfil + smartwatch + formulario opcional), el modelo devuelve una clasificación de riesgo cardiovascular (alto/medio/bajo) con su probabilidad asociada.
+* CA-02: El modelo alcanza al menos 75% de precisión en el conjunto de prueba.
+* CA-03: La inferencia completa en dispositivo tarda menos de 500ms.
+* CA-04: El modelo exportado a TFLite ocupa menos de 10MB.
+* CA-05: Los resultados se muestran en una pantalla/card dentro de la app.
+* CA-06: Los datos del smartwatch (presión arterial, FC, estrés, sueño, actividad física) y los datos del perfil (edad, sexo, colesterol, BMI, triglicéridos) se combinan como features para la predicción; ninguno es excluyente.
+* CA-07: Las features opcionales del formulario (antecedentes familiares, diabetes, fumador, obesidad, alcohol, dieta, problemas previos, medicación) pueden faltar sin que el modelo falle — se imputan con valores por defecto.
+
+**Tareas**
+
+* [x] Adquirir dataset de signos vitales para entrenamiento (heart_attack_prediction_dataset.csv).
+* [x] Crear estructura del proyecto ML (ml-trainer/).
+* [ ] Realizar EDA y feature engineering.
+* [ ] Etiquetar dataset con clases de riesgo (alto/medio/bajo) según umbrales clínicos.
+* [ ] Entrenar modelo clasificador (Random Forest / XGBoost como baseline).
+* [ ] Evaluar métricas (precisión, recall, F1).
+* [ ] Exportar modelo a formato TFLite.
+* [ ] Integrar TFLite en native module Kotlin.
+* [ ] Crear bridge React Native para inferencia on-device.
+* [ ] Mostrar resultado de riesgo en UI.
+
+**Artefactos**
+
+* `ml-trainer/` — Pipeline completo de entrenamiento en Python.
+* `ml-trainer/data/heart_attack_prediction_dataset.csv` — Dataset con 26 variables.
+* `android/.../RiskPredictor.kt` — Módulo nativo de inferencia TFLite.
+* `src/services/RiskService.ts` — Bridge React Native.
+
+**Definición de done**
+
+* Dataset etiquetado y listo para entrenamiento.
+* Modelo entrenado con métricas documentadas (≥75% precisión).
+* Modelo exportado a TFLite (<10MB, <500ms inferencia).
+* Inferencia on-device funcionando desde la app.
+* Riesgo cardiovascular visible en dashboard.
+* Tests unitarios del módulo de predicción.
+
+---
+
+### **HU-92 — Diseño de modelo de datos orientado a ML** {#hu-92-—-diseño-de-modelo-de-datos-orientado-a-ml}
+
+**Goal:** Estructurar la base de datos en Supabase para almacenar los datos del smartwatch, los factores de riesgo del usuario y las predicciones del modelo ML.
+
+**User Story:** Como sistema, quiero tener una base de datos con tablas orientadas a ML, para que el pipeline de entrenamiento y predicción pueda consumir datos estructurados.
+
+**Cambios en la BD:**
+
+| Acción | Detalle |
+|--------|---------|
+| Renombrar | `datos_clinicos_config` → `datos_reloj` |
+| Eliminar | `signo_vital` (reemplazada por `datos_reloj` + `promedio_semanal_ml`) |
+| Agregar columnas | `perfil_usuario`: `peso_kg`, `altura_cm` |
+| Agregar columnas | `datos_reloj`: `nivel_estres`, `actividad_pasos`, `horas_sueno` |
+| Nueva tabla | `factores_riesgo_cardiaco` (formulario opcional) |
+| Nueva tabla | `promedio_semanal_ml` (promedios semanales para features ML) |
+| Nueva tabla | `prediccion_riesgo` (resultados del modelo) |
+
+**Tablas nuevas:**
+
+| Tabla | Columnas |
+|-------|----------|
+| `factores_riesgo_cardiaco` | diabetes, antecedentes_familiares, fumador, obesidad, consumo_alcohol, tipo_dieta, problemas_cardiacos_previos, uso_medicacion |
+| `promedio_semanal_ml` | bp_sistolica_prom, bp_diastolica_prom, frec_cardiaca_prom, spo2_prom, nivel_estres_prom, pasos_diarios_prom, horas_sueno_prom, total_lecturas |
+| `prediccion_riesgo` | riesgo (bajo/medio/alto), score, modelo_version, factores_mas_influyentes, datos_entrada |
+
+**Arquitectura:**
+```
+perfil_usuario (edad, sexo, peso, altura)
+      ├── datos_reloj (cada 30s) ──► pipeline Python ──► promedio_semanal_ml
+      └── factores_riesgo_cardiaco
+                │
+                ▼ modelo TFLite ──► prediccion_riesgo
+```
+
+**Criterios de aceptación**
+
+* CA-01: `datos_reloj` almacena lecturas del smartwatch (PA, FC, SpO2, estrés, pasos, sueño).
+* CA-02: `promedio_semanal_ml` se alimenta desde el pipeline Python con promedios semanales.
+* CA-03: `factores_riesgo_cardiaco` guarda datos del formulario opcional.
+* CA-04: `prediccion_riesgo` guarda resultados del modelo con score y factores influyentes.
+* CA-05: `perfil_usuario` contiene peso_kg y altura_cm; `datos_reloj` no los tiene.
+* CA-06: `signo_vital` fue eliminada del schema.
+
+**Definición de done**
+
+* Schema actualizado en Supabase.
+* `schema.sql` documenta la versión final de la BD.
+* `models.ts` exporta las interfaces de todas las tablas nuevas.
+* HU-92 marcada como done.
+
