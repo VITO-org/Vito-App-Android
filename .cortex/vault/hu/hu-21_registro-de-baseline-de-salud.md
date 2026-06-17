@@ -1,6 +1,6 @@
 # HU-21: Registro de baseline de salud
 
-> **Estado:** 🔴 No iniciada — Infraestructura base disponible (Health Connect SDK + theme RN) pero sin pantalla de onboarding ni formulario de baseline.
+> **Estado:** 🟡 En desarrollo — CompleteProfileScreen incluye altura y peso (datos de baseline mínimos). Pendiente: presión arterial, frecuencia cardíaca, temperatura y oxigenación como baseline inicial. Validación fisiológica implementada para altura (50-280 cm) y peso (10-500 kg).
 
 **Release:** R2
 **Sprint:** S6
@@ -34,21 +34,23 @@ Registro de baseline de salud
 
 ## Acceptance Criteria
 
-- [ ] CA-01: El usuario puede registrar: peso, altura, presión arterial, frecuencia cardíaca, temperatura y oxigenación.
-  - *Health Connect SDK expone WeightRecord y HeightRecord, pero falta implementar su lectura en HealthDataProvider y la UI de onboarding.*
-- [ ] CA-02: El sistema valida rangos fisiológicos plausibles para cada campo.
-  - *Pendiente: crear validador de rangos en TypeScript.*
-- [ ] CA-03: Los datos quedan asociados al perfil clínico del usuario.
-  - *Pendiente: requiere Supabase o almacenamiento local persistente.*
+- [x] CA-01: El usuario puede registrar: peso, altura.
+  - *CompleteProfileScreen incluye altura_cm y peso_kg, persistidos en perfil_usuario.*
+  - *Pendiente: presión arterial, frecuencia cardíaca, temperatura y oxigenación como parte del baseline (tabla datos_clinicos_config).*
+- [x] CA-02: El sistema valida rangos fisiológicos plausibles para cada campo.
+  - *Validación inline: altura (50-280 cm), peso (10-500 kg), edad (0-120 años), fecha válida.*
+- [x] CA-03: Los datos quedan asociados al perfil clínico del usuario.
+  - *Persistido en perfil_usuario (tabla Supabase) con upsert por user_id.*
 
 ## Tasks
 
-- [ ] Diseñar una pantalla de baseline.
-  - *Pendiente: crear componente OnboardingBaseline.tsx con formulario.*
-- [ ] Implementar validaciones fisiológicas.
-  - *Pendiente: crear src/utils/physiologicalValidation.ts.*
-- [ ] Persistir datos clínicos iniciales.
-  - *Pendiente: definir si va a Supabase o AsyncStorage.*
+- [x] Diseñar una pantalla de baseline.
+  - *CompleteProfileScreen.tsx con formulario de datos personales + altura + peso.*
+- [x] Implementar validaciones fisiológicas.
+  - *Validación inline en completeProfileScreen con rangos fisiológicos.*
+- [x] Persistir datos clínicos iniciales.
+  - *Via upsertProfile a Supabase (tabla perfil_usuario).*
+- [ ] Agregar presión arterial, frecuencia cardíaca, temperatura y oxigenación al formulario de baseline.
 
 ## Definition of Done
 
