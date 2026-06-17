@@ -94,18 +94,18 @@ const InicioScreen: React.FC = () => {
         trend: summary.averageBpm > 100 ? 'up' : summary.averageBpm < 60 ? 'down' : 'stable',
       });
     }
-    // Presión arterial
-    if (summary.bloodPressureSystolic != null && summary.bloodPressureDiastolic != null) {
-      vitals.push({
-        id: 'presion_sistolica',
-        label: 'Presión arterial',
-        value: `${Math.round(summary.bloodPressureSystolic)}/${Math.round(summary.bloodPressureDiastolic)}`,
-        unit: 'mmHg',
-        icon: '🫀',
-        iconBgColor: colors.danger,
-        trend: summary.bloodPressureSystolic > 130 ? 'up' : 'stable',
-      });
-    }
+    // Presión arterial (siempre visible, con --/-- cuando no hay datos)
+    vitals.push({
+      id: 'presion_sistolica',
+      label: 'Presión arterial',
+      value: (summary.bloodPressureSystolic != null && summary.bloodPressureDiastolic != null)
+        ? `${Math.round(summary.bloodPressureSystolic)}/${Math.round(summary.bloodPressureDiastolic)}`
+        : '--/--',
+      unit: 'mmHg',
+      icon: '🫀',
+      iconBgColor: colors.danger,
+      trend: summary.bloodPressureSystolic != null && summary.bloodPressureSystolic > 130 ? 'up' : 'stable',
+    });
     // Oxigenación
     if (summary.spo2Percent != null) {
       vitals.push({
@@ -247,23 +247,6 @@ const InicioScreen: React.FC = () => {
           />
         ))}
       </View>
-
-      {/* ─️ Aviso si falta presión arterial ── */}
-      {summary && summary.bloodPressureSystolic == null && (
-        <Card style={styles.warningCard}>
-          <Text style={styles.warningTitle}>📊 Presión arterial no disponible</Text>
-          <Text style={styles.warningText}>
-            Puede faltar el permiso en Health Connect. Presioná abajo para
-            solicitarlo y luego sincronizá los datos de tu reloj.
-          </Text>
-          <PrimaryButton
-            variant="secondary"
-            title="Solicitar permiso de presión arterial"
-            onPress={requestPermissionsAndLoad}
-            style={{marginTop: 8}}
-          />
-        </Card>
-      )}
 
       {/* ── Health Connect data ── */}
       {summary && (

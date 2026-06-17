@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../services/supabase/client';
 import * as api from '../services/supabase/api';
-import type { PerfilUsuario, RolUsuario } from '../services/supabase/models';
+import type { PerfilUsuario, DatosClinicosConfig, RolUsuario } from '../services/supabase/models';
 
 // ─── Types ───
 
@@ -10,6 +10,7 @@ interface SupabaseContextValue {
   session: Session | null;
   profile: PerfilUsuario | null;
   isLoading: boolean;
+  needsProfile: boolean;
   error: string | null;
 
   // Auth actions
@@ -21,6 +22,7 @@ interface SupabaseContextValue {
   // Profile actions
   refreshProfile: () => Promise<void>;
   updateProfile: (data: Partial<PerfilUsuario> & { user_id: string }) => Promise<void>;
+  updateClinicalConfig: (data: Partial<DatosClinicosConfig> & { id_usuario: string }) => Promise<void>;
 
   // Utilidad
   getUserId: () => string | null;
@@ -36,38 +38,63 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<PerfilUsuario | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [needsProfile, setNeedsProfile] = useState(true); // empieza true; loadProfile lo pone false si hay perfil
   const [error, setError] = useState<string | null>(null);
 
-  // Cargar sesión al montar
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session?.user) {
-        loadProfile(session.user.id);
-      }
-      setIsLoading(false);
-    });
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      if (session?.user) {
-        loadProfile(session.user.id);
-      } else {
-        setProfile(null);
-      }
-    });
-
-    return () => listener?.subscription.unsubscribe();
-  }, []);
-
+  // No dep绳子 stales — loadProfile se define antes del effect
   const loadProfile = async (userId: string) => {
     try {
       const p = await api.getProfile(userId);
       setProfile(p);
+      setNeedsProfile(!p);
     } catch {
-      // El perfil puede no existir todavía
+      setNeedsProfile(false);
     }
   };
+
+  // Cargar sesión al montar
+  useEffect(() => {
+    // Safety timeout: si getSession no responde en 8s, forzar salida del loading
+    const safetyTimer = setTimeout(() => setIsLoading(false), 8000);
+
+    supabase.auth
+      .getSession()
+      .then(async ({ data: { session } }) => {
+        clearTimeout(safetyTimer);
+        setSession(session);
+        if (session?.user) {
+          await loadProfile(session.user.id);
+        }
+        setIsLoading(false);
+      })
+      .catch(() => {
+        clearTimeout(safetyTimer);
+        // Si getSession falla (AsyncStorage corrupto, etc.), igual mostrar la UI
+        setIsLoading(false);
+      });
+
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      async (_event, session) => {
+        setSession(session);
+        if (session?.user) {
+          try {
+            await loadProfile(session.user.id);
+          } catch {
+            // Si loadProfile falla acá, no es crítico — el listener de getSession ya avanzó
+          }
+        } else {
+          setProfile(null);
+          setNeedsProfile(false);
+        }
+      },
+    );
+
+    return () => {
+      clearTimeout(safetyTimer);
+      listener?.subscription.unsubscribe();
+    };
+  }, []);
 
   const getUserId = useCallback(() => session?.user?.id ?? null, [session]);
 
@@ -114,6 +141,7 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
     try {
       await api.signOut();
       setProfile(null);
+      setNeedsProfile(false);
     } catch (e: unknown) {
       const msg = (e as { message?: string }).message ?? 'Error al cerrar sesión';
       setError(msg);
@@ -132,6 +160,14 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
     async (data: Partial<PerfilUsuario> & { user_id: string }) => {
       const updated = await api.upsertProfile(data);
       setProfile(updated);
+      setNeedsProfile(false);
+    },
+    [],
+  );
+
+  const updateClinicalConfig = useCallback(
+    async (data: Partial<DatosClinicosConfig> & { id_usuario: string }) => {
+      await api.upsertDatosClinicosConfig(data);
     },
     [],
   );
@@ -142,6 +178,7 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
     session,
     profile,
     isLoading,
+    needsProfile,
     error,
     signUp: signUpFn,
     signIn: signInFn,
@@ -149,6 +186,7 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
     signOut: signOutFn,
     refreshProfile,
     updateProfile,
+    updateClinicalConfig,
     getUserId,
   };
 

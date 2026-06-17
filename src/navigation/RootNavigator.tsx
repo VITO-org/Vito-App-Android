@@ -5,6 +5,7 @@ import BottomTabNavigator from './BottomTabNavigator';
 import DetalleSignoScreen from '../screens/DetalleSignoScreen';
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
+import CompleteProfileScreen from '../screens/CompleteProfileScreen';
 import {useSupabase} from '../context/SupabaseProvider';
 
 export type RootStackParamList = {
@@ -17,12 +18,13 @@ export type RootStackParamList = {
   };
   Login: undefined;
   Register: undefined;
+  CompleteProfile: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 function RootNavigatorContent() {
-  const {session, isLoading} = useSupabase();
+  const {session, isLoading, needsProfile} = useSupabase();
 
   if (isLoading) {
     return (
@@ -36,14 +38,18 @@ function RootNavigatorContent() {
   return (
     <Stack.Navigator screenOptions={{headerShown: false}}>
       {session ? (
-        <>
-          <Stack.Screen name="MainTabs" component={BottomTabNavigator} />
-          <Stack.Screen
-            name="DetalleSigno"
-            component={DetalleSignoScreen}
-            options={{animation: 'slide_from_right'}}
-          />
-        </>
+        needsProfile ? (
+          <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />
+        ) : (
+          <>
+            <Stack.Screen name="MainTabs" component={BottomTabNavigator} />
+            <Stack.Screen
+              name="DetalleSigno"
+              component={DetalleSignoScreen}
+              options={{animation: 'slide_from_right'}}
+            />
+          </>
+        )
       ) : (
         <>
           <Stack.Screen name="Login" component={LoginScreen} />
