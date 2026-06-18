@@ -37,7 +37,13 @@ function RootNavigatorContent() {
 
   return (
     <Stack.Navigator
-      initialRouteName="Login"
+      initialRouteName={
+        session
+          ? needsProfile
+            ? 'CompleteProfile'
+            : 'MainTabs'
+          : 'Login'
+      }
       screenOptions={{headerShown: false}}>
       {session ? (
         needsProfile ? (
