@@ -36,7 +36,9 @@ function RootNavigatorContent() {
   }
 
   return (
-    <Stack.Navigator screenOptions={{headerShown: false}}>
+    <Stack.Navigator
+      initialRouteName="Login"
+      screenOptions={{headerShown: false}}>
       {session ? (
         needsProfile ? (
           <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />
