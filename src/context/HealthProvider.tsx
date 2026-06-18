@@ -15,8 +15,9 @@ import {
   HealthModuleNotAvailableError,
 } from '../services/VitoHealthNative';
 import {useSupabase} from './SupabaseProvider';
-import {insertDatoReloj} from '../services/supabase/api';
+import {insertDatoReloj, upsertDatosClinicosConfig} from '../services/supabase/api';
 import type {DatoRelojInsert} from '../services/supabase/models';
+import {saveHealthSnapshot, pruneOldEntries} from '../services/HealthDataCache';
 
 type ErrorSeverity = 'error' | 'warning';
 
@@ -90,12 +91,25 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
       setSummary(data);
       setLastSync(new Date());
 
+      // Guardar en caché local (AsyncStorage) como respaldo para el historial
+      saveHealthSnapshot(data).catch(() => {});
+      // Podar entradas viejas 1 vez al día (lo ejecutamos pero ignoramos error)
+      pruneOldEntries(60).catch(() => {});
+
       // Sincronizar automáticamente con Supabase (datos_reloj)
       const userId = getUserId();
       if (userId) {
         try {
           const redondear = (v: number | null): number | null =>
             v != null ? Math.round(v) : null;
+
+          // Asegurar que datos_clinicos_config tiene fila por si existe
+          // un trigger en datos_reloj que la referencia (workaround error 23505)
+          try {
+            await upsertDatosClinicosConfig({id_usuario: userId});
+          } catch {
+            // ignorar error del upsert preparatorio
+          }
 
           const lectura: DatoRelojInsert = {
             id_usuario: userId,
