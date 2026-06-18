@@ -36,42 +36,26 @@ function RootNavigatorContent() {
   }
 
   return (
-    <Stack.Navigator
-      initialRouteName={
-        session
-          ? needsProfile
-            ? 'CompleteProfile'
-            : 'MainTabs'
-          : 'Login'
-      }
-      screenOptions={{headerShown: false}}>
+    <Stack.Navigator screenOptions={{headerShown: false}}>
       {/*
-        Login y Register SIEMPRE están en el navigator para evitar el bug
-        de fragment donde el orden se invierte con <> condicional.
+        Cada pantalla es un condicional INDIVIDUAL.
+        Sin fragments, sin Stack.Group — el orden en JSX determina
+        el orden real en React Navigation (sin bugs de reversión).
       */}
-      <Stack.Screen name="Login" component={LoginScreen} />
-      <Stack.Screen name="Register" component={RegisterScreen} />
-
-      {/*
-        Pantallas de sesión: solo se agregan si hay sesión activa.
-        Si no hay sesión, el initialRouteName 'Login' funciona porque Login
-        está siempre presente.
-      */}
-      {session && (
-        <>
-          {needsProfile ? (
-            <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />
-          ) : (
-            <>
-              <Stack.Screen name="MainTabs" component={BottomTabNavigator} />
-              <Stack.Screen
-                name="DetalleSigno"
-                component={DetalleSignoScreen}
-                options={{animation: 'slide_from_right'}}
-              />
-            </>
-          )}
-        </>
+      {!session && <Stack.Screen name="Login" component={LoginScreen} />}
+      {!session && <Stack.Screen name="Register" component={RegisterScreen} />}
+      {session && needsProfile && (
+        <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />
+      )}
+      {session && !needsProfile && (
+        <Stack.Screen name="MainTabs" component={BottomTabNavigator} />
+      )}
+      {session && !needsProfile && (
+        <Stack.Screen
+          name="DetalleSigno"
+          component={DetalleSignoScreen}
+          options={{animation: 'slide_from_right'}}
+        />
       )}
     </Stack.Navigator>
   );
