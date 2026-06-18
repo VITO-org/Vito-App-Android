@@ -45,23 +45,32 @@ function RootNavigatorContent() {
           : 'Login'
       }
       screenOptions={{headerShown: false}}>
-      {session ? (
-        needsProfile ? (
-          <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />
-        ) : (
-          <>
-            <Stack.Screen name="MainTabs" component={BottomTabNavigator} />
-            <Stack.Screen
-              name="DetalleSigno"
-              component={DetalleSignoScreen}
-              options={{animation: 'slide_from_right'}}
-            />
-          </>
-        )
-      ) : (
+      {/*
+        Login y Register SIEMPRE están en el navigator para evitar el bug
+        de fragment donde el orden se invierte con <> condicional.
+      */}
+      <Stack.Screen name="Login" component={LoginScreen} />
+      <Stack.Screen name="Register" component={RegisterScreen} />
+
+      {/*
+        Pantallas de sesión: solo se agregan si hay sesión activa.
+        Si no hay sesión, el initialRouteName 'Login' funciona porque Login
+        está siempre presente.
+      */}
+      {session && (
         <>
-          <Stack.Screen name="Login" component={LoginScreen} />
-          <Stack.Screen name="Register" component={RegisterScreen} />
+          {needsProfile ? (
+            <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />
+          ) : (
+            <>
+              <Stack.Screen name="MainTabs" component={BottomTabNavigator} />
+              <Stack.Screen
+                name="DetalleSigno"
+                component={DetalleSignoScreen}
+                options={{animation: 'slide_from_right'}}
+              />
+            </>
+          )}
         </>
       )}
     </Stack.Navigator>
