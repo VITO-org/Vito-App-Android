@@ -12,8 +12,11 @@ import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {colors, fontSize, spacing, shadows} from '../theme';
 import Card from '../components/Card';
 import {useSupabase} from '../context/SupabaseProvider';
+import {useHealth} from '../context/HealthProvider';
 import {getDatosReloj} from '../services/supabase/api';
+import {getDailyAveragesForRange, type DailyAverages} from '../services/HealthDataCache';
 import type {DatoReloj} from '../services/supabase/models';
+import type {HealthSummary} from '../types/health';
 import {NORMAL_RANGES} from '../data/mockReportes';
 
 // ─── Tipos ───
@@ -133,10 +136,13 @@ function formatearFecha(iso: string): string {
 const HistorialScreen: React.FC = () => {
   const {getUserId} = useSupabase();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const {summary: healthSummary} = useHealth();
 
   const [periodo, setPeriodo] = useState<Periodo>('7d');
   const [loading, setLoading] = useState(true);
   const [datos, setDatos] = useState<DatoReloj[]>([]);
+  const [cacheDays, setCacheDays] = useState<{date: string; averages: DailyAverages}[]>([]);
+  const [usingCache, setUsingCache] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -149,20 +155,39 @@ const HistorialScreen: React.FC = () => {
       }
 
       setLoading(true);
+      setUsingCache(false);
       const dias = PERIODOS.find(p => p.key === periodo)!.dias;
       const desde = new Date(Date.now() - dias * 24 * 60 * 60 * 1000);
 
+      // 1️⃣ Intentar desde Supabase (datos_reloj)
+      let dbData: DatoReloj[] = [];
       try {
         const result = await getDatosReloj(userId, {
           from: desde.toISOString(),
           to: new Date().toISOString(),
           limit: 2000,
         });
-        if (!cancelled) setDatos(result);
+        dbData = result;
       } catch {
-        if (!cancelled) setDatos([]);
-      } finally {
-        if (!cancelled) setLoading(false);
+        dbData = [];
+      }
+
+      // 2️⃣ Si no hay datos en la DB, usar caché local (AsyncStorage)
+      if (dbData.length === 0) {
+        const cachedDays = await getDailyAveragesForRange(desde, new Date());
+        if (!cancelled) {
+          setCacheDays(cachedDays);
+          setDatos([]);
+          setUsingCache(cachedDays.length > 0);
+          setLoading(false);
+        }
+      } else {
+        if (!cancelled) {
+          setDatos(dbData);
+          setCacheDays([]);
+          setUsingCache(false);
+          setLoading(false);
+        }
       }
     }
 
@@ -170,11 +195,144 @@ const HistorialScreen: React.FC = () => {
     return () => { cancelled = true; };
   }, [periodo, getUserId]);
 
-  const resumen = useCallback(() => calcularResumen(datos), [datos])();
+  // ─── Resumen desde DB ───
+  const resumenBD = useCallback(() => calcularResumen(datos), [datos])();
 
-  const ultimasLecturas = [...datos]
-    .sort((a, b) => new Date(b.recorded_at ?? 0).getTime() - new Date(a.recorded_at ?? 0).getTime())
-    .slice(0, 20);
+  // ─── Resumen desde caché local ───
+  const resumenCache = useCallback((): Resumen | null => {
+    if (cacheDays.length === 0 && !healthSummary) return null;
+
+    const allDays = [...cacheDays];
+
+    // Agregar hoy desde useHealth() si hay datos
+    if (healthSummary) {
+      const avg = (v: number | null): number =>
+        v != null ? v : 0;
+
+      // Ver si ya existe entrada de hoy en cacheDays
+      const hoy = new Date();
+      const hoyStr = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
+      const existeHoy = allDays.some(d => d.date === hoyStr);
+      if (!existeHoy) {
+        // Crear un "día virtual" con el HealthSummary actual
+        allDays.push({
+          date: hoyStr,
+          averages: {
+            steps: avg(healthSummary.steps),
+            caloriesKcal: avg(healthSummary.caloriesKcal),
+            distanceMeters: avg(healthSummary.distanceMeters),
+            sleepMinutes: avg(healthSummary.sleepMinutes),
+            averageBpm: healthSummary.averageBpm,
+            bloodPressureSystolic: healthSummary.bloodPressureSystolic,
+            bloodPressureDiastolic: healthSummary.bloodPressureDiastolic,
+            spo2Percent: healthSummary.spo2Percent,
+            bodyTemperatureCelsius: healthSummary.bodyTemperatureCelsius,
+            count: 1,
+          },
+        });
+      }
+    }
+
+    if (allDays.length === 0) return null;
+
+    // Agregar todos los días
+    const n = allDays.length;
+
+    const sumMetric = (key: keyof DailyAverages): number =>
+      allDays.reduce((acc, d) => {
+        const v = d.averages[key];
+        return acc + (typeof v === 'number' ? v : 0);
+      }, 0);
+
+    const avgMetric = (key: keyof DailyAverages): number =>
+      sumMetric(key) / n;
+
+    // Para valores que pueden ser null, sacar el promedio no-nulo
+    const avgNullable = (key: keyof DailyAverages): number => {
+      const valid = allDays.filter(d => d.averages[key] != null);
+      if (valid.length === 0) return 0;
+      return valid.reduce((acc, d) => acc + (d.averages[key] as number), 0) / valid.length;
+    };
+
+    // Encontrar máximos/mínimos por cada métrica (de los promedios diarios)
+    const minOf = (key: keyof DailyAverages): number => {
+      const vals = allDays.map(d => d.averages[key]).filter((v): v is number => v != null);
+      return vals.length > 0 ? Math.min(...vals) : 0;
+    };
+    const maxOf = (key: keyof DailyAverages): number => {
+      const vals = allDays.map(d => d.averages[key]).filter((v): v is number => v != null);
+      return vals.length > 0 ? Math.max(...vals) : 0;
+    };
+
+    return {
+      frecCardiaca: {
+        avg: avgNullable('averageBpm'),
+        min: minOf('averageBpm'),
+        max: maxOf('averageBpm'),
+        count: allDays.filter(d => d.averages.averageBpm != null).length,
+      },
+      sistolica: {
+        avg: avgNullable('bloodPressureSystolic'),
+        min: minOf('bloodPressureSystolic'),
+        max: maxOf('bloodPressureSystolic'),
+        count: allDays.filter(d => d.averages.bloodPressureSystolic != null).length,
+      },
+      diastolica: {
+        avg: avgNullable('bloodPressureDiastolic'),
+        min: minOf('bloodPressureDiastolic'),
+        max: maxOf('bloodPressureDiastolic'),
+        count: allDays.filter(d => d.averages.bloodPressureDiastolic != null).length,
+      },
+      spo2: {
+        avg: avgNullable('spo2Percent'),
+        min: minOf('spo2Percent'),
+        max: maxOf('spo2Percent'),
+        count: allDays.filter(d => d.averages.spo2Percent != null).length,
+      },
+      temperatura: {
+        avg: avgNullable('bodyTemperatureCelsius'),
+        min: minOf('bodyTemperatureCelsius'),
+        max: maxOf('bodyTemperatureCelsius'),
+        count: allDays.filter(d => d.averages.bodyTemperatureCelsius != null).length,
+      },
+      pasos: {
+        avg: avgNullable('steps'),
+        total: Math.round(sumMetric('steps')),
+        count: allDays.filter(d => d.averages.steps > 0).length,
+      },
+      sueno: {
+        avg: avgNullable('sleepMinutes') / 60, // convertir a horas
+        count: allDays.filter(d => d.averages.sleepMinutes > 0).length,
+      },
+    };
+  }, [cacheDays, healthSummary])();
+
+  const resumen = usingCache && resumenCache ? resumenCache : resumenBD;
+
+  // ─── Últimas lecturas ───
+  // Si hay datos de DB, mostrar individuales; si no, mostrar promedios diarios del caché
+  const ultimasLecturas: DatoReloj[] = datos.length > 0
+    ? [...datos]
+        .sort((a, b) => new Date(b.recorded_at ?? 0).getTime() - new Date(a.recorded_at ?? 0).getTime())
+        .slice(0, 20)
+    : cacheDays.length > 0
+      ? [...cacheDays]
+          .sort((a, b) => b.date.localeCompare(a.date))
+          .slice(0, 20)
+          .map(d => ({
+            id: `cache_${d.date}`,
+            id_usuario: '',
+            bp_sistolica: d.averages.bloodPressureSystolic ? Math.round(d.averages.bloodPressureSystolic) : null,
+            bp_diastolica: d.averages.bloodPressureDiastolic ? Math.round(d.averages.bloodPressureDiastolic) : null,
+            frec_cardiaca_bpm: d.averages.averageBpm ? Math.round(d.averages.averageBpm) : null,
+            spo2_pct: d.averages.spo2Percent ? Math.round(d.averages.spo2Percent) : null,
+            temperatura: d.averages.bodyTemperatureCelsius,
+            nivel_estres: null,
+            actividad_pasos: d.averages.steps ? Math.round(d.averages.steps) : null,
+            horas_sueno: d.averages.sleepMinutes > 0 ? d.averages.sleepMinutes / 60 : null,
+            recorded_at: d.date + 'T12:00:00',
+          }))
+      : [];
 
   // ─── Render ───
 
@@ -184,7 +342,9 @@ const HistorialScreen: React.FC = () => {
       <View style={styles.header}>
         <Text style={styles.title}>Historial</Text>
         <Text style={styles.subtitle}>
-          {datos.length} lecturas registradas
+          {usingCache
+            ? `${cacheDays.length} días con datos (caché local)`
+            : `${datos.length} lecturas registradas`}
         </Text>
       </View>
 
@@ -209,16 +369,18 @@ const HistorialScreen: React.FC = () => {
         </Card>
       )}
 
-      {!loading && datos.length === 0 && (
+      {!loading && datos.length === 0 && cacheDays.length === 0 && (
         <Card>
           <Text style={styles.emptyText}>
             Aún no hay datos en este período.{'\n'}
-            Los datos del reloj se sincronizan cada 10 minutos.
+            Los datos del reloj se sincronizan cada 10 minutos.{'\n\n'}
+            💡 Abrí la pantalla de inicio para forzar una lectura
+            desde Health Connect.
           </Text>
         </Card>
       )}
 
-      {!loading && datos.length > 0 && (
+      {!loading && (datos.length > 0 || cacheDays.length > 0) && (
         <>
           {/* Resumen de promedios */}
           <Text style={styles.sectionTitle}>Resumen del período</Text>
@@ -374,9 +536,18 @@ const HistorialScreen: React.FC = () => {
             </View>
           </View>
 
-          {/* Últimas lecturas */}
-          <Text style={styles.sectionTitle}>Últimas lecturas</Text>
+          {/* Últimas lecturas / Resumen diario */}
+          <Text style={styles.sectionTitle}>
+            {usingCache ? 'Resumen diario' : 'Últimas lecturas'}
+          </Text>
           <Card style={styles.lecturasCard}>
+            {usingCache && (
+              <View style={styles.cacheTag}>
+                <Text style={styles.cacheTagText}>
+                  📱 Datos locales — los promedios diarios se acumulan al usar la app
+                </Text>
+              </View>
+            )}
             {ultimasLecturas.map((lectura, i) => {
               const fecha = formatearFecha(lectura.recorded_at ?? '');
               const tieneFC = lectura.frec_cardiaca_bpm != null;
@@ -607,6 +778,20 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: colors.textSecondary,
     marginLeft: 8,
+  },
+
+  // ── Cache tag ──
+  cacheTag: {
+    backgroundColor: colors.primary + '15',
+    paddingHorizontal: spacing.cardPadding,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  cacheTagText: {
+    fontSize: fontSize.caption,
+    color: colors.textSecondary,
+    lineHeight: 18,
   },
 });
 
