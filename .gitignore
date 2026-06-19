@@ -41,3 +41,5 @@ android/.kotlin/
 .cortex/vault/.cortex_index.json
 
 *.deb
+*.apk
+

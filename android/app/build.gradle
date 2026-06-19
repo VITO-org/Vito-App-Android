@@ -4,6 +4,11 @@ apply plugin: "com.facebook.react"
 
 react {
     autolinkLibrariesWithApp()
+    //
+    // Added by install-expo-modules
+    entryFile = file(["node", "-e", "require('expo/scripts/resolveAppEntry')", rootDir.getAbsoluteFile().getParentFile().getAbsolutePath(), "android", "absolute"].execute(null, rootDir).text.trim())
+    // cliFile removed
+    // bundleCommand removed
 }
 
 def enableProguardInReleaseBuilds = false
