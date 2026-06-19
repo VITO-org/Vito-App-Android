@@ -1,4 +1,4 @@
-import React, {useState, useCallback} from 'react';
+import React, {useState, useCallback, useEffect} from 'react';
 import {
   View,
   Text,
@@ -8,25 +8,17 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
+import {useNavigation} from '@react-navigation/native';
+import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import Card from '../components/Card';
 import PrimaryButton from '../components/PrimaryButton';
 import VITOMascot from '../components/VITOMascot';
 import {useSupabase} from '../context/SupabaseProvider';
 import {colors, spacing, fontSize} from '../theme';
 import type {SexoBiologico} from '../services/supabase/models';
-
-type FormField = keyof typeof fieldMeta;
-
-const fieldMeta = {
-  nombre: {label: 'Nombre *', placeholder: 'Tu nombre', keyboard: 'default' as const},
-  apellido: {label: 'Apellido', placeholder: 'Tu apellido', keyboard: 'default' as const},
-  dia: {label: 'Día', placeholder: 'DD', keyboard: 'numeric' as const},
-  mes: {label: 'Mes', placeholder: 'MM', keyboard: 'numeric' as const},
-  anio: {label: 'Año', placeholder: 'AAAA', keyboard: 'numeric' as const},
-  altura: {label: 'Altura (cm)', placeholder: 'Ej: 170', keyboard: 'numeric' as const},
-  peso: {label: 'Peso (kg)', placeholder: 'Ej: 70', keyboard: 'numeric' as const},
-};
+import type {RootStackParamList} from '../navigation/RootNavigator';
 
 const SEXOS: {key: SexoBiologico; label: string}[] = [
   {key: 'M', label: 'Masculino'},
@@ -35,13 +27,14 @@ const SEXOS: {key: SexoBiologico; label: string}[] = [
 ];
 
 /**
- * Pantalla de finalización de perfil que aparece después del registro.
- * Recopila datos personales (nombre, apellido, fecha de nacimiento, sexo)
- * y datos clínicos básicos (altura, peso).
+ * Pantalla para editar datos personales del perfil.
+ * Pre-carga los valores existentes desde el perfil y permite actualizarlos.
  */
-const CompleteProfileScreen: React.FC = () => {
-  const {session, updateProfile, updateClinicalConfig, getUserId} = useSupabase();
+const EditarPerfilScreen: React.FC = () => {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const {session, profile, updateProfile, getUserId} = useSupabase();
 
+  // ── Estado del formulario ──
   const [nombre, setNombre] = useState('');
   const [apellido, setApellido] = useState('');
   const [dni, setDni] = useState('');
@@ -50,56 +43,57 @@ const CompleteProfileScreen: React.FC = () => {
   const [mes, setMes] = useState('');
   const [anio, setAnio] = useState('');
   const [sexo, setSexo] = useState<SexoBiologico | null>(null);
-  const [altura, setAltura] = useState('');
-  const [peso, setPeso] = useState('');
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const calcularEdad = useCallback((): number | null => {
-    const d = parseInt(dia, 10);
-    const m = parseInt(mes, 10);
-    const a = parseInt(anio, 10);
-    if (!d || !m || !a) return null;
-    const hoy = new Date();
-    const nac = new Date(a, m - 1, d);
-    let edad = hoy.getFullYear() - nac.getFullYear();
-    const mesDiff = hoy.getMonth() - nac.getMonth();
-    if (mesDiff < 0 || (mesDiff === 0 && hoy.getDate() < nac.getDate())) {
-      edad--;
-    }
-    return edad;
-  }, [dia, mes, anio]);
+  // ── Cargar datos del perfil existente ──
+  useEffect(() => {
+    if (profile) {
+      setNombre(profile.nombre ?? '');
+      setApellido(profile.apellido ?? '');
+      setDni(profile.dni ?? '');
+      setTelefono(profile.telefono ?? '');
+      setSexo(profile.sexo ?? null);
 
+      if (profile.fecha_nac) {
+        const parts = profile.fecha_nac.split('-');
+        if (parts.length === 3) {
+          setAnio(parts[0]);
+          setMes(parts[1]);
+          setDia(parts[2]);
+        }
+      }
+    }
+  }, [profile]);
+
+  const displayName =
+    profile?.nombre
+      ? profile.nombre + (profile.apellido ? ` ${profile.apellido}` : '')
+      : session?.user?.email?.split('@')[0] ?? 'Usuario';
+
+  const email = session?.user?.email ?? '';
+
+  // ── Validación ──
   const validar = (): string | null => {
     if (!nombre.trim()) return 'El nombre es obligatorio';
 
-    const d = parseInt(dia, 10);
-    const m = parseInt(mes, 10);
-    const a = parseInt(anio, 10);
-    if (!d || !m || !a) return 'Completá la fecha de nacimiento';
-    if (d < 1 || d > 31) return 'Día inválido';
-    if (m < 1 || m > 12) return 'Mes inválido';
-    if (a < 1900 || a > new Date().getFullYear()) return 'Año inválido';
-
-    const edad = calcularEdad();
-    if (edad != null && edad < 0) return 'La fecha de nacimiento es futura';
-    if (edad != null && edad > 120) return 'Revisá el año de nacimiento';
-
-    if (!sexo) return 'Seleccioná tu sexo biológico';
-
-    if (altura.trim()) {
-      const h = parseFloat(altura);
-      if (isNaN(h) || h < 50 || h > 280) return 'La altura debe estar entre 50 y 280 cm';
-    }
-    if (peso.trim()) {
-      const w = parseFloat(peso);
-      if (isNaN(w) || w < 10 || w > 500) return 'El peso debe estar entre 10 y 500 kg';
+    if (dia.trim() || mes.trim() || anio.trim()) {
+      const d = parseInt(dia, 10);
+      const m = parseInt(mes, 10);
+      const a = parseInt(anio, 10);
+      if (d < 1 || d > 31) return 'Día inválido';
+      if (m < 1 || m > 12) return 'Mes inválido';
+      if (a < 1900 || a > new Date().getFullYear()) return 'Año inválido';
+      const hoy = new Date();
+      const nac = new Date(a, m - 1, d);
+      if (nac > hoy) return 'La fecha de nacimiento es futura';
     }
 
     return null;
   };
 
+  // ── Guardar ──
   const handleSave = async () => {
     const err = validar();
     if (err) {
@@ -115,15 +109,18 @@ const CompleteProfileScreen: React.FC = () => {
 
     setError(null);
     setLoading(true);
-    // Timeout de seguridad: si la API no responde en 10s, mostramos error
+
     const timeout = setTimeout(() => {
       setError('La conexión está tardando demasiado. ¿Tenés internet?');
       setLoading(false);
     }, 10000);
 
     try {
-      const fechaNac = `${anio}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
-      // Guardar datos personales en perfil_usuario (crítico — esperamos)
+      let fechaNac: string | null = null;
+      if (dia.trim() && mes.trim() && anio.trim()) {
+        fechaNac = `${anio}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
+      }
+
       await updateProfile({
         user_id: userId,
         nombre: nombre.trim(),
@@ -133,17 +130,10 @@ const CompleteProfileScreen: React.FC = () => {
         fecha_nac: fechaNac,
         sexo,
       });
-      // Guardar altura y peso en datos_clinicos_config (no crítico — en background)
-      if (altura.trim() || peso.trim()) {
-        updateClinicalConfig({
-          id_usuario: userId,
-          altura_cm: altura.trim() ? parseFloat(altura) : null,
-          peso_kg: peso.trim() ? parseFloat(peso) : null,
-        }).catch(() => {
-          // No bloquear la UI si falla la sincronización de altura/peso
-        });
-      }
-      // El RootNavigator detecta needsProfile=false y muestra MainTabs automáticamente
+
+      Alert.alert('Datos guardados', 'Tu perfil se actualizó correctamente.', [
+        {text: 'OK', onPress: () => navigation.goBack()},
+      ]);
     } catch (e: unknown) {
       const msg = (e as {message?: string}).message ?? 'Error al guardar el perfil';
       setError(msg);
@@ -153,8 +143,7 @@ const CompleteProfileScreen: React.FC = () => {
     }
   };
 
-  const edad = calcularEdad();
-
+  // ── Render ──
   return (
     <KeyboardAvoidingView
       style={styles.flex}
@@ -163,13 +152,20 @@ const CompleteProfileScreen: React.FC = () => {
         style={styles.screen}
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled">
-        {/* Header */}
-        <View style={styles.header}>
-          <VITOMascot size={56} />
-          <Text style={styles.title}>Completá tu perfil</Text>
-          <Text style={styles.subtitle}>
-            Estos datos nos ayudan a personalizar tu experiencia en VITO
-          </Text>
+        {/* Back + título */}
+        <View style={styles.topBar}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Text style={styles.backArrow}>‹</Text>
+          </TouchableOpacity>
+          <Text style={styles.screenTitle}>Datos personales</Text>
+          <View style={styles.backButton} />
+        </View>
+
+        {/* Header con avatar */}
+        <View style={styles.profileHeader}>
+          <VITOMascot size={64} />
+          <Text style={styles.userName}>{displayName}</Text>
+          {email ? <Text style={styles.userEmail}>{email}</Text> : null}
         </View>
 
         {/* Formulario */}
@@ -180,27 +176,29 @@ const CompleteProfileScreen: React.FC = () => {
             </View>
           )}
 
-          {/* Nombre y Apellido */}
-          <Text style={styles.label}>{fieldMeta.nombre.label}</Text>
+          {/* Nombre */}
+          <Text style={styles.label}>Nombre *</Text>
           <TextInput
             style={styles.input}
-            placeholder={fieldMeta.nombre.placeholder}
+            placeholder="Tu nombre"
             placeholderTextColor={colors.textSecondary}
             autoCapitalize="words"
             value={nombre}
             onChangeText={setNombre}
           />
 
-          <Text style={styles.label}>{fieldMeta.apellido.label}</Text>
+          {/* Apellido */}
+          <Text style={styles.label}>Apellido</Text>
           <TextInput
             style={styles.input}
-            placeholder={fieldMeta.apellido.placeholder}
+            placeholder="Tu apellido"
             placeholderTextColor={colors.textSecondary}
             autoCapitalize="words"
             value={apellido}
             onChangeText={setApellido}
           />
 
+          {/* DNI */}
           <Text style={styles.label}>DNI</Text>
           <TextInput
             style={styles.input}
@@ -211,6 +209,7 @@ const CompleteProfileScreen: React.FC = () => {
             onChangeText={setDni}
           />
 
+          {/* Teléfono */}
           <Text style={styles.label}>Teléfono</Text>
           <TextInput
             style={styles.input}
@@ -222,12 +221,12 @@ const CompleteProfileScreen: React.FC = () => {
           />
 
           {/* Fecha de nacimiento */}
-          <Text style={styles.label}>Fecha de nacimiento *</Text>
+          <Text style={styles.label}>Fecha de nacimiento</Text>
           <View style={styles.dateRow}>
             <View style={styles.dateFieldSmall}>
               <TextInput
                 style={styles.input}
-                placeholder={fieldMeta.dia.placeholder}
+                placeholder="DD"
                 placeholderTextColor={colors.textSecondary}
                 keyboardType="numeric"
                 maxLength={2}
@@ -239,7 +238,7 @@ const CompleteProfileScreen: React.FC = () => {
             <View style={styles.dateFieldSmall}>
               <TextInput
                 style={styles.input}
-                placeholder={fieldMeta.mes.placeholder}
+                placeholder="MM"
                 placeholderTextColor={colors.textSecondary}
                 keyboardType="numeric"
                 maxLength={2}
@@ -251,7 +250,7 @@ const CompleteProfileScreen: React.FC = () => {
             <View style={styles.dateFieldLarge}>
               <TextInput
                 style={styles.input}
-                placeholder={fieldMeta.anio.placeholder}
+                placeholder="AAAA"
                 placeholderTextColor={colors.textSecondary}
                 keyboardType="numeric"
                 maxLength={4}
@@ -261,15 +260,8 @@ const CompleteProfileScreen: React.FC = () => {
             </View>
           </View>
 
-          {/* Edad calculada */}
-          {edad != null && (
-            <View style={styles.ageBadge}>
-              <Text style={styles.ageText}>Edad: {edad} años</Text>
-            </View>
-          )}
-
           {/* Sexo biológico */}
-          <Text style={styles.label}>Sexo biológico *</Text>
+          <Text style={styles.label}>Sexo biológico</Text>
           <View style={styles.sexoRow}>
             {SEXOS.map(s => (
               <TouchableOpacity
@@ -285,34 +277,8 @@ const CompleteProfileScreen: React.FC = () => {
             ))}
           </View>
 
-          {/* Altura y Peso */}
-          <View style={styles.measureRow}>
-            <View style={styles.measureField}>
-              <Text style={styles.label}>{fieldMeta.altura.label}</Text>
-              <TextInput
-                style={styles.input}
-                placeholder={fieldMeta.altura.placeholder}
-                placeholderTextColor={colors.textSecondary}
-                keyboardType="numeric"
-                value={altura}
-                onChangeText={setAltura}
-              />
-            </View>
-            <View style={styles.measureField}>
-              <Text style={styles.label}>{fieldMeta.peso.label}</Text>
-              <TextInput
-                style={styles.input}
-                placeholder={fieldMeta.peso.placeholder}
-                placeholderTextColor={colors.textSecondary}
-                keyboardType="numeric"
-                value={peso}
-                onChangeText={setPeso}
-              />
-            </View>
-          </View>
-
           <PrimaryButton
-            title="Guardar y continuar"
+            title="Guardar cambios"
             onPress={handleSave}
             loading={loading}
             style={styles.button}
@@ -337,23 +303,47 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.screenPaddingBottom,
     flexGrow: 1,
   },
-  header: {
+
+  // ── Top bar ──
+  topBar: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 24,
-    marginTop: 20,
+    justifyContent: 'space-between',
+    marginBottom: 16,
   },
-  title: {
-    fontSize: fontSize.title,
+  backButton: {
+    width: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  backArrow: {
+    fontSize: 32,
+    color: colors.primaryDark,
+    fontWeight: '300',
+    lineHeight: 36,
+  },
+  screenTitle: {
+    fontSize: fontSize.subtitle,
     fontWeight: '700',
     color: colors.primaryDark,
-    marginTop: 12,
   },
-  subtitle: {
-    fontSize: fontSize.body,
+
+  // ── Header ──
+  profileHeader: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  userName: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginTop: 10,
+  },
+  userEmail: {
+    fontSize: fontSize.caption,
     color: colors.textSecondary,
-    marginTop: 6,
-    textAlign: 'center',
-    lineHeight: 22,
+    marginTop: 4,
   },
 
   // ── Form ──
@@ -407,19 +397,6 @@ const styles = StyleSheet.create({
     marginTop: 24,
     fontWeight: '600',
   },
-  ageBadge: {
-    backgroundColor: colors.successLight,
-    borderRadius: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    alignSelf: 'flex-start',
-    marginTop: 8,
-  },
-  ageText: {
-    fontSize: fontSize.caption,
-    fontWeight: '600',
-    color: colors.success,
-  },
 
   // ── Sexo ──
   sexoRow: {
@@ -448,15 +425,6 @@ const styles = StyleSheet.create({
   sexoTextActive: {
     color: colors.primary,
   },
-
-  // ── Measurements ──
-  measureRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  measureField: {
-    flex: 1,
-  },
 });
 
-export default CompleteProfileScreen;
+export default EditarPerfilScreen;

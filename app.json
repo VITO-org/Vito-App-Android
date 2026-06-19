@@ -1,4 +1,27 @@
 {
   "name": "VitoHealthConnect",
-  "displayName": "Vito Health Connect"
+  "displayName": "Vito Health Connect",
+  "expo": {
+    "name": "Vito Health Connect",
+    "slug": "vito-health-connect",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "android": {
+      "package": "com.vito.healthconnect.rn",
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.health.READ_HEART_RATE",
+        "android.permission.health.READ_STEPS",
+        "android.permission.health.READ_SLEEP",
+        "android.permission.health.READ_ACTIVE_CALORIES_BURNED"
+      ]
+    },
+    "plugins": [],
+    "extra": {
+      "eas": {
+        "projectId": "fa67daf3-789f-4cc2-a373-ceb1507c4a50"
+      }
+    },
+    "owner": "florenstt"
+  }
 }
