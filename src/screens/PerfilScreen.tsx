@@ -1,9 +1,12 @@
 import React from 'react';
 import {View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert} from 'react-native';
+import {useNavigation} from '@react-navigation/native';
+import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import Card from '../components/Card';
 import VITOMascot from '../components/VITOMascot';
 import {useSupabase} from '../context/SupabaseProvider';
 import {colors, spacing, fontSize} from '../theme';
+import type {RootStackParamList} from '../navigation/RootNavigator';
 
 interface PerfilOptionProps {
   icon: string;
@@ -23,15 +26,10 @@ const PerfilOption: React.FC<PerfilOptionProps> = ({icon, label, onPress}) => (
   </TouchableOpacity>
 );
 
-const OPTS: PerfilOptionProps[] = [
-  {icon: '📋', label: 'Datos personales'},
-  {icon: '⚙️', label: 'Configuración'},
-  {icon: '📱', label: 'Dispositivos conectados'},
-  {icon: '🔒', label: 'Privacidad y seguridad'},
-  {icon: '❓', label: 'Ayuda y soporte'},
-];
+// Módulo de opciones: sin onPress fijo — se asigna dentro del componente
 
 const PerfilScreen: React.FC = () => {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const {session, profile, signOut} = useSupabase();
 
   const displayName =
@@ -40,6 +38,10 @@ const PerfilScreen: React.FC = () => {
       : session?.user?.email?.split('@')[0] ?? 'Usuario';
 
   const email = session?.user?.email ?? '';
+
+  const handleNavigateEditarPerfil = () => {
+    navigation.navigate('EditarPerfil');
+  };
 
   const handleSignOut = () => {
     Alert.alert(
@@ -73,10 +75,16 @@ const PerfilScreen: React.FC = () => {
 
       {/* Opciones */}
       <Card>
-        {OPTS.map((opt, i) => (
+        {([
+          {icon: '📋', label: 'Datos personales', onPress: handleNavigateEditarPerfil},
+          {icon: '⚙️', label: 'Configuración'},
+          {icon: '📱', label: 'Dispositivos conectados'},
+          {icon: '🔒', label: 'Privacidad y seguridad'},
+          {icon: '❓', label: 'Ayuda y soporte'},
+        ] as PerfilOptionProps[]).map((opt, i) => (
           <React.Fragment key={opt.label}>
             <PerfilOption {...opt} />
-            {i < OPTS.length - 1 && <View style={styles.divider} />}
+            {i < 4 && <View style={styles.divider} />}
           </React.Fragment>
         ))}
       </Card>

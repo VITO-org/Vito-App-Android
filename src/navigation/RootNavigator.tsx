@@ -6,6 +6,7 @@ import DetalleSignoScreen from '../screens/DetalleSignoScreen';
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
 import CompleteProfileScreen from '../screens/CompleteProfileScreen';
+import EditarPerfilScreen from '../screens/EditarPerfilScreen';
 import {useSupabase} from '../context/SupabaseProvider';
 
 export type RootStackParamList = {
@@ -19,6 +20,7 @@ export type RootStackParamList = {
   Login: undefined;
   Register: undefined;
   CompleteProfile: undefined;
+  EditarPerfil: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -54,6 +56,13 @@ function RootNavigatorContent() {
         <Stack.Screen
           name="DetalleSigno"
           component={DetalleSignoScreen}
+          options={{animation: 'slide_from_right'}}
+        />
+      )}
+      {session && !needsProfile && (
+        <Stack.Screen
+          name="EditarPerfil"
+          component={EditarPerfilScreen}
           options={{animation: 'slide_from_right'}}
         />
       )}
