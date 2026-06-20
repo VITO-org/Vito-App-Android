@@ -26,6 +26,9 @@ interface SupabaseContextValue {
 
   // Utilidad
   getUserId: () => string | null;
+
+  // Debug / diagnóstico
+  forceRefreshProfile: () => Promise<PerfilUsuario | null>;
 }
 
 // ─── Context ───
@@ -42,10 +45,10 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
   const [needsProfile, setNeedsProfile] = useState(true); // empieza true; loadProfile lo pone false si hay perfil
   const [error, setError] = useState<string | null>(null);
 
-  // No dep绳子 stales — loadProfile se define antes del effect
-  const loadProfile = async (userId: string) => {
+  // loadProfile: ahora recibe el access_token para bypassear @supabase/supabase-js
+  const loadProfile = async (userId: string, accessToken?: string | null) => {
     try {
-      const p = await api.getProfile(userId);
+      const p = await api.getProfile(userId, accessToken);
       setProfile(p);
       setNeedsProfile(!p);
     } catch {
@@ -65,7 +68,7 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
           setSession(session);
-          await loadProfile(session.user.id);
+          await loadProfile(session.user.id, session.access_token);
           return;
         }
         // Si getSession() devolvió null, reintentar una vez (puede ser
@@ -74,7 +77,7 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
         const { data: { session: retrySession } } = await supabase.auth.getSession();
         if (retrySession?.user) {
           setSession(retrySession);
-          await loadProfile(retrySession.user.id);
+          await loadProfile(retrySession.user.id, retrySession.access_token);
         }
         // Si sigue null, el usuario no tiene sesión guardada → mostrar Login
       } catch {
@@ -94,7 +97,7 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
         setSession(session);
         if (session?.user) {
           try {
-            await loadProfile(session.user.id);
+            await loadProfile(session.user.id, session.access_token);
           } catch {
             // Si loadProfile falla acá, no es crítico — el listener de getSession ya avanzó
           }
@@ -168,17 +171,33 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
   const refreshProfile = useCallback(async () => {
     const uid = getUserId();
     if (!uid) return;
-    await loadProfile(uid);
-  }, [getUserId]);
+    await loadProfile(uid, session?.access_token);
+  }, [getUserId, session]);
 
   const updateProfile = useCallback(
     async (data: Partial<PerfilUsuario> & { user_id: string }) => {
-      const updated = await api.upsertProfile(data);
+      const token = session?.access_token;
+      const updated = await api.upsertProfile(data, token);
       setProfile(updated);
       setNeedsProfile(false);
     },
-    [],
+    [session],
   );
+
+  // Para debugging desde CompleteProfileScreen
+  const forceRefreshProfile = useCallback(async () => {
+    const uid = getUserId();
+    if (!uid) return null;
+    try {
+      const p = await api.getProfile(uid);
+      setProfile(p);
+      setNeedsProfile(!p);
+      return p;
+    } catch (e) {
+      console.warn('forceRefreshProfile error:', e);
+      return null;
+    }
+  }, [getUserId]);
 
   const updateClinicalConfig = useCallback(
     async (data: Partial<DatosClinicosConfig> & { id_usuario: string }) => {
@@ -203,6 +222,7 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
     updateProfile,
     updateClinicalConfig,
     getUserId,
+    forceRefreshProfile,
   };
 
   return (

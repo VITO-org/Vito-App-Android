@@ -43,6 +43,8 @@ const EditarPerfilScreen: React.FC = () => {
   const [mes, setMes] = useState('');
   const [anio, setAnio] = useState('');
   const [sexo, setSexo] = useState<SexoBiologico | null>(null);
+  const [altura, setAltura] = useState('');
+  const [peso, setPeso] = useState('');
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,6 +66,9 @@ const EditarPerfilScreen: React.FC = () => {
           setDia(parts[2]);
         }
       }
+      // Altura y peso (vienen de datos_clinicos_config o se cargan por separado)
+      setAltura(profile.altura_cm ? String(profile.altura_cm) : '');
+      setPeso(profile.peso_kg ? String(profile.peso_kg) : '');
     }
   }, [profile]);
 
@@ -129,6 +134,8 @@ const EditarPerfilScreen: React.FC = () => {
         telefono: telefono.trim() || null,
         fecha_nac: fechaNac,
         sexo,
+        altura_cm: altura.trim() ? parseFloat(altura) : null,
+        peso_kg: peso.trim() ? parseFloat(peso) : null,
       });
 
       Alert.alert('Datos guardados', 'Tu perfil se actualizó correctamente.', [
@@ -275,6 +282,31 @@ const EditarPerfilScreen: React.FC = () => {
                 </Text>
               </TouchableOpacity>
             ))}
+          </View>
+
+          {/* Altura y Peso */}
+          <Text style={styles.label}>Altura y peso</Text>
+          <View style={styles.measureRow}>
+            <View style={styles.measureField}>
+              <TextInput
+                style={styles.input}
+                placeholder="Altura (cm)"
+                placeholderTextColor={colors.textSecondary}
+                keyboardType="numeric"
+                value={altura}
+                onChangeText={setAltura}
+              />
+            </View>
+            <View style={styles.measureField}>
+              <TextInput
+                style={styles.input}
+                placeholder="Peso (kg)"
+                placeholderTextColor={colors.textSecondary}
+                keyboardType="numeric"
+                value={peso}
+                onChangeText={setPeso}
+              />
+            </View>
           </View>
 
           <PrimaryButton
@@ -424,6 +456,16 @@ const styles = StyleSheet.create({
   },
   sexoTextActive: {
     color: colors.primary,
+  },
+
+  // ── Measurements ──
+  measureRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 4,
+  },
+  measureField: {
+    flex: 1,
   },
 });
 

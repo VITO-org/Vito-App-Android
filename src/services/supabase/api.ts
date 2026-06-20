@@ -1,4 +1,5 @@
 import { supabase } from './client';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {
   Usuario,
   PerfilUsuario,
@@ -16,6 +17,97 @@ import type {
   RolUsuario,
   TipoMetrica,
 } from './models';
+
+// ═══════════════════════════════════════════
+// RAW FETCH HELPER (bypass @supabase/supabase-js bug con Hermes)
+// ═══════════════════════════════════════════
+
+const SUPABASE_URL = 'https://rkgbedehkfpiylaubjbo.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJrZ2JlZGVoa2ZwaXlsYXViamJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3NjE1NzYsImV4cCI6MjA5MTMzNzU3Nn0.8f9CewFjP6dtTbxAvmj5nCNn8JipXJpQWHjM7k_oeQo';
+
+/**
+ * Obtener el access_token del cliente Supabase.
+ * NOTA: No funciona reliablemente con @supabase/supabase-js v2.107.0 + Hermes.
+ * Los callers deberían pasar el token desde el contexto React cuando sea posible.
+ */
+async function getAccessToken(): Promise<string | null> {
+  // La key que usa @supabase/supabase-js internamente
+  const keys = [
+    'sb-rkgbedehkfpiylaubjbo.supabase.co-auth-token',
+    'sb-rkgbedehkfpiylaubjbo-auth-token',
+  ];
+  for (const key of keys) {
+    try {
+      const raw = await AsyncStorage.getItem(key);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return parsed[0] ?? parsed?.access_token ?? null;
+      }
+    } catch {}
+  }
+  return null;
+}
+
+/**
+ * Raw fetch a la Data API de Supabase (PostgREST).
+ * NO usa @supabase/supabase-js — evita el bug que cuelga requests.
+ */
+async function rawSupabaseFetch<T>(
+  table: string,
+  options: {
+    method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+    query?: string; // ej: "?id=eq.xxx"
+    body?: unknown;
+    prefer?: string;
+    select?: string;
+    accessToken?: string | null; // Pasar desde el contexto React para evitar llamar a getAccessToken()
+  } = {},
+): Promise<{ data: T | null; error: Error | null }> {
+  try {
+    // Usar token pasado directamente, o intentar obtenerlo de AsyncStorage
+    let token = options.accessToken ?? null;
+    if (!token) token = await getAccessToken();
+    if (!token) return { data: null, error: new Error('No hay token de sesión') };
+
+    const url = `${SUPABASE_URL}/rest/v1/${table}${options.query ?? ''}`;
+    const headers: Record<string, string> = {
+      'Authorization': `Bearer ${token}`,
+      'apikey': SUPABASE_ANON_KEY,
+    };
+    if (options.prefer) headers['Prefer'] = options.prefer;
+    if (options.body) headers['Content-Type'] = 'application/json';
+
+    // Timeout de 15s
+    const controller = new AbortController();
+    const tid = setTimeout(() => controller.abort(), 15000);
+
+    const res = await fetch(url, {
+      method: options.method ?? 'GET',
+      headers,
+      body: options.body ? JSON.stringify(options.body) : undefined,
+      signal: controller.signal,
+    });
+    clearTimeout(tid);
+
+    // 204 No Content
+    if (res.status === 204) return { data: null, error: null };
+
+    const text = await res.text();
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`;
+      try {
+        const j = JSON.parse(text);
+        msg = j.message ?? j.error ?? msg;
+      } catch {}
+      return { data: null, error: new Error(msg) };
+    }
+
+    const result = text ? (JSON.parse(text) as T) : null;
+    return { data: result, error: null };
+  } catch (e) {
+    return { data: null, error: e instanceof Error ? e : new Error(String(e)) };
+  }
+}
 
 // ═══════════════════════════════════════════
 // AUTH
@@ -82,26 +174,36 @@ export async function getSession() {
 // PERFIL DE USUARIO
 // ═══════════════════════════════════════════
 
-export async function getProfile(userId: string): Promise<PerfilUsuario | null> {
-  const { data, error } = await supabase
-    .from('perfil_usuario')
-    .select('*')
-    .eq('user_id', userId)
-    .maybeSingle();
+export async function getProfile(
+  userId: string,
+  accessToken?: string | null,
+): Promise<PerfilUsuario | null> {
+  const { data, error } = await rawSupabaseFetch<PerfilUsuario[]>(
+    'perfil_usuario',
+    { query: `?user_id=eq.${userId}`, accessToken },
+  );
   if (error) throw error;
-  return data as PerfilUsuario | null;
+  return (data ?? [])[0] ?? null;
 }
 
 export async function upsertProfile(
   profile: Partial<PerfilUsuario> & { user_id: string },
+  accessToken?: string | null,
 ): Promise<PerfilUsuario> {
-  const { data, error } = await supabase
-    .from('perfil_usuario')
-    .upsert(profile, { onConflict: 'user_id' })
-    .select()
-    .single();
+  const { data, error } = await rawSupabaseFetch<PerfilUsuario>(
+    'perfil_usuario',
+    {
+      method: 'POST',
+      query: '?on_conflict=user_id',
+      body: profile,
+      prefer: 'resolution=merge-duplicates,return=representation',
+      accessToken,
+    },
+  );
   if (error) throw error;
-  return data as PerfilUsuario;
+  if (Array.isArray(data)) return (data as PerfilUsuario[])[0];
+  if (data) return data as PerfilUsuario;
+  throw new Error('No se pudo guardar el perfil');
 }
 
 // ═══════════════════════════════════════════
