@@ -64,8 +64,31 @@ const PerfilScreen: React.FC = () => {
     );
   };
 
+  const profileIncomplete = session && !profile?.nombre;
+
+  const handleNavigateCompleteProfile = () => {
+    navigation.navigate('CompleteProfile');
+  };
+
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
+      {/* Banner si el perfil está incompleto */}
+      {profileIncomplete && (
+        <TouchableOpacity
+          style={styles.banner}
+          onPress={handleNavigateCompleteProfile}
+          activeOpacity={0.8}>
+          <View style={styles.bannerContent}>
+            <Text style={styles.bannerIcon}>⚠️</Text>
+            <View style={styles.bannerTextCol}>
+              <Text style={styles.bannerTitle}>Perfil incompleto</Text>
+              <Text style={styles.bannerSub}>Completá tus datos personales para personalizar tu experiencia</Text>
+            </View>
+            <Text style={styles.bannerArrow}>›</Text>
+          </View>
+        </TouchableOpacity>
+      )}
+
       {/* Avatar + nombre */}
       <View style={styles.profileHeader}>
         <VITOMascot size={72} />
@@ -108,6 +131,42 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: spacing.screenPaddingHorizontal,
     paddingTop: spacing.screenPaddingTop,
+  },
+
+  // ── Banner perfil incompleto ──
+  banner: {
+    backgroundColor: '#FFF7ED',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+    marginBottom: 20,
+  },
+  bannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    gap: 10,
+  },
+  bannerIcon: {
+    fontSize: 20,
+  },
+  bannerTextCol: {
+    flex: 1,
+  },
+  bannerTitle: {
+    fontSize: fontSize.body,
+    fontWeight: '600',
+    color: '#9A3412',
+  },
+  bannerSub: {
+    fontSize: fontSize.caption,
+    color: '#C2410C',
+    marginTop: 2,
+  },
+  bannerArrow: {
+    fontSize: 22,
+    color: '#C2410C',
+    fontWeight: '300',
   },
 
   // ── Header ──

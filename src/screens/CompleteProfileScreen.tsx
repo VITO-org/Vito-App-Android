@@ -1,4 +1,4 @@
-import React, {useState, useCallback} from 'react';
+import React, {useState, useCallback, useRef} from 'react';
 import {
   View,
   Text,
@@ -9,12 +9,37 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import {useNavigation} from '@react-navigation/native';
 import Card from '../components/Card';
 import PrimaryButton from '../components/PrimaryButton';
 import VITOMascot from '../components/VITOMascot';
 import {useSupabase} from '../context/SupabaseProvider';
 import {colors, spacing, fontSize} from '../theme';
 import type {SexoBiologico} from '../services/supabase/models';
+import {supabase} from '../services/supabase/client';
+
+/** Test rápido: hace un HEAD a la API de Supabase para ver si responde */
+async function testSupabaseConnection(): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(
+      'https://rkgbedehkfpiylaubjbo.supabase.co/rest/v1/',
+      {
+        method: 'HEAD',
+        headers: {'Accept': 'application/json'},
+        signal: controller.signal,
+      },
+    );
+    clearTimeout(id);
+    console.warn(`[testSupabaseConnection] status=${res.status}`);
+    return res.ok || res.status === 401;
+    // 401 = autenticación requerida (normal para REST sin auth)
+  } catch (e) {
+    console.warn('[testSupabaseConnection] Error:', e);
+    return false;
+  }
+}
 
 type FormField = keyof typeof fieldMeta;
 
@@ -40,6 +65,7 @@ const SEXOS: {key: SexoBiologico; label: string}[] = [
  * y datos clínicos básicos (altura, peso).
  */
 const CompleteProfileScreen: React.FC = () => {
+  const navigation = useNavigation();
   const {session, updateProfile, updateClinicalConfig, getUserId} = useSupabase();
 
   const [nombre, setNombre] = useState('');
@@ -55,6 +81,7 @@ const CompleteProfileScreen: React.FC = () => {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const requestDoneRef = useRef(false); // Evita race-condition timeout vs respuesta
 
   const calcularEdad = useCallback((): number | null => {
     const d = parseInt(dia, 10);
@@ -113,18 +140,25 @@ const CompleteProfileScreen: React.FC = () => {
       return;
     }
 
+    // Log para diagnosticar conectividad
+    console.warn(`[CompleteProfile] userId=${userId}, session=${session?.access_token?.slice(0,10)}...`);
+
     setError(null);
     setLoading(true);
-    // Timeout de seguridad: si la API no responde en 10s, mostramos error
+    requestDoneRef.current = false;
+
+    // Timeout extendido a 30s para diagnóstico
     const timeout = setTimeout(() => {
-      setError('La conexión está tardando demasiado. ¿Tenés internet?');
-      setLoading(false);
-    }, 10000);
+      if (!requestDoneRef.current) {
+        console.warn('[CompleteProfile] TIMEOUT 30s alcanzado — la request no respondió');
+        setError('La conexión está tardando demasiado. ¿Tenés internet? (30s)');
+        setLoading(false);
+      }
+    }, 30000);
 
     try {
       const fechaNac = `${anio}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
-      // Guardar datos personales en perfil_usuario (crítico — esperamos)
-      await updateProfile({
+      const profileData = {
         user_id: userId,
         nombre: nombre.trim(),
         apellido: apellido.trim() || null,
@@ -132,20 +166,28 @@ const CompleteProfileScreen: React.FC = () => {
         telefono: telefono.trim() || null,
         fecha_nac: fechaNac,
         sexo,
-      });
-      // Guardar altura y peso en datos_clinicos_config (no crítico — en background)
+      };
+
+      // updateProfile ahora usa raw fetch internamente (bypassea bug de @supabase/supabase-js)
+      await updateProfile(profileData);
+
+      // Guardar altura/peso en segundo plano (no crítico)
       if (altura.trim() || peso.trim()) {
         updateClinicalConfig({
           id_usuario: userId,
           altura_cm: altura.trim() ? parseFloat(altura) : null,
           peso_kg: peso.trim() ? parseFloat(peso) : null,
-        }).catch(() => {
-          // No bloquear la UI si falla la sincronización de altura/peso
-        });
+        }).catch(() => {});
       }
-      // El RootNavigator detecta needsProfile=false y muestra MainTabs automáticamente
+
+      requestDoneRef.current = true;
+      navigation.goBack();
     } catch (e: unknown) {
-      const msg = (e as {message?: string}).message ?? 'Error al guardar el perfil';
+      requestDoneRef.current = true;
+      const err = e as Error & {status?: number; code?: string};
+      console.warn('[CompleteProfile] Error:', err.message, '| status:', err.status, '| code:', err.code);
+      // Mostrar el error real de Supabase
+      const msg = err.message ?? 'Error al guardar el perfil';
       setError(msg);
     } finally {
       clearTimeout(timeout);

@@ -15,8 +15,8 @@ import {
   HealthModuleNotAvailableError,
 } from '../services/VitoHealthNative';
 import {useSupabase} from './SupabaseProvider';
-import {insertDatoReloj, upsertDatosClinicosConfig} from '../services/supabase/api';
-import type {DatoRelojInsert} from '../services/supabase/models';
+import {insertDatosReloj as insertDatoReloj, upsertDatosClinicosConfig} from '../services/supabase/api';
+import type {DatosRelojInsert as DatoRelojInsert} from '../services/supabase/models';
 import {saveHealthSnapshot, pruneOldEntries} from '../services/HealthDataCache';
 
 type ErrorSeverity = 'error' | 'warning';

@@ -26,6 +26,9 @@ interface SupabaseContextValue {
 
   // Utilidad
   getUserId: () => string | null;
+
+  // Debug / diagnóstico
+  forceRefreshProfile: () => Promise<PerfilUsuario | null>;
 }
 
 // ─── Context ───
@@ -42,10 +45,10 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
   const [needsProfile, setNeedsProfile] = useState(true); // empieza true; loadProfile lo pone false si hay perfil
   const [error, setError] = useState<string | null>(null);
 
-  // No dep绳子 stales — loadProfile se define antes del effect
-  const loadProfile = async (userId: string) => {
+  // loadProfile: ahora recibe el access_token para bypassear @supabase/supabase-js
+  const loadProfile = async (userId: string, accessToken?: string | null) => {
     try {
-      const p = await api.getProfile(userId);
+      const p = await api.getProfile(userId, accessToken);
       setProfile(p);
       setNeedsProfile(!p);
     } catch {
@@ -53,24 +56,39 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Cargar sesión al montar
+  // ──────────────────────────────────────────────
+  // Recuperación de sesión al montar
+  // Con reintento por si AsyncStorage no responde
+  // ──────────────────────────────────────────────
   useEffect(() => {
-    // Safety timeout: si getSession no responde en 8s, forzar salida del loading
-    const safetyTimer = setTimeout(() => setIsLoading(false), 8000);
+    const safetyTimer = setTimeout(() => setIsLoading(false), 12000);
 
-    supabase.auth
-      .getSession()
-      .then(async ({ data: { session } }) => {
-        clearTimeout(safetyTimer);
-        setSession(session);
+    const recoverSession = async (): Promise<void> => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
-          await loadProfile(session.user.id);
+          setSession(session);
+          await loadProfile(session.user.id, session.access_token);
+          return;
         }
-        setIsLoading(false);
-      })
-      .catch(() => {
+        // Si getSession() devolvió null, reintentar una vez (puede ser
+        // un race condition con AsyncStorage al arrancar la app)
+        await new Promise(r => setTimeout(r, 500));
+        const { data: { session: retrySession } } = await supabase.auth.getSession();
+        if (retrySession?.user) {
+          setSession(retrySession);
+          await loadProfile(retrySession.user.id, retrySession.access_token);
+        }
+        // Si sigue null, el usuario no tiene sesión guardada → mostrar Login
+      } catch {
+        // AsyncStorage corrupto o error transitorio — mostrar Login
+      }
+    };
+
+    recoverSession()
+      .catch(() => {})
+      .finally(() => {
         clearTimeout(safetyTimer);
-        // Si getSession falla (AsyncStorage corrupto, etc.), igual mostrar la UI
         setIsLoading(false);
       });
 
@@ -79,7 +97,7 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
         setSession(session);
         if (session?.user) {
           try {
-            await loadProfile(session.user.id);
+            await loadProfile(session.user.id, session.access_token);
           } catch {
             // Si loadProfile falla acá, no es crítico — el listener de getSession ya avanzó
           }
@@ -153,17 +171,33 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
   const refreshProfile = useCallback(async () => {
     const uid = getUserId();
     if (!uid) return;
-    await loadProfile(uid);
-  }, [getUserId]);
+    await loadProfile(uid, session?.access_token);
+  }, [getUserId, session]);
 
   const updateProfile = useCallback(
     async (data: Partial<PerfilUsuario> & { user_id: string }) => {
-      const updated = await api.upsertProfile(data);
+      const token = session?.access_token;
+      const updated = await api.upsertProfile(data, token);
       setProfile(updated);
       setNeedsProfile(false);
     },
-    [],
+    [session],
   );
+
+  // Para debugging desde CompleteProfileScreen
+  const forceRefreshProfile = useCallback(async () => {
+    const uid = getUserId();
+    if (!uid) return null;
+    try {
+      const p = await api.getProfile(uid);
+      setProfile(p);
+      setNeedsProfile(!p);
+      return p;
+    } catch (e) {
+      console.warn('forceRefreshProfile error:', e);
+      return null;
+    }
+  }, [getUserId]);
 
   const updateClinicalConfig = useCallback(
     async (data: Partial<DatosClinicosConfig> & { id_usuario: string }) => {
@@ -188,6 +222,7 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
     updateProfile,
     updateClinicalConfig,
     getUserId,
+    forceRefreshProfile,
   };
 
   return (
