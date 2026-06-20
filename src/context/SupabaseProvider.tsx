@@ -53,24 +53,36 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Cargar sesión al montar
+  // Cargar sesión al montar, con reintento si falla
   useEffect(() => {
-    // Safety timeout: si getSession no responde en 8s, forzar salida del loading
-    const safetyTimer = setTimeout(() => setIsLoading(false), 8000);
+    const safetyTimer = setTimeout(() => setIsLoading(false), 12000);
 
-    supabase.auth
-      .getSession()
-      .then(async ({ data: { session } }) => {
-        clearTimeout(safetyTimer);
-        setSession(session);
+    const recoverSession = async (): Promise<void> => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
+          setSession(session);
           await loadProfile(session.user.id);
+          return;
         }
-        setIsLoading(false);
-      })
-      .catch(() => {
+        // Si getSession() devolvió null, reintentar una vez (puede ser
+        // un race condition con AsyncStorage al arrancar la app)
+        await new Promise(r => setTimeout(r, 500));
+        const { data: { session: retrySession } } = await supabase.auth.getSession();
+        if (retrySession?.user) {
+          setSession(retrySession);
+          await loadProfile(retrySession.user.id);
+        }
+        // Si sigue null, el usuario no tiene sesión guardada → mostrar Login
+      } catch {
+        // AsyncStorage corrupto o error transitorio — mostrar Login
+      }
+    };
+
+    recoverSession()
+      .catch(() => {})
+      .finally(() => {
         clearTimeout(safetyTimer);
-        // Si getSession falla (AsyncStorage corrupto, etc.), igual mostrar la UI
         setIsLoading(false);
       });
 

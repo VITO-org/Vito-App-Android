@@ -1,4 +1,4 @@
-import React, {useState, useCallback} from 'react';
+import React, {useState, useCallback, useRef} from 'react';
 import {
   View,
   Text,
@@ -55,6 +55,7 @@ const CompleteProfileScreen: React.FC = () => {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const requestDoneRef = useRef(false); // Evita race-condition timeout vs respuesta
 
   const calcularEdad = useCallback((): number | null => {
     const d = parseInt(dia, 10);
@@ -115,11 +116,16 @@ const CompleteProfileScreen: React.FC = () => {
 
     setError(null);
     setLoading(true);
-    // Timeout de seguridad: si la API no responde en 10s, mostramos error
+    requestDoneRef.current = false;
+
+    // Timeout de seguridad: si la API no responde en 15s, mostramos error
+    // Solo se muestra si la request sigue en curso (evita race condition)
     const timeout = setTimeout(() => {
-      setError('La conexión está tardando demasiado. ¿Tenés internet?');
-      setLoading(false);
-    }, 10000);
+      if (!requestDoneRef.current) {
+        setError('La conexión está tardando demasiado. ¿Tenés internet?');
+        setLoading(false);
+      }
+    }, 15000);
 
     try {
       const fechaNac = `${anio}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
@@ -133,6 +139,7 @@ const CompleteProfileScreen: React.FC = () => {
         fecha_nac: fechaNac,
         sexo,
       });
+      requestDoneRef.current = true; // Marcar éxito antes de limpiar timeout
       // Guardar altura y peso en datos_clinicos_config (no crítico — en background)
       if (altura.trim() || peso.trim()) {
         updateClinicalConfig({
@@ -145,6 +152,7 @@ const CompleteProfileScreen: React.FC = () => {
       }
       // El RootNavigator detecta needsProfile=false y muestra MainTabs automáticamente
     } catch (e: unknown) {
+      requestDoneRef.current = true; // Marcar para que el timeout no sobreescriba
       const msg = (e as {message?: string}).message ?? 'Error al guardar el perfil';
       setError(msg);
     } finally {

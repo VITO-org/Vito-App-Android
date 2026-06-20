@@ -10,6 +10,7 @@ on:
       - dev-pruebas
     paths:
       - 'android/**'
+      - 'src/**'
       - 'package.json'
       - 'package-lock.json'
       - 'app.json'
