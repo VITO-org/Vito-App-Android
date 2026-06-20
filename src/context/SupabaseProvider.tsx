@@ -53,7 +53,10 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Cargar sesión al montar, con reintento si falla
+  // ──────────────────────────────────────────────
+  // Recuperación de sesión al montar
+  // Con reintento por si AsyncStorage no responde
+  // ──────────────────────────────────────────────
   useEffect(() => {
     const safetyTimer = setTimeout(() => setIsLoading(false), 12000);
 

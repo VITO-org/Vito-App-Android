@@ -9,6 +9,7 @@ on:
       - dev
       - dev-pruebas
     paths:
+      - '.github/workflows/**'
       - 'android/**'
       - 'src/**'
       - 'package.json'
