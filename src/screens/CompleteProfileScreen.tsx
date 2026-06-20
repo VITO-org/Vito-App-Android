@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import {useNavigation} from '@react-navigation/native';
 import Card from '../components/Card';
 import PrimaryButton from '../components/PrimaryButton';
 import VITOMascot from '../components/VITOMascot';
@@ -40,6 +41,7 @@ const SEXOS: {key: SexoBiologico; label: string}[] = [
  * y datos clínicos básicos (altura, peso).
  */
 const CompleteProfileScreen: React.FC = () => {
+  const navigation = useNavigation();
   const {session, updateProfile, updateClinicalConfig, getUserId} = useSupabase();
 
   const [nombre, setNombre] = useState('');
@@ -150,7 +152,8 @@ const CompleteProfileScreen: React.FC = () => {
           // No bloquear la UI si falla la sincronización de altura/peso
         });
       }
-      // El RootNavigator detecta needsProfile=false y muestra MainTabs automáticamente
+      // Volver al perfil después de guardar
+      navigation.goBack();
     } catch (e: unknown) {
       requestDoneRef.current = true; // Marcar para que el timeout no sobreescriba
       const msg = (e as {message?: string}).message ?? 'Error al guardar el perfil';

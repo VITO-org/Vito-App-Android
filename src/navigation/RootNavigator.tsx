@@ -26,7 +26,7 @@ export type RootStackParamList = {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 function RootNavigatorContent() {
-  const {session, isLoading, needsProfile} = useSupabase();
+  const {session, isLoading} = useSupabase();
 
   if (isLoading) {
     return (
@@ -41,25 +41,27 @@ function RootNavigatorContent() {
     <Stack.Navigator screenOptions={{headerShown: false}}>
       {/*
         Cada pantalla es un condicional INDIVIDUAL.
-        Sin fragments, sin Stack.Group — el orden en JSX determina
-        el orden real en React Navigation (sin bugs de reversión).
       */}
       {!session && <Stack.Screen name="Login" component={LoginScreen} />}
       {!session && <Stack.Screen name="Register" component={RegisterScreen} />}
-      {session && needsProfile && (
-        <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />
-      )}
-      {session && !needsProfile && (
+      {session && (
         <Stack.Screen name="MainTabs" component={BottomTabNavigator} />
       )}
-      {session && !needsProfile && (
+      {session && (
+        <Stack.Screen
+          name="CompleteProfile"
+          component={CompleteProfileScreen}
+          options={{animation: 'slide_from_bottom'}}
+        />
+      )}
+      {session && (
         <Stack.Screen
           name="DetalleSigno"
           component={DetalleSignoScreen}
           options={{animation: 'slide_from_right'}}
         />
       )}
-      {session && !needsProfile && (
+      {session && (
         <Stack.Screen
           name="EditarPerfil"
           component={EditarPerfilScreen}
