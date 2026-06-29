@@ -1,9 +1,8 @@
 import React from 'react';
-import {View, TouchableOpacity, StyleSheet, Platform} from 'react-native';
+import {View, TouchableOpacity, Image, StyleSheet, Platform} from 'react-native';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {colors, spacing, shadows} from '../theme';
 import AppIcon from '../components/AppIcon';
-import VITOMascot from '../components/VITOMascot';
 
 import InicioScreen from '../screens/InicioScreen';
 import HistorialScreen from '../screens/HistorialScreen';
@@ -51,7 +50,10 @@ const CenterTabButton: React.FC<{
           styles.centerButtonCircle,
           isSelected && styles.centerButtonCircleActive,
         ]}>
-        <VITOMascot size={36} showAntenna={false} />
+        <Image
+              source={require('../assets/icons/ic-vito-personaje.png')}
+              style={{width: 40, height: 40, resizeMode: 'contain'}}
+            />
       </View>
     </TouchableOpacity>
   );

@@ -143,7 +143,15 @@ _No se encontró registro de la técnica de estimación utilizada, puntos de his
 - `2670950` — feat: Login/Register screens, Health Connect native modules, navegación y config Android
 - `0ebc532` — feat: conexión funcional Supabase F1 - auth foundation
 
-**Nota:** No se encontraron capturas de pantalla de las funcionalidades desarrolladas en el repositorio.
+**Capturas de pantalla:**
+
+| Archivo | Propósito |
+|---------|-----------|
+| `screenshots/sprint-1/login-form.png` | Formulario de inicio de sesión |
+| `screenshots/sprint-1/register-form.png` | Formulario de registro |
+| `screenshots/sprint-1/login-validation.png` | Validación de credenciales incorrectas |
+
+> ⚠️ *Las capturas están planificadas pero requieren un emulador Android o dispositivo físico para generarse. Ver instrucciones en la sección Pendientes.*
 
 ### 6️⃣ Sprint 1 — Sprint Review
 
@@ -204,6 +212,15 @@ _No se encontró registro de estimación._
 - `supabase.auth.signUp()` — registro
 - `supabase.auth.getSession()` — sesión persistente
 - `@react-native-async-storage/async-storage` — persistencia local
+
+**Capturas de pantalla:**
+
+| Archivo | Propósito |
+|---------|-----------|
+| `screenshots/sprint-1/login-form.png` | Pantalla de inicio de sesión (misma que S1) |
+| `screenshots/sprint-1/register-form.png` | Pantalla de registro (misma que S1) |
+
+> Las capturas de S2 comparten las de S1 ya que son las mismas pantallas (Login y Register).
 
 ### 6️⃣ Sprint 2 — Sprint Review
 
@@ -295,6 +312,21 @@ _No se encontró registro de estimación._
 - `vault/decisions/DEC-2026-06-05-custom-svg-chart-con-panresponder-vs-libreria-externa-de-graficos.md`
 - `vault/decisions/DEC-2026-06-05-rootnavigator-wrapper-vs-inline-stack-en-bottomtabnavigator.md`
 
+**Capturas de pantalla:**
+
+| Archivo | Propósito |
+|---------|-----------|
+| `screenshots/sprint-3/perfil-view.png` | Vista de perfil de usuario |
+| `screenshots/sprint-3/perfil-editar.png` | Edición de perfil |
+| `screenshots/sprint-3/complete-profile.png` | Finalización de registro post-signup |
+| `screenshots/sprint-3/dashboard-salud.png` | Dashboard con 4 indicadores vitales (Inicio) |
+| `screenshots/sprint-3/detalle-signo.png` | Detalle de signo vital individual |
+| `screenshots/sprint-3/historial-signos.png` | Historial de signos vitales |
+| `screenshots/sprint-3/vito-screen.png` | Pantalla VITO (asistente) |
+| `screenshots/sprint-3/bottom-tabs.png` | Navegación inferior con iconos Flaticon |
+| `screenshots/sprint-3/vital-sign-card.png` | Componente de tarjeta de signo vital |
+| `screenshots/sprint-3/health-dashboard.png` | Componente HealthDashboard |
+
 **Commits representativos:**
 - `9aa169d` — feat: Health Connect BP/SpO2/temp + auto-refresh 30s + rename VITO + refresh button (2026-06-06)
 - `db5f3b7` — feat: CompleteProfileScreen post-registro + fix loading hang + BP siempre visible (2026-06-17)
@@ -366,6 +398,14 @@ _No se encontró registro de estimación._
 | Perfil | Bypass @supabase/supabase-js con raw fetch | `9c7d2f2` |
 | UX | Banner opcional en PerfilScreen (no bloqueante) | `5d8c2b7` |
 
+**Capturas de pantalla:**
+
+| Archivo | Propósito |
+|---------|-----------|
+| `screenshots/sprint-5/alertas-listado.png` | Listado de alertas y notificaciones |
+
+> Las capturas de S4 se organizan bajo `sprint-5/` por consistencia con la estructura definida en los criterios de aceptación.
+
 ### 6️⃣ Sprint 4 — Sprint Review
 
 **Funcionalidades completadas:**
@@ -429,6 +469,9 @@ Las siguientes funcionalidades existen en el código y pueden demostrarse:
 | Tipos de datos Health Connect | 9 |
 | HUs del plan | 10 |
 | HUs con evidencia de implementación parcial o total | 5 (Setup, HU-11, HU-14, HU-15, HU-24) |
+| Capturas planificadas en informe | 16 (ver `screenshots/`) |
+
+> **Nota sobre screenshots:** La estructura de directorios `screenshots/sprint-1/`, `screenshots/sprint-3/` y `screenshots/sprint-5/` está creada. Las capturas deben generarse en un emulador Android o dispositivo físico, siguiendo el flujo de demo detallado arriba. Comando de ejemplo por pantalla: `adb exec-out screencap -p > screenshots/sprint-<n>/<nombre>.png`.
 
 ---
 
@@ -462,7 +505,7 @@ Las siguientes secciones del template no pudieron completarse por falta de datos
 | **Estimación (story points / planning poker)** | No hay estimación | Hacer una sesión de Planning Poker con el equipo. Usar la secuencia de Fibonacci (1,2,3,5,8,13). Estimar solo las HUs pendientes. |
 | **Sprint Backlog / Kanban** | No hay tablero registrado | Crear un proyecto en GitHub Projects con columnas: To Do / In Progress / Done. Mover las HUs de la spec como issues. |
 | **Burndown chart** | No hay seguimiento diario de puntos | Arrancar desde R2: al final de cada día, registrar puntos completados. Con 2 semanas de datos ya se puede trazar. |
-| **Screenshots** | No hay capturas | Tomar capturas de las 8 pantallas existentes con un emulador Android o dispositivo físico. |
+| **Screenshots** | Estructura `screenshots/` creada con carpetas por sprint. Capturas documentadas en Artefactos Generados. | **PENDIENTE:** Tomar capturas con emulador Android o dispositivo físico (16 capturas planificadas). Ejecutar `adb exec-out screencap -p > screenshots/sprint-<n>/<nombre>.png` en cada pantalla. |
 | **Sprint Review (feedback)** | No hay minutas | Documentar después de cada demo de sprint: qué se mostró, qué comentarios dio el equipo/profesor. |
 | **Sprint Retrospective** | No hay minutas | Usar la dinámica "Start / Stop / Continue" después de cada sprint y guardar el resultado en `.cortex/vault/`. |
 | **DoD de release** | No hay Definition of Done global | Definir checklist común: compila, tests pasan, código revisado, criterios de aceptación OK. |
