@@ -52,7 +52,7 @@ const CenterTabButton: React.FC<{
         ]}>
         <Image
               source={require('../assets/icons/ic-vito-personaje.png')}
-              style={{width: 40, height: 40, resizeMode: 'contain'}}
+              style={{width: 52, height: 52, resizeMode: 'contain'}}
             />
       </View>
     </TouchableOpacity>
