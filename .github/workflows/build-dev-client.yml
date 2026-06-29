@@ -1,7 +1,17 @@
 name: Build Android Dev Client APK
 
 on:
-  workflow_dispatch: # Solo manual — se buildea una vez y se reutiliza
+  workflow_dispatch: # Manual
+  push:
+    branches:
+      - dev
+      - dev-pruebas
+    paths:
+      - 'android/**'
+      - 'src/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'app.json'
 
 jobs:
   build:
