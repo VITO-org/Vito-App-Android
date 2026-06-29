@@ -1,7 +1,8 @@
 import React from 'react';
-import {View, Text, TouchableOpacity, StyleSheet, Platform} from 'react-native';
+import {View, TouchableOpacity, StyleSheet, Platform} from 'react-native';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {colors, spacing, shadows} from '../theme';
+import AppIcon from '../components/AppIcon';
 import VITOMascot from '../components/VITOMascot';
 
 import InicioScreen from '../screens/InicioScreen';
@@ -22,17 +23,6 @@ export type BottomTabParamList = {
 };
 
 const Tab = createBottomTabNavigator<BottomTabParamList>();
-
-// ---------------------------------------------------------------------------
-// Iconos emoji (placeholder — reemplazar con íconos vectoriales después)
-// ---------------------------------------------------------------------------
-const TAB_ICONS: Record<keyof BottomTabParamList, string> = {
-  Inicio: '🏠',
-  Historial: '📊',
-  VITO: '',
-  Alertas: '🔔',
-  Perfil: '👤',
-};
 
 const TAB_LABELS: Record<keyof BottomTabParamList, string> = {
   Inicio: 'Inicio',
@@ -92,9 +82,11 @@ const BottomTabNavigator: React.FC = () => {
         options={{
           tabBarLabel: TAB_LABELS.Inicio,
           tabBarIcon: ({color, size}) => (
-            <Text style={[styles.tabIcon, {color, fontSize: size}]}>
-              {TAB_ICONS.Inicio}
-            </Text>
+            <AppIcon
+              name="inicio"
+              size={size}
+              style={{tintColor: color}}
+            />
           ),
         }}
       />
@@ -106,9 +98,11 @@ const BottomTabNavigator: React.FC = () => {
         options={{
           tabBarLabel: TAB_LABELS.Historial,
           tabBarIcon: ({color, size}) => (
-            <Text style={[styles.tabIcon, {color, fontSize: size}]}>
-              {TAB_ICONS.Historial}
-            </Text>
+            <AppIcon
+              name="historial"
+              size={size}
+              style={{tintColor: color}}
+            />
           ),
         }}
       />
@@ -131,9 +125,11 @@ const BottomTabNavigator: React.FC = () => {
         options={{
           tabBarLabel: TAB_LABELS.Alertas,
           tabBarIcon: ({color, size}) => (
-            <Text style={[styles.tabIcon, {color, fontSize: size}]}>
-              {TAB_ICONS.Alertas}
-            </Text>
+            <AppIcon
+              name="alertas"
+              size={size}
+              style={{tintColor: color}}
+            />
           ),
           tabBarBadge: mockAlertasCount > 0 ? mockAlertasCount : undefined,
           tabBarBadgeStyle: styles.badge,
@@ -147,9 +143,11 @@ const BottomTabNavigator: React.FC = () => {
         options={{
           tabBarLabel: TAB_LABELS.Perfil,
           tabBarIcon: ({color, size}) => (
-            <Text style={[styles.tabIcon, {color, fontSize: size}]}>
-              {TAB_ICONS.Perfil}
-            </Text>
+            <AppIcon
+              name="perfil"
+              size={size}
+              style={{tintColor: color}}
+            />
           ),
         }}
       />
@@ -176,9 +174,6 @@ const styles = StyleSheet.create({
   tabBarLabel: {
     fontSize: 11,
     fontWeight: '600',
-    marginTop: 2,
-  },
-  tabIcon: {
     marginTop: 2,
   },
   badge: {

@@ -7,6 +7,7 @@ import {useSupabase} from '../context/SupabaseProvider';
 import Card from '../components/Card';
 import VitalSignCard from '../components/VitalSignCard';
 import PrimaryButton from '../components/PrimaryButton';
+import AppIcon from '../components/AppIcon';
 import VITOMascot from '../components/VITOMascot';
 import {colors, spacing, fontSize} from '../theme';
 import {TipoSignoVital} from '../data/mockReportes';
@@ -223,9 +224,11 @@ const InicioScreen: React.FC = () => {
             style={styles.refreshButton}
             onPress={refreshData}
             disabled={loading}>
-            <Text style={[styles.refreshIcon, loading && styles.refreshIconLoading]}>
-              ↻
-            </Text>
+            <AppIcon
+              name="recargar"
+              size={20}
+              style={loading ? {opacity: 0.5} : undefined}
+            />
           </TouchableOpacity>
           <TouchableOpacity>
             <Text style={styles.seeAll}>Ver todos</Text>
@@ -491,14 +494,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.border,
-  },
-  refreshIcon: {
-    fontSize: 20,
-    color: colors.primary,
-    fontWeight: '700',
-  },
-  refreshIconLoading: {
-    opacity: 0.5,
   },
   seeAll: {
     fontSize: fontSize.caption,
