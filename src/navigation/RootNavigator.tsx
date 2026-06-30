@@ -7,6 +7,7 @@ import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
 import CompleteProfileScreen from '../screens/CompleteProfileScreen';
 import EditarPerfilScreen from '../screens/EditarPerfilScreen';
+import TodosLosSignosScreen from '../screens/TodosLosSignosScreen';
 import {useSupabase} from '../context/SupabaseProvider';
 
 export type RootStackParamList = {
@@ -17,6 +18,7 @@ export type RootStackParamList = {
     unit: string;
     icon: string;
   };
+  TodosLosSignos: undefined;
   Login: undefined;
   Register: undefined;
   CompleteProfile: undefined;
@@ -65,6 +67,13 @@ function RootNavigatorContent() {
         <Stack.Screen
           name="EditarPerfil"
           component={EditarPerfilScreen}
+          options={{animation: 'slide_from_right'}}
+        />
+      )}
+      {session && (
+        <Stack.Screen
+          name="TodosLosSignos"
+          component={TodosLosSignosScreen}
           options={{animation: 'slide_from_right'}}
         />
       )}

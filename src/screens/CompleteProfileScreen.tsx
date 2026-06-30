@@ -12,7 +12,7 @@ import {
 import {useNavigation} from '@react-navigation/native';
 import Card from '../components/Card';
 import PrimaryButton from '../components/PrimaryButton';
-import VITOMascot from '../components/VITOMascot';
+import VitoAvatar from '../components/VitoAvatar';
 import {useSupabase} from '../context/SupabaseProvider';
 import {colors, spacing, fontSize} from '../theme';
 import type {SexoBiologico} from '../services/supabase/models';
@@ -207,7 +207,7 @@ const CompleteProfileScreen: React.FC = () => {
         keyboardShouldPersistTaps="handled">
         {/* Header */}
         <View style={styles.header}>
-          <VITOMascot size={56} />
+          <VitoAvatar size={56} />
           <Text style={styles.title}>Completá tu perfil</Text>
           <Text style={styles.subtitle}>
             Estos datos nos ayudan a personalizar tu experiencia en VITO

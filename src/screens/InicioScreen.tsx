@@ -8,9 +8,9 @@ import Card from '../components/Card';
 import VitalSignCard from '../components/VitalSignCard';
 import PrimaryButton from '../components/PrimaryButton';
 import AppIcon from '../components/AppIcon';
-import VITOMascot from '../components/VITOMascot';
+import VitoAvatar from '../components/VitoAvatar';
 import {colors, spacing, fontSize} from '../theme';
-import {TipoSignoVital} from '../data/mockReportes';
+import {buildSignosFromSummary, getMetricasBienestar} from '../utils/signosVitales';
 
 type RootStackParamList = {
   MainTabs: undefined;
@@ -71,77 +71,42 @@ const InicioScreen: React.FC = () => {
     }
   }, [hcStatus, permissionsGranted, loading, error, summary, requestPermissionsAndLoad, refreshData]);
 
-  // Construir vitals desde datos reales o mock
-  const vitals: {
-    id: TipoSignoVital;
-    label: string;
-    value: string;
-    unit?: string;
-    icon: string;
-    iconBgColor: string;
-    trend?: 'up' | 'down' | 'stable';
-  }[] = [];
+  // Construir vitals desde la fuente única de datos
+  const allSignos = buildSignosFromSummary(summary);
 
-  if (summary) {
-    // Frecuencia cardíaca
-    if (summary.averageBpm != null) {
-      vitals.push({
-        id: 'frecuencia_cardiaca',
-        label: 'Frecuencia cardíaca',
-        value: String(Math.round(summary.averageBpm)),
-        unit: 'lpm',
-        icon: '❤️',
-        iconBgColor: colors.heartRed,
-        trend: summary.averageBpm > 100 ? 'up' : summary.averageBpm < 60 ? 'down' : 'stable',
-      });
-    }
-    // Presión arterial (siempre visible, con --/-- cuando no hay datos)
-    vitals.push({
-      id: 'presion_sistolica',
-      label: 'Presión arterial',
-      value: (summary.bloodPressureSystolic != null && summary.bloodPressureDiastolic != null)
-        ? `${Math.round(summary.bloodPressureSystolic)}/${Math.round(summary.bloodPressureDiastolic)}`
-        : '--/--',
-      unit: 'mmHg',
-      icon: '🫀',
-      iconBgColor: colors.danger,
-      trend: summary.bloodPressureSystolic != null && summary.bloodPressureSystolic > 130 ? 'up' : 'stable',
+  // InicioScreen: solo signos vitales (excluye bienestar),
+  // combina sistólica+diastólica en un solo card "Presión arterial"
+  const bienestarIds = new Set(['pasos', 'calorias', 'distancia', 'sueno']);
+  const vitals = allSignos
+    .filter(s => !bienestarIds.has(s.id) && s.id !== 'presion_diastolica')
+    .map(s => {
+      if (s.id === 'presion_sistolica') {
+        // Combinar sistólica + diastólica en "120/80"
+        const diast = allSignos.find(s2 => s2.id === 'presion_diastolica');
+        const combinedValue =
+          s.rawValue != null && diast?.rawValue != null
+            ? `${Math.round(s.rawValue)}/${Math.round(diast.rawValue)}`
+            : '--/--';
+        return {
+          id: s.id,
+          label: 'Presión arterial',
+          value: combinedValue,
+          unit: s.unit,
+          icon: s.icon,
+          iconBgColor: s.iconBgColor,
+          trend: s.trend ?? 'stable',
+        };
+      }
+      return {
+        id: s.id,
+        label: s.label,
+        value: s.value,
+        unit: s.unit,
+        icon: s.icon,
+        iconBgColor: s.iconBgColor,
+        trend: s.trend ?? 'stable',
+      };
     });
-    // Oxigenación
-    if (summary.spo2Percent != null) {
-      vitals.push({
-        id: 'saturacion_oxigeno',
-        label: 'Oxigenación',
-        value: String(Math.round(summary.spo2Percent)),
-        unit: '%',
-        icon: '💧',
-        iconBgColor: colors.oxygenBlue,
-        trend: summary.spo2Percent >= 95 ? 'stable' : 'down',
-      });
-    }
-    // Temperatura
-    if (summary.bodyTemperatureCelsius != null) {
-      vitals.push({
-        id: 'temperatura',
-        label: 'Temperatura',
-        value: summary.bodyTemperatureCelsius.toFixed(1),
-        unit: '°C',
-        icon: '🌡️',
-        iconBgColor: colors.tempRed,
-        trend: summary.bodyTemperatureCelsius > 37.5 ? 'up' : summary.bodyTemperatureCelsius < 36.0 ? 'down' : 'stable',
-      });
-    }
-  }
-
-  // Fallback a datos mock si no hay datos reales
-  if (vitals.length === 0) {
-    vitals.push(
-      {id: 'frecuencia_cardiaca', label: 'Frecuencia cardíaca', value: '--', unit: 'lpm', icon: '❤️', iconBgColor: colors.heartRed, trend: 'stable'},
-      {id: 'presion_sistolica', label: 'Presión arterial', value: '--/--', unit: 'mmHg', icon: '🫀', iconBgColor: colors.danger, trend: 'stable'},
-      {id: 'saturacion_oxigeno', label: 'Oxigenación', value: '--', unit: '%', icon: '💧', iconBgColor: colors.oxygenBlue, trend: 'stable'},
-      {id: 'temperatura', label: 'Temperatura', value: '--', unit: '°C', icon: '🌡️', iconBgColor: colors.tempRed, trend: 'stable'},
-    );
-  }
 
   return (
     <FlatList
@@ -156,14 +121,14 @@ const InicioScreen: React.FC = () => {
       {/* ── Header: saludo + notificaciones ── */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <VITOMascot size={40} showAntenna={false} />
+          <VitoAvatar size={40} />
           <View style={styles.headerText}>
             <Text style={styles.greeting}>¡Hola, {userName}!</Text>
             <Text style={styles.subtitle}>Todo está bajo control</Text>
           </View>
         </View>
         <TouchableOpacity style={styles.notifButton}>
-          <Text style={styles.notifIcon}>🔔</Text>
+          <AppIcon name="alertas" size={20} />
         </TouchableOpacity>
       </View>
 
@@ -216,6 +181,18 @@ const InicioScreen: React.FC = () => {
         </Card>
       )}
 
+      {/* ── Resumen del día (4 métricas de bienestar) ── */}
+      <Text style={styles.resumenTitle}>Resumen del día</Text>
+      <View style={styles.daySummaryGrid}>
+        {getMetricasBienestar(allSignos).map(s => (
+          <View key={s.id} style={styles.daySummaryCard}>
+            <Text style={styles.daySummaryIcon}>{s.icon}</Text>
+            <Text style={styles.daySummaryValue}>{s.value}</Text>
+            <Text style={styles.daySummaryLabel}>{s.label}</Text>
+          </View>
+        ))}
+      </View>
+
       {/* ── Signos Vitales ── */}
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Signos vitales</Text>
@@ -227,15 +204,19 @@ const InicioScreen: React.FC = () => {
             <AppIcon
               name="recargar"
               size={20}
-              style={loading ? {opacity: 0.5} : undefined}
+              style={[
+                {tintColor: colors.success},
+                loading ? {opacity: 0.5} : undefined,
+              ]}
             />
           </TouchableOpacity>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation.navigate('TodosLosSignos')}>
             <Text style={styles.seeAll}>Ver todos</Text>
           </TouchableOpacity>
         </View>
       </View>
 
+      {/* ── Grid de signos vitales ── */}
       <View style={styles.vitalsGrid}>
         {vitals.map((v, i) => (
           <VitalSignCard
@@ -250,32 +231,6 @@ const InicioScreen: React.FC = () => {
           />
         ))}
       </View>
-
-      {/* ── Health Connect data ── */}
-      {summary && (
-        <Card style={styles.hcCard}>
-          <Text style={styles.hcTitle}>Health Connect — Resumen del día</Text>
-          <Text style={styles.hcText}>
-            👣 Pasos: {(summary.steps ?? 0).toLocaleString('es-ES')}
-          </Text>
-          <Text style={styles.hcText}>
-            🔥 Calorías: {(summary.caloriesKcal ?? 0).toFixed(0)} kcal
-          </Text>
-          <Text style={styles.hcText}>
-            📏 Distancia: {(summary.distanceMeters ?? 0).toFixed(0)} m
-          </Text>
-          {summary.sleepMinutes > 0 && (
-            <Text style={styles.hcText}>
-              😴 Sueño: {summary.sleepMinutes} min
-            </Text>
-          )}
-          {summary.exerciseSessions > 0 && (
-            <Text style={styles.hcText}>
-              🏃 Ejercicios: {summary.exerciseSessions} sesiones
-            </Text>
-          )}
-        </Card>
-      )}
 
       {loading && (
         <Card>
@@ -527,15 +482,39 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
 
-  // ── Health Connect ──
-  hcCard: {
-    marginTop: 4,
-  },
-  hcTitle: {
+  // ── Resumen del día ──
+  resumenTitle: {
     fontSize: fontSize.body,
     fontWeight: '600',
     color: colors.textPrimary,
-    marginBottom: 4,
+    marginBottom: 12,
+    marginTop: 4,
+  },
+  daySummaryGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  daySummaryCard: {
+    backgroundColor: colors.surface,
+    borderRadius: spacing.cardBorderRadius,
+    padding: 12,
+    width: '23%',
+    alignItems: 'center',
+  },
+  daySummaryIcon: {
+    fontSize: 22,
+    marginBottom: 6,
+  },
+  daySummaryValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  daySummaryLabel: {
+    fontSize: fontSize.caption,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
   hcText: {
     fontSize: fontSize.caption,

@@ -3,7 +3,7 @@ import {View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert} from 'react
 import {useNavigation} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import Card from '../components/Card';
-import VITOMascot from '../components/VITOMascot';
+import VitoAvatar from '../components/VitoAvatar';
 import {useSupabase} from '../context/SupabaseProvider';
 import {colors, spacing, fontSize} from '../theme';
 import type {RootStackParamList} from '../navigation/RootNavigator';
@@ -91,7 +91,7 @@ const PerfilScreen: React.FC = () => {
 
       {/* Avatar + nombre */}
       <View style={styles.profileHeader}>
-        <VITOMascot size={72} />
+        <VitoAvatar size={72} />
         <Text style={styles.userName}>{displayName}</Text>
         {email ? <Text style={styles.userEmail}>{email}</Text> : null}
       </View>

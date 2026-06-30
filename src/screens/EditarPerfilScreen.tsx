@@ -14,7 +14,7 @@ import {useNavigation} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import Card from '../components/Card';
 import PrimaryButton from '../components/PrimaryButton';
-import VITOMascot from '../components/VITOMascot';
+import VitoAvatar from '../components/VitoAvatar';
 import {useSupabase} from '../context/SupabaseProvider';
 import {colors, spacing, fontSize} from '../theme';
 import type {SexoBiologico} from '../services/supabase/models';
@@ -170,7 +170,7 @@ const EditarPerfilScreen: React.FC = () => {
 
         {/* Header con avatar */}
         <View style={styles.profileHeader}>
-          <VITOMascot size={64} />
+          <VitoAvatar size={64} />
           <Text style={styles.userName}>{displayName}</Text>
           {email ? <Text style={styles.userEmail}>{email}</Text> : null}
         </View>
