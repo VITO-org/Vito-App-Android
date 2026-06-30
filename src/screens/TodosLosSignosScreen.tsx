@@ -8,6 +8,8 @@ import {
   getSignosVitales,
   getMetricasBienestar,
 } from '../utils/signosVitales';
+import AppIcon, {type AppIconName} from '../components/AppIcon';
+import FlechaIcon from '../components/FlechaIcon';
 import type {RootStackParamList} from '../navigation/RootNavigator';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'TodosLosSignos'>;
@@ -36,7 +38,8 @@ const TodosLosSignosScreen: React.FC<Props> = ({navigation}) => {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Text style={styles.backText}>← Volver</Text>
+          <FlechaIcon direction="left" size={14} color={colors.primary} style={{marginRight: 6}} />
+          <Text style={styles.backText}>Volver</Text>
         </TouchableOpacity>
         <Text style={styles.title}>Todos los signos</Text>
         <Text style={styles.subtitle}>
@@ -67,7 +70,11 @@ const TodosLosSignosScreen: React.FC<Props> = ({navigation}) => {
               return (
                 <Card key={s.id} style={styles.resumenCard} {...cardProps}>
                   <View style={[styles.iconCircle, {backgroundColor: s.iconBgColor + '20'}]}>
-                    <Text style={styles.iconEmoji}>{s.icon}</Text>
+                    {s.iconName ? (
+                      <AppIcon name={s.iconName as AppIconName} size={s.iconSize ?? 22} />
+                    ) : (
+                      <Text style={styles.iconEmoji}>{s.icon}</Text>
+                    )}
                   </View>
                   <Text style={styles.resumenValue}>{s.value}</Text>
                   <Text style={styles.resumenUnit}>{s.unit}</Text>
@@ -100,6 +107,8 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 12,
   },
   backText: {
@@ -140,9 +149,9 @@ const styles = StyleSheet.create({
     ...shadows.card,
   },
   iconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 10,

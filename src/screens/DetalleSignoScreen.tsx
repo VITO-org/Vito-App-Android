@@ -3,6 +3,7 @@ import {View, Text, ScrollView, TouchableOpacity, StyleSheet, LayoutChangeEvent}
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {colors, fontSize, spacing} from '../theme';
 import Card from '../components/Card';
+import FlechaIcon from '../components/FlechaIcon';
 import LineChart from '../components/LineChart';
 import ResumenEstadistico from '../components/ResumenEstadistico';
 import {useSupabase} from '../context/SupabaseProvider';
@@ -176,7 +177,8 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
     <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Text style={styles.backText}>← Volver</Text>
+          <FlechaIcon direction="left" size={14} color={colors.primary} style={{marginRight: 6}} />
+          <Text style={styles.backText}>Volver</Text>
         </TouchableOpacity>
         <Text style={styles.title}>{label}</Text>
         {unit ? <Text style={styles.unit}>{unit}</Text> : null}
@@ -251,6 +253,8 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 12,
   },
   backText: {

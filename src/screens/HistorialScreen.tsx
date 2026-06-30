@@ -11,6 +11,8 @@ import {useNavigation} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {colors, fontSize, spacing, shadows} from '../theme';
 import Card from '../components/Card';
+import AppIcon from '../components/AppIcon';
+import FlechaIcon from '../components/FlechaIcon';
 import {useSupabase} from '../context/SupabaseProvider';
 import {useHealth} from '../context/HealthProvider';
 import {getDatosReloj} from '../services/supabase/api';
@@ -18,6 +20,7 @@ import {getDailyAveragesForRange, type DailyAverages} from '../services/HealthDa
 import type {DatoReloj} from '../services/supabase/models';
 import type {HealthSummary} from '../types/health';
 import {NORMAL_RANGES} from '../data/mockReportes';
+import {buildSignosFromResumen, type Resumen} from '../utils/signosVitales';
 
 // ─── Tipos ───
 
@@ -38,16 +41,6 @@ const PERIODOS: {key: Periodo; label: string; dias: number}[] = [
   {key: '30d', label: '30 días', dias: 30},
   {key: '90d', label: '90 días', dias: 90},
 ];
-
-interface Resumen {
-  frecCardiaca: {avg: number; min: number; max: number; count: number};
-  sistolica: {avg: number; min: number; max: number; count: number};
-  diastolica: {avg: number; min: number; max: number; count: number};
-  spo2: {avg: number; min: number; max: number; count: number};
-  temperatura: {avg: number; min: number; max: number; count: number};
-  pasos: {avg: number; total: number; count: number};
-  sueno: {avg: number; count: number};
-}
 
 function calcularResumen(datos: DatoReloj[]): Resumen {
   const acc = {
@@ -309,6 +302,8 @@ const HistorialScreen: React.FC = () => {
 
   const resumen = usingCache && resumenCache ? resumenCache : resumenBD;
 
+  const historialSignos = buildSignosFromResumen(resumen);
+
   // ─── Últimas lecturas ───
   // Si hay datos de DB, mostrar individuales; si no, mostrar promedios diarios del caché
   const ultimasLecturas: DatoReloj[] = datos.length > 0
@@ -385,155 +380,39 @@ const HistorialScreen: React.FC = () => {
           {/* Resumen de promedios */}
           <Text style={styles.sectionTitle}>Resumen del período</Text>
           <View style={styles.resumenGrid}>
-            {/* Frecuencia cardíaca */}
-            <TouchableOpacity
-              style={styles.resumenCard}
-              onPress={() =>
-                navigation.navigate('DetalleSigno', {
-                  tipoSigno: 'frecuencia_cardiaca',
-                  label: 'Frecuencia cardíaca',
-                  unit: 'lpm',
-                  icon: '❤️',
-                })
-              }>
-              <View style={[styles.iconCircle, {backgroundColor: colors.heartRed + '20'}]}>
-                <Text style={styles.iconEmoji}>❤️</Text>
-              </View>
-              <Text style={styles.resumenValue}>
-                {Math.round(resumen.frecCardiaca.avg)}
-              </Text>
-              <Text style={styles.resumenUnit}>lpm</Text>
-              <Text style={styles.resumenLabel}>Frecuencia cardíaca</Text>
-              <Text style={styles.resumenRange}>
-                {Math.round(resumen.frecCardiaca.min)}-{Math.round(resumen.frecCardiaca.max)}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Presión sistólica */}
-            <TouchableOpacity
-              style={styles.resumenCard}
-              onPress={() =>
-                navigation.navigate('DetalleSigno', {
-                  tipoSigno: 'presion_sistolica',
-                  label: 'Presión sistólica',
-                  unit: 'mmHg',
-                  icon: '🫀',
-                })
-              }>
-              <View style={[styles.iconCircle, {backgroundColor: colors.danger + '20'}]}>
-                <Text style={styles.iconEmoji}>🫀</Text>
-              </View>
-              <Text style={styles.resumenValue}>
-                {Math.round(resumen.sistolica.avg)}
-              </Text>
-              <Text style={styles.resumenUnit}>mmHg</Text>
-              <Text style={styles.resumenLabel}>Sistólica</Text>
-              <Text style={styles.resumenRange}>
-                {Math.round(resumen.sistolica.min)}-{Math.round(resumen.sistolica.max)}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Presión diastólica */}
-            <TouchableOpacity
-              style={styles.resumenCard}
-              onPress={() =>
-                navigation.navigate('DetalleSigno', {
-                  tipoSigno: 'presion_diastolica',
-                  label: 'Presión diastólica',
-                  unit: 'mmHg',
-                  icon: '🫀',
-                })
-              }>
-              <View style={[styles.iconCircle, {backgroundColor: colors.danger + '20'}]}>
-                <Text style={styles.iconEmoji}>🫀</Text>
-              </View>
-              <Text style={styles.resumenValue}>
-                {Math.round(resumen.diastolica.avg)}
-              </Text>
-              <Text style={styles.resumenUnit}>mmHg</Text>
-              <Text style={styles.resumenLabel}>Diastólica</Text>
-              <Text style={styles.resumenRange}>
-                {Math.round(resumen.diastolica.min)}-{Math.round(resumen.diastolica.max)}
-              </Text>
-            </TouchableOpacity>
-
-            {/* SPO2 */}
-            <TouchableOpacity
-              style={styles.resumenCard}
-              onPress={() =>
-                navigation.navigate('DetalleSigno', {
-                  tipoSigno: 'saturacion_oxigeno',
-                  label: 'Oxigenación',
-                  unit: '%',
-                  icon: '💧',
-                })
-              }>
-              <View style={[styles.iconCircle, {backgroundColor: colors.oxygenBlue + '20'}]}>
-                <Text style={styles.iconEmoji}>💧</Text>
-              </View>
-              <Text style={styles.resumenValue}>
-                {resumen.spo2.avg.toFixed(1)}
-              </Text>
-              <Text style={styles.resumenUnit}>%</Text>
-              <Text style={styles.resumenLabel}>Oxigenación</Text>
-              <Text style={styles.resumenRange}>
-                {resumen.spo2.min.toFixed(0)}-{resumen.spo2.max.toFixed(0)}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Temperatura */}
-            <TouchableOpacity
-              style={styles.resumenCard}
-              onPress={() =>
-                navigation.navigate('DetalleSigno', {
-                  tipoSigno: 'temperatura',
-                  label: 'Temperatura',
-                  unit: '°C',
-                  icon: '🌡️',
-                })
-              }>
-              <View style={[styles.iconCircle, {backgroundColor: colors.tempRed + '20'}]}>
-                <Text style={styles.iconEmoji}>🌡️</Text>
-              </View>
-              <Text style={styles.resumenValue}>
-                {resumen.temperatura.avg.toFixed(1)}
-              </Text>
-              <Text style={styles.resumenUnit}>°C</Text>
-              <Text style={styles.resumenLabel}>Temperatura</Text>
-              <Text style={styles.resumenRange}>
-                {resumen.temperatura.min.toFixed(1)}-{resumen.temperatura.max.toFixed(1)}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Pasos */}
-            <View style={styles.resumenCard}>
-              <View style={[styles.iconCircle, {backgroundColor: colors.primary + '20'}]}>
-                <Text style={styles.iconEmoji}>👣</Text>
-              </View>
-              <Text style={styles.resumenValue}>
-                {resumen.pasos.total.toLocaleString('es-ES')}
-              </Text>
-              <Text style={styles.resumenUnit}>total</Text>
-              <Text style={styles.resumenLabel}>Pasos</Text>
-              <Text style={styles.resumenRange}>
-                Ø {Math.round(resumen.pasos.avg).toLocaleString('es-ES')}/día
-              </Text>
-            </View>
-
-            {/* Sueño */}
-            <View style={styles.resumenCard}>
-              <View style={[styles.iconCircle, {backgroundColor: '#7C3AED20'}]}>
-                <Text style={styles.iconEmoji}>😴</Text>
-              </View>
-              <Text style={styles.resumenValue}>
-                {resumen.sueno.avg.toFixed(1)}
-              </Text>
-              <Text style={styles.resumenUnit}>h</Text>
-              <Text style={styles.resumenLabel}>Sueño</Text>
-              <Text style={styles.resumenRange}>
-                {resumen.sueno.count} registros
-              </Text>
-            </View>
+            {historialSignos.map(signo => {
+              const tieneDetalle = !['pasos', 'sueno'].includes(signo.id);
+              const content = (
+                <>
+                  <View style={[styles.iconCircle, {backgroundColor: signo.iconBgColor + '20'}]}>
+                    <AppIcon name={signo.iconName!} size={signo.iconSize!} />
+                  </View>
+                  <Text style={styles.resumenValue}>{signo.value}</Text>
+                  <Text style={styles.resumenUnit}>{signo.unit}</Text>
+                  <Text style={styles.resumenLabel}>{signo.label}</Text>
+                  <Text style={styles.resumenRange}>{signo.rangeLabel}</Text>
+                </>
+              );
+              return tieneDetalle ? (
+                <TouchableOpacity
+                  key={signo.id}
+                  style={styles.resumenCard}
+                  onPress={() =>
+                    navigation.navigate('DetalleSigno', {
+                      tipoSigno: signo.id,
+                      label: signo.label,
+                      unit: signo.unit,
+                      icon: signo.iconName ?? signo.icon,
+                    })
+                  }>
+                  {content}
+                </TouchableOpacity>
+              ) : (
+                <View key={signo.id} style={styles.resumenCard}>
+                  {content}
+                </View>
+              );
+            })}
           </View>
 
           {/* Últimas lecturas / Resumen diario */}
@@ -602,7 +481,7 @@ const HistorialScreen: React.FC = () => {
                       )}
                     </View>
                   </View>
-                  <Text style={styles.lecturaArrow}>→</Text>
+                  <FlechaIcon direction="right" size={16} color={colors.textSecondary} />
                 </TouchableOpacity>
               );
             })}
@@ -709,13 +588,10 @@ const styles = StyleSheet.create({
   iconCircle: {
     width: 36,
     height: 36,
-    borderRadius: 10,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 10,
-  },
-  iconEmoji: {
-    fontSize: 18,
   },
   resumenValue: {
     fontSize: 26,

@@ -231,10 +231,21 @@ class HealthDataProvider(
         val latestTemp = temperatureRecords.maxByOrNull { it.time }
         val bodyTemperatureCelsius = latestTemp?.temperature?.inCelsius
 
+        // Descartar calorías huérfanas: si no hay pasos ni distancia,
+        // cualquier caloría reportada probablemente es un residual de otro sensor.
+        val steps = aggregate[StepsRecord.COUNT_TOTAL] ?: 0L
+        val distanceMeters = aggregate[DistanceRecord.DISTANCE_TOTAL]?.inMeters ?: 0.0
+        var caloriesKcal = aggregate[TotalCaloriesBurnedRecord.ENERGY_TOTAL]?.inKilocalories ?: 0.0
+
+        if (steps == 0L && distanceMeters == 0.0 && caloriesKcal > 0.0) {
+            Log.w(TAG, "Calories=$caloriesKcal con steps=0 y distance=0, forzando a 0.0")
+            caloriesKcal = 0.0
+        }
+
         return HealthSummary(
-            steps = aggregate[StepsRecord.COUNT_TOTAL] ?: 0L,
-            distanceMeters = aggregate[DistanceRecord.DISTANCE_TOTAL]?.inMeters ?: 0.0,
-            caloriesKcal = aggregate[TotalCaloriesBurnedRecord.ENERGY_TOTAL]?.inKilocalories ?: 0.0,
+            steps = steps,
+            distanceMeters = distanceMeters,
+            caloriesKcal = caloriesKcal,
             sleepMinutes = sleepSessions.sumOf { session ->
                 Duration.between(session.startTime, session.endTime).toMinutes()
             },

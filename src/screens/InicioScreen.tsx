@@ -7,8 +7,9 @@ import {useSupabase} from '../context/SupabaseProvider';
 import Card from '../components/Card';
 import VitalSignCard from '../components/VitalSignCard';
 import PrimaryButton from '../components/PrimaryButton';
-import AppIcon from '../components/AppIcon';
+import AppIcon, {type AppIconName} from '../components/AppIcon';
 import VitoAvatar from '../components/VitoAvatar';
+import StatusIndicator from '../components/StatusIndicator';
 import {colors, spacing, fontSize} from '../theme';
 import {buildSignosFromSummary, getMetricasBienestar} from '../utils/signosVitales';
 
@@ -93,6 +94,8 @@ const InicioScreen: React.FC = () => {
           value: combinedValue,
           unit: s.unit,
           icon: s.icon,
+          iconName: s.iconName,
+          iconSize: s.iconSize,
           iconBgColor: s.iconBgColor,
           trend: s.trend ?? 'stable',
         };
@@ -103,6 +106,8 @@ const InicioScreen: React.FC = () => {
         value: s.value,
         unit: s.unit,
         icon: s.icon,
+        iconName: s.iconName,
+        iconSize: s.iconSize,
         iconBgColor: s.iconBgColor,
         trend: s.trend ?? 'stable',
       };
@@ -186,7 +191,13 @@ const InicioScreen: React.FC = () => {
       <View style={styles.daySummaryGrid}>
         {getMetricasBienestar(allSignos).map(s => (
           <View key={s.id} style={styles.daySummaryCard}>
-            <Text style={styles.daySummaryIcon}>{s.icon}</Text>
+            {s.iconName ? (
+              <View style={[styles.daySummaryIconCircle, {backgroundColor: s.iconBgColor + '20'}]}>
+                <AppIcon name={s.iconName as AppIconName} size={s.iconSize ?? 26} />
+              </View>
+            ) : (
+              <Text style={styles.daySummaryIcon}>{s.icon}</Text>
+            )}
             <Text style={styles.daySummaryValue}>{s.value}</Text>
             <Text style={styles.daySummaryLabel}>{s.label}</Text>
           </View>
@@ -232,12 +243,6 @@ const InicioScreen: React.FC = () => {
         ))}
       </View>
 
-      {loading && (
-        <Card>
-          <Text style={styles.hcText}>Cargando datos de Health Connect...</Text>
-        </Card>
-      )}
-
       {!permissionsGranted && hcStatus === 'available' && !loading && !error && (
         <Card>
           <Text style={styles.hcText}>Conectá con Health Connect para ver tus datos reales.</Text>
@@ -272,7 +277,7 @@ const InicioScreen: React.FC = () => {
           );
         }
 
-        const items: {title: string; detail: string}[] = [
+        const items: {title: string; detail: string; iconName?: AppIconName}[] = [
           {
             title: 'Sincronización Health Connect',
             detail: lastSync.toLocaleDateString('es-ES', {
@@ -286,25 +291,29 @@ const InicioScreen: React.FC = () => {
         if (summary) {
           if (summary.steps > 0) {
             items.push({
-              title: '👣 Pasos registrados',
+              iconName: 'pasos',
+              title: 'Pasos registrados',
               detail: `${summary.steps.toLocaleString('es-ES')} pasos`,
             });
           }
           if (summary.caloriesKcal > 0) {
             items.push({
-              title: '🔥 Calorías quemadas',
+              iconName: 'calorias',
+              title: 'Calorías quemadas',
               detail: `${summary.caloriesKcal.toFixed(0)} kcal`,
             });
           }
           if (summary.distanceMeters > 0) {
             items.push({
-              title: '📏 Distancia recorrida',
+              iconName: 'distancia',
+              title: 'Distancia recorrida',
               detail: `${(summary.distanceMeters / 1000).toFixed(2)} km`,
             });
           }
           if (summary.sleepMinutes > 0) {
             items.push({
-              title: '😴 Sueño registrado',
+              iconName: 'sueno',
+              title: 'Sueño registrado',
               detail: `${Math.floor(summary.sleepMinutes / 60)}h ${summary.sleepMinutes % 60}m`,
             });
           }
@@ -322,14 +331,17 @@ const InicioScreen: React.FC = () => {
               <View
                 key={i}
                 style={[styles.activityRow, i === items.length - 1 && styles.activityRowLast]}>
+                {item.iconName ? (
+                  <View style={[styles.activityIconCircle, {backgroundColor: (allSignos.find(s => s.id === item.iconName)?.iconBgColor || '#ccc') + '20'}]}>
+                    <AppIcon name={item.iconName} size={18} />
+                  </View>
+                ) : null}
                 <View style={styles.activityInfo}>
                   <Text style={styles.activityTitle}>{item.title}</Text>
                   <Text style={styles.activityTime}>{item.detail}</Text>
                 </View>
                 {i === 0 && (
-                  <View style={styles.activityCheck}>
-                    <Text style={styles.checkIcon}>✓</Text>
-                  </View>
+                  <StatusIndicator status="ok" size={20} />
                 )}
               </View>
             ))}
@@ -502,6 +514,14 @@ const styles = StyleSheet.create({
     width: '23%',
     alignItems: 'center',
   },
+  daySummaryIconCircle: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
   daySummaryIcon: {
     fontSize: 22,
     marginBottom: 6,
@@ -523,9 +543,16 @@ const styles = StyleSheet.create({
   },
 
   // ── Última Actividad ──
+  activityIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
   activityRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -534,7 +561,9 @@ const styles = StyleSheet.create({
   activityRowLast: {
     borderBottomWidth: 0,
   },
-  activityInfo: {},
+  activityInfo: {
+    flex: 1,
+  },
   activityTitle: {
     fontSize: fontSize.body,
     fontWeight: '500',
@@ -544,19 +573,6 @@ const styles = StyleSheet.create({
     fontSize: fontSize.caption,
     color: colors.textSecondary,
     marginTop: 2,
-  },
-  activityCheck: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.successLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  checkIcon: {
-    fontSize: 14,
-    color: colors.success,
-    fontWeight: '700',
   },
 });
 

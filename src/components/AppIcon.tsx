@@ -15,6 +15,18 @@ const ICON_MAP: Record<string, ReturnType<typeof require>> = {
   'alertas': require('../assets/icons/ic-alertas.png'),
   'perfil': require('../assets/icons/ic-perfil.png'),
   'recargar': require('../assets/icons/ic-recargar.png'),
+  'pasos': require('../assets/icons/ic-pasos.png'),
+  'calorias': require('../assets/icons/ic-calorias.png'),
+  'distancia': require('../assets/icons/ic-distancia.png'),
+  'sueno': require('../assets/icons/ic-sueno.png'),
+  'check': require('../assets/icons/ic-check.png'),
+  'error': require('../assets/icons/ic-error.png'),
+  'alerta': require('../assets/icons/ic-alerta.png'),
+  'frecuencia-cardiaca': require('../assets/icons/ic-frecuencia-cardiaca.png'),
+  'presion-arterial': require('../assets/icons/ic-presion-arterial.png'),
+  'oxigenacion': require('../assets/icons/ic-oxigenacion.png'),
+  'temperatura': require('../assets/icons/ic-temperatura.png'),
+  'flecha': require('../assets/icons/ic-flecha.png'),
 } as const;
 
 export type AppIconName = keyof typeof ICON_MAP;
