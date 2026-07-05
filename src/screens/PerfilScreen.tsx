@@ -1,5 +1,5 @@
 import React from 'react';
-import {View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert} from 'react-native';
+import {View, Text, Image, ScrollView, StyleSheet, TouchableOpacity, Alert} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import Card from '../components/Card';
@@ -10,15 +10,20 @@ import type {RootStackParamList} from '../navigation/RootNavigator';
 
 interface PerfilOptionProps {
   icon: string;
+  iconSource?: any;
   label: string;
   onPress?: () => void;
 }
 
-const PerfilOption: React.FC<PerfilOptionProps> = ({icon, label, onPress}) => (
+const PerfilOption: React.FC<PerfilOptionProps> = ({icon, iconSource, label, onPress}) => (
   <TouchableOpacity style={styles.optionRow} onPress={onPress} activeOpacity={0.6}>
     <View style={styles.optionLeft}>
       <View style={styles.optionIcon}>
-        <Text style={styles.optionEmoji}>{icon}</Text>
+        {iconSource ? (
+          <Image source={iconSource} style={{width: 22, height: 22, resizeMode: 'contain'}} />
+        ) : (
+          <Text style={styles.optionEmoji}>{icon}</Text>
+        )}
       </View>
       <Text style={styles.optionLabel}>{label}</Text>
     </View>
@@ -99,11 +104,11 @@ const PerfilScreen: React.FC = () => {
       {/* Opciones */}
       <Card>
         {([
-          {icon: '📋', label: 'Datos personales', onPress: handleNavigateEditarPerfil},
-          {icon: '⚙️', label: 'Configuración'},
-          {icon: '📱', label: 'Dispositivos conectados'},
-          {icon: '🔒', label: 'Privacidad y seguridad'},
-          {icon: '❓', label: 'Ayuda y soporte'},
+          {icon: '📋', label: 'Datos personales', onPress: handleNavigateEditarPerfil, iconSource: require('../assets/icons/ic-datos-personales.png')},
+          {icon: '⚙️', label: 'Configuración', iconSource: require('../assets/icons/ic-ajustes.png')},
+          {icon: '📱', label: 'Dispositivos conectados', iconSource: require('../assets/icons/ic-dispositivos.png')},
+          {icon: '🔒', label: 'Privacidad y seguridad', iconSource: require('../assets/icons/ic-seguridad.png')},
+          {icon: '❓', label: 'Ayuda y soporte', iconSource: require('../assets/icons/ic-ayuda.png')},
         ] as PerfilOptionProps[]).map((opt, i) => (
           <React.Fragment key={opt.label}>
             <PerfilOption {...opt} />
@@ -114,7 +119,6 @@ const PerfilScreen: React.FC = () => {
 
       {/* Cerrar sesión */}
       <TouchableOpacity style={styles.logoutButton} onPress={handleSignOut} activeOpacity={0.7}>
-        <Text style={styles.logoutIcon}>🚪</Text>
         <Text style={styles.logoutText}>Cerrar sesión</Text>
       </TouchableOpacity>
 
@@ -201,8 +205,6 @@ const styles = StyleSheet.create({
   optionIcon: {
     width: 36,
     height: 36,
-    borderRadius: 10,
-    backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -232,13 +234,6 @@ const styles = StyleSheet.create({
     marginTop: 24,
     paddingVertical: 14,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.danger,
-    backgroundColor: colors.dangerLight,
-  },
-  logoutIcon: {
-    fontSize: 16,
-    marginRight: 8,
   },
   logoutText: {
     fontSize: fontSize.body,

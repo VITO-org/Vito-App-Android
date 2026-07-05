@@ -51,8 +51,8 @@ const CenterTabButton: React.FC<{
           isSelected && styles.centerButtonCircleActive,
         ]}>
         <Image
-              source={require('../assets/icons/ic-vito-personaje.png')}
-              style={{width: 52, height: 52, resizeMode: 'contain'}}
+              source={require('../assets/icons/VITO-Completo.png')}
+              style={{width: 60, height: 60, resizeMode: 'contain'}}
             />
       </View>
     </TouchableOpacity>

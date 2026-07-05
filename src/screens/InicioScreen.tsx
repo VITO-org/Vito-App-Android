@@ -393,8 +393,6 @@ const styles = StyleSheet.create({
   notifButton: {
     width: 44,
     height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },

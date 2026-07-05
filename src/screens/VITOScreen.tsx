@@ -1,5 +1,5 @@
 import React from 'react';
-import {View, Text, TextInput, ScrollView, StyleSheet} from 'react-native';
+import {View, Text, TextInput, Image, ScrollView, StyleSheet} from 'react-native';
 import Card from '../components/Card';
 import VITOMascot from '../components/VITOMascot';
 import {colors, spacing, fontSize, shadows} from '../theme';
@@ -15,7 +15,10 @@ const VITOScreen: React.FC = () => {
     <View style={styles.screen}>
       {/* Header */}
       <View style={styles.header}>
-        <VITOMascot size={44} />
+        <Image
+          source={require('../assets/icons/VITO-Completo.png')}
+          style={{width: 44, height: 44, resizeMode: 'contain'}}
+        />
         <View style={styles.headerText}>
           <Text style={styles.headerTitle}>Vittito</Text>
           <Text style={styles.headerSub}>Tu asistente de salud</Text>
@@ -64,7 +67,10 @@ const VITOScreen: React.FC = () => {
           placeholderTextColor={colors.textSecondary}
         />
         <View style={styles.micButton}>
-          <Text style={styles.micIcon}>🎤</Text>
+          <Image
+            source={require('../assets/icons/ic-microfono.png')}
+            style={{width: 22, height: 22, resizeMode: 'contain', tintColor: '#FFFFFF'}}
+          />
         </View>
       </View>
     </View>

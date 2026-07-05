@@ -7,7 +7,7 @@ interface VitoAvatarProps {
 }
 
 const AVATAR_SIZE_MULTIPLIER = 1.1;  // contenedor un 10% más grande que la imagen
-const IMAGE_SIZE_MULTIPLIER = 0.8;   // imagen ocupa el 80% del contenedor
+const IMAGE_SIZE_MULTIPLIER = 1.0;   // imagen ocupa el 100% del contenedor
 
 /**
  * Avatar circular reutilizable con la imagen de VITO.
@@ -31,7 +31,7 @@ const VitoAvatar: React.FC<VitoAvatarProps> = ({size = 72}) => {
         },
       ]}>
       <Image
-        source={require('../assets/icons/ic-vito-personaje.png')}
+        source={require('../assets/icons/VITO-Completo.png')}
         style={{width: imageSize, height: imageSize}}
         resizeMode="contain"
       />
@@ -41,9 +41,7 @@ const VitoAvatar: React.FC<VitoAvatarProps> = ({size = 72}) => {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 2,
-    borderColor: colors.primary,
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
