@@ -13,6 +13,7 @@ import {useNavigation} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import Card from '../components/Card';
 import PrimaryButton from '../components/PrimaryButton';
+import VITOLogo from '../components/VITOLogo';
 import {useSupabase} from '../context/SupabaseProvider';
 import {colors, spacing, fontSize} from '../theme';
 import type {RootStackParamList} from '../navigation/RootNavigator';
@@ -72,6 +73,7 @@ const RegisterScreen: React.FC = () => {
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
+          <VITOLogo />
           <Text style={styles.title}>Crear cuenta</Text>
           <Text style={styles.subtitle}>
             Regístrate en VITO Salud
@@ -182,7 +184,7 @@ const styles = StyleSheet.create({
   },
   container: {
     paddingHorizontal: spacing.screenPaddingHorizontal,
-    paddingTop: spacing.screenPaddingTop,
+    paddingTop: 10,
     paddingBottom: spacing.screenPaddingBottom,
     flexGrow: 1,
   },

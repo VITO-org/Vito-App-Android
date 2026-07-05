@@ -13,6 +13,7 @@ import {useNavigation} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import Card from '../components/Card';
 import PrimaryButton from '../components/PrimaryButton';
+import VITOLogo from '../components/VITOLogo';
 import {useSupabase} from '../context/SupabaseProvider';
 import {colors, spacing, fontSize} from '../theme';
 import type {RootStackParamList} from '../navigation/RootNavigator';
@@ -67,6 +68,7 @@ const LoginScreen: React.FC = () => {
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
+          <VITOLogo />
           <Text style={styles.title}>Iniciar sesión</Text>
           <Text style={styles.subtitle}>
             Accede a tu cuenta de VITO Salud
@@ -148,7 +150,7 @@ const styles = StyleSheet.create({
   },
   container: {
     paddingHorizontal: spacing.screenPaddingHorizontal,
-    paddingTop: spacing.screenPaddingTop,
+    paddingTop: 10,
     paddingBottom: spacing.screenPaddingBottom,
     justifyContent: 'center',
     flexGrow: 1,
