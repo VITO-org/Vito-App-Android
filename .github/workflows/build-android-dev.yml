@@ -1,7 +1,16 @@
+# =============================================================================
+# Build Android Preview APK — Vito Health Connect
+# =============================================================================
+# Build de release APK para testing/preview.
+# Corre en GitHub Actions — no necesita la PC del desarrollador.
+#
+# Trigger manual (workflow_dispatch) o push a branches activos.
+# =============================================================================
+
 name: Build Android Preview APK
 
 on:
-  workflow_dispatch: # Permite ejecutar la build manualmente desde GitHub
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -17,10 +26,17 @@ on:
       - 'package-lock.json'
       - 'app.json'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: Build Release APK (preview)
     runs-on: ubuntu-latest
+
+    env:
+      NODE_OPTIONS: '--max-old-space-size=4096'
 
     steps:
       - name: Checkout repository
@@ -31,6 +47,7 @@ jobs:
         with:
           node-version: 22
           cache: 'npm'
+          cache-dependency-path: package-lock.json
 
       - name: Setup Java JDK 17
         uses: actions/setup-java@v4
@@ -40,14 +57,40 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: wrapper
+          cache-read-only: false
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Android Release APK (firmado con debug keystore)
+      - name: Verify Expo modules
+        run: |
+          node -e "
+            const expo = require('expo/package.json');
+            console.log('✓ expo', expo.version);
+          "
+
+      - name: Setup release signing (si hay secrets)
+        env:
+          RELEASE_KEYSTORE: ${{ secrets.RELEASE_KEYSTORE || '' }}
+        run: |
+          if [ -n "$RELEASE_KEYSTORE" ]; then
+            printf '%s' "$RELEASE_KEYSTORE" | base64 -d > android/app/release.keystore
+            echo "✓ Keystore de producción configurado"
+          else
+            echo "ℹ Usando debug.keystore — no hay secrets de release configurados"
+          fi
+
+      - name: Build Android Release APK
         run: |
           cd android
           ./gradlew assembleRelease
+        env:
+          # Si hay secrets de release configurados, pasarlos al build
+          RELEASE_KEYSTORE_PASS: ${{ secrets.RELEASE_KEYSTORE_PASS || '' }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS || '' }}
+          RELEASE_KEY_PASS: ${{ secrets.RELEASE_KEY_PASS || '' }}
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
@@ -55,3 +98,4 @@ jobs:
           name: VitoHealth-Preview
           path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
+          compression-level: 0

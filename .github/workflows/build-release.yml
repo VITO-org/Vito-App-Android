@@ -1,0 +1,311 @@
+# =============================================================================
+# Build Release — Vito Health Connect
+# =============================================================================
+# Crea la build de release (APK + AAB) y genera un GitHub Release.
+# Corre en GitHub Actions — no necesita la PC del desarrollador.
+#
+# Trigger manual (workflow_dispatch) o automático en branches release/*.
+#
+# ## Producción (firmado con keystore real)
+# Para builds firmados para Play Store, configurar estos secrets en el repo:
+#   - RELEASE_KEYSTORE       : keystore en base64
+#   - RELEASE_KEYSTORE_PASS  : contraseña del keystore
+#   - RELEASE_KEY_ALIAS      : alias de la key
+#   - RELEASE_KEY_PASS       : contraseña de la key
+#
+# Sin esos secrets, la build se firma con debug.keystore (solo testing).
+# =============================================================================
+
+name: Build Release APK + AAB
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump_version:
+        description: 'Incrementar versionCode y versionName? (patch | minor | major | none)'
+        required: true
+        default: 'none'
+        type: choice
+        options:
+          - none
+          - patch
+          - minor
+          - major
+      release_tag:
+        description: 'Tag del release (ej: v1.0.0). Si se omite, se auto-genera'
+        required: false
+        type: string
+      upload_to_release:
+        description: 'Crear GitHub Release con los artefactos?'
+        required: true
+        default: true
+        type: boolean
+
+  push:
+    branches:
+      - 'release/*'
+      - main
+
+# Cancelar corridas duplicadas en el mismo branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Release
+    runs-on: ubuntu-latest
+
+    env:
+      # Version name y code se pasan como variables para consistency
+      APP_NAME: VitoHealthConnect
+      NODE_OPTIONS: '--max-old-space-size=4096'
+
+    steps:
+      # ------------------------------------------------------------------
+      # 1. Checkout
+      # ------------------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # necesario para versión semántica con git tags
+
+      # ------------------------------------------------------------------
+      # 2. Setup Node.js
+      # ------------------------------------------------------------------
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      # ------------------------------------------------------------------
+      # 3. Setup Java JDK 17 (requerido por AGP 8.x)
+      # ------------------------------------------------------------------
+      - name: Setup Java JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      # ------------------------------------------------------------------
+      # 4. Setup Gradle con caché
+      # ------------------------------------------------------------------
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: wrapper
+          cache-read-only: false
+
+      # ------------------------------------------------------------------
+      # 5. Instalar dependencias Node
+      # ------------------------------------------------------------------
+      - name: Install Node dependencies
+        run: npm ci
+
+      # ------------------------------------------------------------------
+      # 6. Verificar que Expo modules están disponibles
+      # ------------------------------------------------------------------
+      - name: Verify Expo modules
+        run: |
+          node -e "
+            const expo = require('expo/package.json');
+            const autolinking = require('expo-modules-autolinking/package.json');
+            console.log('✓ expo', expo.version);
+            console.log('✓ expo-modules-autolinking', autolinking.version);
+          "
+        shell: bash
+
+      # ------------------------------------------------------------------
+      # 7. Determinar versión
+      # ------------------------------------------------------------------
+      - name: Determine version
+        id: version
+        run: |
+          # Leer versión actual desde app.json
+          CURRENT_VERSION=$(node -e "console.log(require('./app.json').expo.version)")
+          CURRENT_CODE=$(node -e "console.log(require('./app.json').expo.android.versionCode)")
+
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "current_code=$CURRENT_CODE" >> $GITHUB_OUTPUT
+
+          BUMP="${{ inputs.bump_version || 'none' }}"
+
+          if [ "$BUMP" = "none" ]; then
+            echo "new_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+            echo "new_code=$CURRENT_CODE" >> $GITHUB_OUTPUT
+          else
+            # Incrementar versionCode en 1
+            NEW_CODE=$((CURRENT_CODE + 1))
+
+            # Incrementar versionName según semver
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
+            case "$BUMP" in
+              major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+              minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+              patch) PATCH=$((PATCH + 1)) ;;
+            esac
+            NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+
+            echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+            echo "new_code=$NEW_CODE" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Show version info
+        run: |
+          echo "Current: ${{ steps.version.outputs.current_version }} (code ${{ steps.version.outputs.current_code }})"
+          echo "New:     ${{ steps.version.outputs.new_version }} (code ${{ steps.version.outputs.new_code }})"
+
+      # ------------------------------------------------------------------
+      # 8. Setup release signing (si hay secrets, firmar con keystore real)
+      # ------------------------------------------------------------------
+      - name: Setup release signing
+        id: signing
+        env:
+          RELEASE_KEYSTORE: ${{ secrets.RELEASE_KEYSTORE || '' }}
+        run: |
+          if [ -n "$RELEASE_KEYSTORE" ]; then
+            echo "RELEASE_KEYSTORE_EXISTS=true" >> "$GITHUB_OUTPUT"
+            printf '%s' "$RELEASE_KEYSTORE" | base64 -d > android/app/release.keystore
+            echo "✓ Keystore de producción configurado"
+          else
+            echo "RELEASE_KEYSTORE_EXISTS=false" >> "$GITHUB_OUTPUT"
+            echo "ℹ Usando debug.keystore — no hay secrets de release configurados"
+          fi
+
+      # ------------------------------------------------------------------
+      # 9. Build Release APK + AAB
+      # ------------------------------------------------------------------
+      - name: Build Release APK & AAB
+        env:
+          RELEASE_KEYSTORE_PASS: ${{ secrets.RELEASE_KEYSTORE_PASS || '' }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS || '' }}
+          RELEASE_KEY_PASS: ${{ secrets.RELEASE_KEY_PASS || '' }}
+        run: |
+          cd android
+
+          # Pasar versión como argumentos a Gradle
+          ./gradlew \
+            -PversionName=${{ steps.version.outputs.new_version }} \
+            -PversionCode=${{ steps.version.outputs.new_code }} \
+            assembleRelease \
+            bundleRelease
+
+      # ------------------------------------------------------------------
+      # 10. Verificar artefactos generados
+      # ------------------------------------------------------------------
+      - name: Verify build artifacts
+        id: artifacts
+        run: |
+          APK_PATH="android/app/build/outputs/apk/release/app-release.apk"
+          AAB_PATH="android/app/build/outputs/bundle/release/app-release.aab"
+
+          if [ -f "$APK_PATH" ]; then
+            APK_SIZE=$(stat -c%s "$APK_PATH")
+            echo "APK: $(numfmt --to=iec $APK_SIZE)"
+            echo "apk_exists=true" >> $GITHUB_OUTPUT
+            echo "apk_size=$APK_SIZE" >> $GITHUB_OUTPUT
+          else
+            echo "⚠ APK no encontrado en $APK_PATH"
+            echo "apk_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+          if [ -f "$AAB_PATH" ]; then
+            AAB_SIZE=$(stat -c%s "$AAB_PATH")
+            echo "AAB: $(numfmt --to=iec $AAB_SIZE)"
+            echo "aab_exists=true" >> $GITHUB_OUTPUT
+            echo "aab_size=$AAB_SIZE" >> $GITHUB_OUTPUT
+          else
+            echo "⚠ AAB no encontrado en $AAB_PATH"
+            echo "aab_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+          # Generar checksums
+          if [ -f "$APK_PATH" ]; then
+            sha256sum "$APK_PATH" | cut -d' ' -f1 > android/app/build/outputs/apk/release/app-release.apk.sha256
+          fi
+          if [ -f "$AAB_PATH" ]; then
+            sha256sum "$AAB_PATH" | cut -d' ' -f1 > android/app/build/outputs/bundle/release/app-release.aab.sha256
+          fi
+
+      # ------------------------------------------------------------------
+      # 11. Upload artifacts (siempre)
+      # ------------------------------------------------------------------
+      - name: Upload APK artifact
+        if: steps.artifacts.outputs.apk_exists == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-${{ steps.version.outputs.new_version }}-APK
+          path: |
+            android/app/build/outputs/apk/release/app-release.apk
+            android/app/build/outputs/apk/release/app-release.apk.sha256
+          if-no-files-found: error
+          compression-level: 0
+
+      - name: Upload AAB artifact
+        if: steps.artifacts.outputs.aab_exists == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-${{ steps.version.outputs.new_version }}-AAB
+          path: |
+            android/app/build/outputs/bundle/release/app-release.aab
+            android/app/build/outputs/bundle/release/app-release.aab.sha256
+          if-no-files-found: error
+          compression-level: 0
+
+      # ------------------------------------------------------------------
+      # 12. Generar release notes
+      # ------------------------------------------------------------------
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          APK_OK="${{ steps.artifacts.outputs.apk_exists }}"
+          AAB_OK="${{ steps.artifacts.outputs.aab_exists }}"
+
+          APK_STATUS="❌"
+          AAB_STATUS="❌"
+          [ "$APK_OK" = "true" ] && APK_STATUS="✅"
+          [ "$AAB_OK" = "true" ] && AAB_STATUS="✅"
+
+          cat > release-notes.md << EOF
+          ## Vito Health Connect v${{ steps.version.outputs.new_version }}
+
+          Build automático via GitHub Actions.
+
+          | Artefacto | Estado |
+          |-----------|--------|
+          | APK | ${APK_STATUS} |
+          | AAB | ${AAB_STATUS} |
+
+          ### Instalación
+          Descargá el APK de los assets abajo y abrílo en tu dispositivo Android.
+          Asegurate de tener "Instalar apps de orígenes desconocidos" habilitado.
+
+          ### Checksums
+          Los archivos \`.sha256\` están incluidos en los assets.
+          EOF
+
+          echo "✓ Release notes generados ($(wc -c < release-notes.md) bytes)"
+
+      # ------------------------------------------------------------------
+      # 13. Crear GitHub Release
+      # ------------------------------------------------------------------
+      - name: Create GitHub Release
+        if: |
+          github.event_name == 'workflow_dispatch' ||
+          startsWith(github.ref, 'refs/heads/release/')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.new_version }}
+          name: Release v${{ steps.version.outputs.new_version }}
+          body_path: release-notes.md
+          draft: true
+          prerelease: ${{ !startsWith(github.ref, 'refs/heads/release/') }}
+          files: |
+            android/app/build/outputs/apk/release/app-release.apk
+            android/app/build/outputs/apk/release/app-release.apk.sha256
+            android/app/build/outputs/bundle/release/app-release.aab
+            android/app/build/outputs/bundle/release/app-release.aab.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

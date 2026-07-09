@@ -1,7 +1,16 @@
+# =============================================================================
+# Build Android Dev Client APK — Vito Health Connect
+# =============================================================================
+# Build de debug APK con expo-dev-client para desarrollo.
+# Corre en GitHub Actions — no necesita la PC del desarrollador.
+#
+# Trigger manual (workflow_dispatch) o push a branches de desarrollo.
+# =============================================================================
+
 name: Build Android Dev Client APK
 
 on:
-  workflow_dispatch: # Manual
+  workflow_dispatch:
   push:
     branches:
       - dev
@@ -15,10 +24,17 @@ on:
       - 'package-lock.json'
       - 'app.json'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: Build Debug APK (Dev Client)
     runs-on: ubuntu-latest
+
+    env:
+      NODE_OPTIONS: '--max-old-space-size=4096'
 
     steps:
       - name: Checkout repository
@@ -29,6 +45,7 @@ jobs:
         with:
           node-version: 22
           cache: 'npm'
+          cache-dependency-path: package-lock.json
 
       - name: Setup Java JDK 17
         uses: actions/setup-java@v4
@@ -38,17 +55,25 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: wrapper
+          cache-read-only: false
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Android Debug APK (con expo-dev-client)
+      - name: Verify Expo modules
+        run: |
+          node -e "
+            const expo = require('expo/package.json');
+            console.log('✓ expo', expo.version);
+          "
+
+      - name: Build Android Debug APK (Dev Client)
         run: |
           cd android
           ./gradlew assembleDebug
         env:
-          # Indica a React Native que es un build de desarrollo
-          # El APK incluirá expo-dev-client para conectarse a Metro
           NODE_ENV: development
 
       - name: Upload APK Artifact
@@ -58,3 +83,4 @@ jobs:
           path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
           if-no-files-found: error
+          compression-level: 0

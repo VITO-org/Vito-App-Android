@@ -23,8 +23,10 @@ android {
         applicationId "com.vito.healthconnect.rn"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // Sobrescribible desde CLI con -PversionCode y -PversionName
+        // Usado por CI (build-release.yml) para versionado automático
+        versionCode project.hasProperty('versionCode') ? project.property('versionCode').toInteger() : 1
+        versionName project.hasProperty('versionName') ? project.property('versionName') : "1.0"
     }
     signingConfigs {
         debug {
@@ -33,13 +35,29 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        release {
+            // En CI, si release.keystore existe (inyectado por el workflow),
+            // se usa para firmar la release. Si no, cae a debug.
+            def releaseKeystore = file('release.keystore')
+            if (releaseKeystore.exists()) {
+                storeFile releaseKeystore
+                storePassword System.getenv('RELEASE_KEYSTORE_PASS') ?: ''
+                keyAlias System.getenv('RELEASE_KEY_ALIAS') ?: ''
+                keyPassword System.getenv('RELEASE_KEY_PASS') ?: ''
+            } else {
+                storeFile file('debug.keystore')
+                storePassword 'android'
+                keyAlias 'androiddebugkey'
+                keyPassword 'android'
+            }
+        }
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.release
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
