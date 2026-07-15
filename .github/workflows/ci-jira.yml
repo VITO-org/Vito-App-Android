@@ -55,6 +55,10 @@ jobs:
         if: steps.extract.outputs.skip != 'true'
         run: ./scripts/jira-transition.sh "${{ steps.extract.outputs.issue_key }}" "In Progress"
 
+      - name: Fix gradlew line endings
+        if: steps.extract.outputs.skip != 'true'
+        run: sed -i 's/\r$//' android/gradlew
+
       - name: Build Android (debug)
         id: build
         if: steps.extract.outputs.skip != 'true'

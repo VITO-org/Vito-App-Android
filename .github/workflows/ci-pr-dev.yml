@@ -52,6 +52,10 @@ jobs:
             echo "skip=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Fix gradlew line endings
+        if: steps.extract.outputs.skip != 'true'
+        run: sed -i 's/\r$//' android/gradlew
+
       - name: Build Android (debug)
         id: build
         if: steps.extract.outputs.skip != 'true'
