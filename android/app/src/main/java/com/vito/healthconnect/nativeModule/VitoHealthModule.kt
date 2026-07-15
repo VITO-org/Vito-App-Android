@@ -119,12 +119,16 @@ class VitoHealthModule(reactContext: ReactApplicationContext) :
         scope.launch {
             try {
                 val granted = healthDataProvider!!.getGrantedPermissions()
+                Log.d(TAG, "Permisos concedidos: $granted")
+                Log.d(TAG, "Permisos requeridos: ${HealthDataProvider.REQUIRED_PERMISSIONS}")
                 if (granted.containsAll(HealthDataProvider.REQUIRED_PERMISSIONS)) {
+                    Log.d(TAG, "Todos los permisos concedidos ✓")
                     isRequestingPermissions = false
                     pendingPermissionsPromise = null
                     promise.resolve(buildResultMap(true, false))
                     return@launch
                 }
+                Log.d(TAG, "Faltan permisos, lanzando diálogo...")
 
                 val launcher = getOrCreatePermissionLauncher(activityForResult)
 

@@ -1,6 +1,6 @@
 # HU-15: Configuración de perfil personal
 
-> **Estado:** 🔴 No iniciada — Depende de HU-14 (Registro). Requiere Supabase para persistencia. Tema RN disponible (colors.ts, spacing.ts).
+> **Estado:** 🟡 En desarrollo — CompleteProfileScreen creada con campos de perfil personal (nombre, apellido, fecha de nacimiento, sexo, altura, peso). Se muestra automáticamente después del registro. Persiste vía upsertProfile a Supabase. Pendiente: editar perfil desde PerfilScreen.
 
 **Release:** R5
 **Sprint:** S23
@@ -34,14 +34,22 @@ Configuración de perfil personal
 
 ## Acceptance Criteria
 
-- [ ] CA-01: El usuario puede registrar: nombre, apellido, DNI, fecha de nacimiento, sexo biológico, género y nacionalidad.
-- [ ] CA-02: El sistema calcula automáticamente la edad a partir de la fecha de nacimiento.
+- [x] CA-01: El usuario puede registrar: nombre, apellido, fecha de nacimiento, sexo biológico, altura y peso.
+  - *CompleteProfileScreen implementa todos los campos post-registro.*
+  - *Pendiente: DNI, género y nacionalidad (HU-15 original).*
+- [x] CA-02: El sistema calcula automáticamente la edad a partir de la fecha de nacimiento.
+  - *calcularEdad() en CompleteProfileScreen muestra edad en tiempo real mientras se completa la fecha.*
 
 ## Tasks
 
-- [ ] Diseñar formulario de perfil.
-- [ ] Persistir datos personales.
-- [ ] Calcular la edad automáticamente.
+- [x] Diseñar formulario de perfil.
+  - *CompleteProfileScreen.tsx con nombre, apellido, fecha de nacimiento, sexo, altura, peso.*
+- [x] Persistir datos personales.
+  - *Vía upsertProfile → tabla perfil_usuario en Supabase.*
+- [x] Calcular la edad automáticamente.
+  - *Función calcularEdad() con badge de edad dinámico.*
+- [ ] Agregar campos faltantes (DNI, género, nacionalidad).
+- [ ] Permitir editar perfil desde PerfilScreen.
 
 ## Definition of Done
 
@@ -53,7 +61,11 @@ Configuración de perfil personal
 
 ## Files in Scope
 
-*(A definir durante la implementación)*
+- `src/screens/CompleteProfileScreen.tsx` — Nuevo formulario de finalización de perfil post-registro
+- `src/context/SupabaseProvider.tsx` — needsProfile state + updateProfile persistencia
+- `src/navigation/RootNavigator.tsx` — Redirección a CompleteProfile cuando needsProfile=true
+- `src/services/supabase/schema.sql` — Columnas altura_cm, peso_kg agregadas a perfil_usuario
+- `src/services/supabase/models.ts` — PerfilUsuario extendido con altura_cm, peso_kg
 
 ## Tags
 

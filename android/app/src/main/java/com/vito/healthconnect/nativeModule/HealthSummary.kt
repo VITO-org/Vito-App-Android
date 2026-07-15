@@ -13,6 +13,14 @@ data class HealthSummary(
     val sleepMinutes: Long,
     val averageBpm: Double?,
     val exerciseSessions: Int,
+    /** Presión arterial sistólica en mmHg (opcional, depende del dispositivo). */
+    val bloodPressureSystolic: Double?,
+    /** Presión arterial diastólica en mmHg (opcional). */
+    val bloodPressureDiastolic: Double?,
+    /** Saturación de oxígeno en porcentaje (opcional). */
+    val spo2Percent: Double?,
+    /** Temperatura corporal en °C (opcional). */
+    val bodyTemperatureCelsius: Double?,
 ) {
     /**
      * Convierte a un Map<String, Any> que React Native puede leer como ReadableMap.
@@ -25,5 +33,9 @@ data class HealthSummary(
         "sleepMinutes" to sleepMinutes,
         "averageBpm" to averageBpm,
         "exerciseSessions" to exerciseSessions,
+        "bloodPressureSystolic" to bloodPressureSystolic,
+        "bloodPressureDiastolic" to bloodPressureDiastolic,
+        "spo2Percent" to spo2Percent,
+        "bodyTemperatureCelsius" to bodyTemperatureCelsius,
     )
 }

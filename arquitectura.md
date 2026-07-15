@@ -2,9 +2,8 @@
 
 ## Descripción General
 
-VITO es una aplicación móvil Android desarrollada en Kotlin utilizando una arquitectura moderna basada en MVVM y Jetpack Compose.
-
-La aplicación se conecta a un backend en Supabase para autenticación, almacenamiento y persistencia de datos, y consume un servicio externo desarrollado en FastAPI para funcionalidades de Machine Learning.
+VITO es una aplicación móvil desarrollada en **React Native** con **TypeScript**.
+La aplicación se conecta a un backend en **Supabase** para autenticación, almacenamiento y persistencia de datos, a **Health Connect** (mediante módulos nativos de Android) para la recolección de datos de salud y biométricos, y consumirá un servicio externo para funcionalidades de Machine Learning.
 
 ---
 
@@ -12,12 +11,12 @@ La aplicación se conecta a un backend en Supabase para autenticación, almacena
 
 ## Mobile App
 
-* Lenguaje: Kotlin
-* UI Framework: Jetpack Compose
-* Arquitectura: MVVM (Model – View – ViewModel)
-* Navegación: Navigation Compose
-* Manejo de estado: StateFlow + Kotlin Coroutines
-* Persistencia local: Room Database
+* **Framework:** React Native
+* **Lenguaje:** TypeScript / JavaScript
+* **Navegación:** React Navigation v7
+* **Manejo de estado:** Context API de React
+* **Estilizado y UI:** React Native StyleSheet y Componentes base
+* **Integración Nativa:** Native Modules en Java (Android) para Health Connect
 
 ---
 
@@ -25,20 +24,20 @@ La aplicación se conecta a un backend en Supabase para autenticación, almacena
 
 ### Supabase
 
-Utilizado como Backend-as-a-Service (BaaS).
+Utilizado como Backend-as-a-Service (BaaS) mediante `@supabase/supabase-js`.
 
 Responsabilidades:
 
 * Autenticación de usuarios
 * Base de datos PostgreSQL
 * Storage de archivos
-* APIs y acceso a datos
+* APIs y acceso a datos remotos
 
-### Servicio de Machine Learning
+### Servicio de Machine Learning (Externo)
 
-* Framework: FastAPI
-* Función:
-
+* **Entorno de Entrenamiento:** Python (en el directorio `ml-trainer`)
+* **Framework Planificado:** FastAPI (servicio HTTP)
+* **Función:**
     * Procesamiento de datos biométricos
     * Predicciones del modelo de Machine Learning
     * Comunicación mediante endpoints REST
@@ -48,7 +47,10 @@ Responsabilidades:
 # Arquitectura General
 
 ```text
-Android App (Kotlin + Jetpack Compose)
+React Native App (TypeScript)
+        │
+        ├── Módulos Nativos (Android - Java)
+        │     └── Health Connect (Datos biométricos locales)
         │
         ├── Supabase
         │     ├── PostgreSQL
@@ -56,122 +58,61 @@ Android App (Kotlin + Jetpack Compose)
         │     └── Authentication
         │
         └── FastAPI ML Service
-              └── Modelo de Machine Learning
+              └── Modelo de Machine Learning (entrenado en ml-trainer)
 ```
-
----
-
-# Patrón Arquitectónico
-
-## MVVM (Model – View – ViewModel)
-
-La aplicación debe seguir estrictamente el patrón MVVM.
-
-### Responsabilidades
-
-#### View (UI)
-
-* Pantallas hechas con Jetpack Compose
-* Observan estados expuestos por ViewModels
-* No contienen lógica de negocio
-
-#### ViewModel
-
-* Manejan el estado de la UI
-* Ejecutan lógica de presentación
-* Usan Coroutines y StateFlow
-* Consumen repositories
-
-#### Repository
-
-* Fuente única de acceso a datos
-* Coordinan acceso remoto y local
-* Manejan Supabase, APIs y Room
-
-#### Data Layer
-
-Contiene:
-
-* DTOs
-* Models
-* APIs
-* DataSources
-* Implementaciones de repositories
-
-#### Domain Layer
-
-Contiene:
-
-* Casos de uso (UseCases)
-* Entidades de dominio
-* Lógica de negocio pura
 
 ---
 
 # Estructura del Proyecto
 
 ```text
-app/
-│
-├── ui/
-│   ├── screens/
-│   ├── components/
-│   ├── navigation/
-│   └── theme/
-│
-├── viewmodel/
-│
-├── repository/
-│
-├── data/
-│   ├── remote/
-│   ├── local/
-│   ├── model/
-│   └── dto/
-│
-├── domain/
-│   ├── model/
-│   └── usecase/
-│
-└── utils/
+/
+├── android/            # Proyecto nativo Android (Módulos de Health Connect en Java)
+├── ios/                # Proyecto nativo iOS
+├── ml-trainer/         # Scripts y notebooks de Python para entrenamiento ML
+├── src/                # Código fuente de React Native
+│   ├── components/     # Componentes de UI reutilizables
+│   ├── context/        # Estado global (HealthProvider, SupabaseProvider)
+│   ├── data/           # Mocks y utilidades de datos
+│   ├── navigation/     # Configuración de React Navigation
+│   ├── screens/        # Pantallas de la aplicación
+│   ├── services/       # Integración con APIs y Módulos Nativos (VitoHealthNative.ts, supabase/)
+│   ├── theme/          # Constantes de diseño y estilos globales
+│   └── types/          # Definiciones de tipos e interfaces de TypeScript
+├── package.json        # Dependencias de Node.js
+└── App.tsx             # Punto de entrada de la aplicación React Native
 ```
 
 ---
 
 # Reglas de Arquitectura
 
-## UI
+## UI y Componentes
 
-* Toda la UI debe realizarse con Jetpack Compose.
-* No usar XML layouts.
-* Las pantallas deben ser reutilizables y desacopladas.
+* Toda la UI se realiza con componentes funcionales de React.
+* Mantener la lógica de presentación separada de la lógica de negocio usando custom hooks cuando la complejidad lo amerite.
+* Las pantallas (`screens/`) deben orquestar componentes más pequeños y reutilizables (`components/`).
 
 ## Estado
 
-* El estado debe manejarse con StateFlow.
-* Usar collectAsState() en Compose.
-* Evitar estados mutables fuera del ViewModel.
+* El estado global y la inyección de dependencias simples se manejan con React Context (`src/context/`).
+* El estado local de la UI se administra con hooks nativos (`useState`, `useReducer`).
 
-## Concurrencia
+## Concurrencia y APIs
 
-* Usar Kotlin Coroutines.
-* Evitar callbacks tradicionales.
-* Toda operación de red o base de datos debe ejecutarse de manera asíncrona.
+* Usar `async/await` y Promesas para operaciones asíncronas.
+* Las llamadas a Supabase y servicios nativos deben estar aisladas en `src/services/` o provistas por el Contexto.
+* Evitar inicializar conexiones pesadas o llamadas de red innecesarias directamente en los renders.
 
 ## Navegación
 
-* Usar Navigation Compose.
-* Centralizar rutas en un único archivo o sealed class.
+* Se utiliza `React Navigation v7`.
+* Las rutas se definen de manera centralizada en la carpeta `src/navigation/`.
 
-## Persistencia Local
+## Integración con APIs Nativas (Health Connect)
 
-* Usar Room para cache y almacenamiento offline.
-* Los repositories deben decidir cuándo usar datos locales o remotos.
-
-## APIs
-
-* El acceso a Supabase y FastAPI debe estar encapsulado en la capa data.
-* Nunca consumir APIs directamente desde la UI.
+* La lectura de datos de salud se realiza de forma nativa a través de un módulo escrito en Java dentro del proyecto Android (`VitoHealthModule`).
+* El código JS/TS de la aplicación invoca estas funciones nativas de forma asíncrona mediante el wrapper en `src/services/VitoHealthNative.ts`.
 
 ---
 
@@ -179,46 +120,23 @@ app/
 
 El servicio FastAPI se encargará de:
 
-* Recibir datos biométricos
-* Ejecutar inferencias del modelo ML
-* Retornar predicciones y métricas
+* Recibir la información de salud y biométrica previamente extraída de Health Connect.
+* Ejecutar inferencias mediante el modelo ML entrenado.
+* Retornar predicciones y recomendaciones personalizadas.
 
-La app Android:
+La app React Native:
 
-* Consume el servicio vía HTTP REST
-* No ejecuta modelos localmente
-* Solo muestra resultados y métricas procesadas
+* Consume el servicio ML vía peticiones HTTP REST.
+* No ejecuta la inferencia de forma local para evitar consumo excesivo de recursos.
+* Muestra los insights y métricas ya procesadas en las vistas de la app.
 
 ---
 
 # Objetivo de Esta Arquitectura
 
-Esta arquitectura busca:
+Esta arquitectura fue elegida para:
 
-* Escalabilidad
-* Separación clara de responsabilidades
-* Fácil mantenimiento
-* Testing simplificado
-* Reutilización de componentes
-* Compatibilidad con buenas prácticas Android modernas
-
----
-
-# Restricciones Técnicas
-
-La IA o cualquier desarrollador que trabaje en este proyecto debe respetar:
-
-* MVVM como arquitectura principal
-* Jetpack Compose obligatorio
-* Kotlin obligatorio
-* StateFlow + Coroutines para estados
-* Navigation Compose para navegación
-* Room para persistencia local
-* Supabase como backend principal
-* FastAPI como servicio de Machine Learning
-
-No introducir arquitecturas distintas sin justificación técnica.
-No mezclar múltiples patrones arquitectónicos innecesariamente.
-
-```
-```
+* Permitir un desarrollo ágil y multiplataforma, optimizando tiempos al usar React Native.
+* Garantizar tipos seguros y reducción de errores con TypeScript.
+* Mantener control específico en características de la plataforma mediante la implementación de Native Modules cuando sea necesario (como Health Connect).
+* Separar claramente la lógica de negocio/servicios de la presentación.

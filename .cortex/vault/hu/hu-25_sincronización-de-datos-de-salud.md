@@ -1,5 +1,7 @@
 # HU-25: Sincronización de datos de salud
 
+> **Estado:** 🟡 En desarrollo — Sync automático a Supabase `datos_reloj` implementado con lastSync tracking. Pendiente resolución de conflictos entre fuentes.
+
 **Release:** R1
 **Sprint:** S4
 **Épica:** Épica 2: Registro e Integración de Datos
@@ -32,13 +34,18 @@ Sincronización de datos de salud
 
 ## Acceptance Criteria
 
-- [ ] CA-01: El sistema sincroniza datos en tiempo real o por intervalos configurables.
+- [x] CA-01: El sistema sincroniza datos en tiempo real o por intervalos configurables.
+  - *Auto-sync cada 10 min via HealthProvider + intervalo configurable por contexto.*
+  - *Cada lectura exitosa persiste en Supabase `datos_reloj` automáticamente.*
+  - *`lastSync` timestamp trackeado en el contexto para UI reactiva.*
 - [ ] CA-02: El sistema detecta conflictos entre distintas fuentes de datos.
 - [ ] CA-03: El sistema prioriza wearable sobre registro manual en caso de conflicto.
 
 ## Tasks
 
-- [ ] Implementar sincronización automática.
+- [x] Implementar sincronización automática.
+  - *HealthProvider.tsx: loadHealthData() syncs a datos_reloj vía insertDatoReloj().*
+  - *lastSync actualizado post-sync para feedback visual.*
 - [ ] Resolver conflictos entre fuentes.
 - [ ] Gestionar versionado de registros.
 
@@ -52,7 +59,7 @@ Sincronización de datos de salud
 
 ## Files in Scope
 
-*(A definir durante la implementación)*
+- `src/context/HealthProvider.tsx` — Contexto con lastSync, auto-refresh cada 10 min, sync a datos_reloj
 
 ## Tags
 

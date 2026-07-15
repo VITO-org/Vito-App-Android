@@ -1,6 +1,6 @@
 # HU-24: Integración con dispositivos wearables
 
-> **Estado:** 🟡 En desarrollo — Base completada (Health Connect SDK integrado). Pendiente flujo de conexión UI y source tagging.
+> **Estado:** 🟡 En desarrollo — Health Connect SDK integrado. BP reading ampliado a 7 días para cubrir delays de Health Sync. Pendiente flujo de conexión UI y source tagging.
 
 **Release:** R1
 **Sprint:** S4
@@ -37,7 +37,9 @@ Integración con dispositivos wearables
 - [x] CA-01: El usuario puede conectar dispositivos compatibles desde la app.
   - *Health Connect SDK integrado como middleware. Cualquier wearable que sincronice con HC queda conectado automáticamente.*
 - [x] CA-02: El sistema recibe datos biométricos del dispositivo de forma automática.
-  - *HealthDataProvider.loadTodayData() lee 6 tipos de records (Steps, Distance, Calories, Sleep, HeartRate, Exercise).*
+  - *HealthDataProvider.loadTodayData() lee 6 tipos de records: Steps, Distance, Calories, Sleep, HeartRate, Exercise + BloodPressure + SpO2 + BodyTemperature.*
+  - *BP expandido a últimos 7 días (no solo hoy) para tolerar retardos de Health Sync.*
+  - *Diagnóstico por logcat: permisos, cantidad de registros encontrados y valores leídos.*
 - [ ] CA-03: Cada dato almacena su origen (dispositivo o manual).
   - *Pendiente: extraer metadata.sourceDevice del Health Connect SDK y mostrarlo en el dashboard.*
 

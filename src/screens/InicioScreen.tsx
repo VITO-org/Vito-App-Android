@@ -1,13 +1,17 @@
-import React from 'react';
-import {View, Text, ScrollView, StyleSheet, TouchableOpacity} from 'react-native';
+import React, {useEffect, useCallback, useState} from 'react';
+import {View, Text, FlatList, StyleSheet, TouchableOpacity, Dimensions} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useHealth} from '../context/HealthProvider';
+import {useSupabase} from '../context/SupabaseProvider';
 import Card from '../components/Card';
 import VitalSignCard from '../components/VitalSignCard';
-import VITOMascot from '../components/VITOMascot';
+import PrimaryButton from '../components/PrimaryButton';
+import AppIcon, {type AppIconName} from '../components/AppIcon';
+import VitoAvatar from '../components/VitoAvatar';
+import StatusIndicator from '../components/StatusIndicator';
 import {colors, spacing, fontSize} from '../theme';
-import {TipoSignoVital} from '../data/mockReportes';
+import {buildSignosFromSummary, getMetricasBienestar} from '../utils/signosVitales';
 
 type RootStackParamList = {
   MainTabs: undefined;
@@ -22,45 +26,114 @@ type RootStackParamList = {
 /**
  * Dashboard principal — pantalla de inicio de VITO.
  *
- * Diseño:
- * - Saludo superior + notificaciones
- * - Card "Estado general" con badge verde "Bien"
- * - Grid 2 columnas de signos vitales con íconos, valores y tendencias
- * - Última actividad (medicación)
+ * Muestra datos reales de Health Connect cuando están disponibles,
+ * con fallback a datos mock cuando no.
  */
 const InicioScreen: React.FC = () => {
-  const {summary, loading} = useHealth();
+  const {
+    summary,
+    loading,
+    error,
+    errorSeverity,
+    hcStatus,
+    permissionsGranted,
+    lastSync,
+    requestPermissionsAndLoad,
+    refreshData,
+  } = useHealth();
+  const {session, profile} = useSupabase();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
-  // Mock: datos para el dashboard (reemplazar con datos reales cuando existan)
-  const mockVitals: {
-    id: TipoSignoVital;
-    label: string;
-    value: string;
-    unit?: string;
-    icon: string;
-    iconBgColor: string;
-    trend?: 'up' | 'down' | 'stable';
-  }[] = [
-    {id: 'frecuencia_cardiaca', label: 'Frecuencia cardíaca', value: '72', unit: 'lpm', icon: '❤️', iconBgColor: colors.heartRed, trend: 'up' as const},
-    {id: 'presion_sistolica', label: 'Presión arterial', value: '120/80', unit: 'mmHg', icon: '🫀', iconBgColor: colors.danger, trend: 'stable' as const},
-    {id: 'saturacion_oxigeno', label: 'Oxigenación', value: '98', unit: '%', icon: '💧', iconBgColor: colors.oxygenBlue, trend: 'up' as const},
-    {id: 'temperatura', label: 'Temperatura', value: '36.6', unit: '°C', icon: '🌡️', iconBgColor: colors.tempRed, trend: 'down' as const},
-  ];
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await refreshData();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshData]);
+
+  const userName = profile?.nombre
+    ? profile.nombre
+    : session?.user?.email?.split('@')[0] ?? 'Usuario';
+
+  // Gestión automática de Health Connect:
+  // - Si HC disponible y sin permisos → solicitar permisos + cargar datos
+  // - Si HC disponible y permisos concedidos pero sin datos → cargar datos
+  useEffect(() => {
+    if (hcStatus === 'available' && !loading && !error) {
+      if (!permissionsGranted) {
+        requestPermissionsAndLoad();
+      } else if (!summary) {
+        refreshData();
+      }
+    }
+  }, [hcStatus, permissionsGranted, loading, error, summary, requestPermissionsAndLoad, refreshData]);
+
+  // Construir vitals desde la fuente única de datos
+  const allSignos = buildSignosFromSummary(summary);
+
+  // InicioScreen: solo signos vitales (excluye bienestar),
+  // combina sistólica+diastólica en un solo card "Presión arterial"
+  const bienestarIds = new Set(['pasos', 'calorias', 'distancia', 'sueno']);
+  const vitals = allSignos
+    .filter(s => !bienestarIds.has(s.id) && s.id !== 'presion_diastolica')
+    .map(s => {
+      if (s.id === 'presion_sistolica') {
+        // Combinar sistólica + diastólica en "120/80"
+        const diast = allSignos.find(s2 => s2.id === 'presion_diastolica');
+        const combinedValue =
+          s.rawValue != null && diast?.rawValue != null
+            ? `${Math.round(s.rawValue)}/${Math.round(diast.rawValue)}`
+            : '--/--';
+        return {
+          id: s.id,
+          label: 'Presión arterial',
+          value: combinedValue,
+          unit: s.unit,
+          icon: s.icon,
+          iconName: s.iconName,
+          iconSize: s.iconSize,
+          iconBgColor: s.iconBgColor,
+          trend: s.trend ?? 'stable',
+        };
+      }
+      return {
+        id: s.id,
+        label: s.label,
+        value: s.value,
+        unit: s.unit,
+        icon: s.icon,
+        iconName: s.iconName,
+        iconSize: s.iconSize,
+        iconBgColor: s.iconBgColor,
+        trend: s.trend ?? 'stable',
+      };
+    });
 
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
+    <FlatList
+      style={styles.scroll}
+      contentContainerStyle={styles.container}
+      refreshing={refreshing}
+      onRefresh={onRefresh}
+      data={[{}]}
+      keyExtractor={() => 'content'}
+      renderItem={() => (
+      <>
       {/* ── Header: saludo + notificaciones ── */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <VITOMascot size={40} showAntenna={false} />
+          <VitoAvatar size={40} />
           <View style={styles.headerText}>
-            <Text style={styles.greeting}>¡Hola, Juan!</Text>
+            <Text style={styles.greeting}>¡Hola, {userName}!</Text>
             <Text style={styles.subtitle}>Todo está bajo control</Text>
           </View>
         </View>
         <TouchableOpacity style={styles.notifButton}>
-          <Text style={styles.notifIcon}>🔔</Text>
+          <AppIcon name="alertas" size={20} />
         </TouchableOpacity>
       </View>
 
@@ -77,16 +150,86 @@ const InicioScreen: React.FC = () => {
         </View>
       </Card>
 
+      {/* ── Estado Health Connect ── */}
+      {hcStatus === 'unavailable' && (
+        <Card style={styles.warningCard}>
+          <Text style={styles.warningTitle}>Health Connect no disponible</Text>
+          <Text style={styles.warningText}>
+            Instalá Google Health Connect desde Play Store para ver tus datos reales.
+          </Text>
+        </Card>
+      )}
+
+      {hcStatus === 'update_required' && (
+        <Card style={styles.warningCard}>
+          <Text style={styles.warningTitle}>Health Connect desactualizado</Text>
+          <Text style={styles.warningText}>
+            Actualizá Health Connect desde Play Store.
+          </Text>
+        </Card>
+      )}
+
+      {error && (
+        <Card style={[styles.warningCard, errorSeverity === 'error' && styles.errorCard]}>
+          <Text style={styles.warningTitle}>
+            {errorSeverity === 'error' ? 'Error' : 'Aviso'}
+          </Text>
+          <Text style={styles.warningText}>{error}</Text>
+          {hcStatus === 'available' && !loading && (
+            <PrimaryButton
+              variant="secondary"
+              title="Conceder permisos"
+              onPress={requestPermissionsAndLoad}
+              style={{marginTop: 8}}
+            />
+          )}
+        </Card>
+      )}
+
+      {/* ── Resumen del día (4 métricas de bienestar) ── */}
+      <Text style={styles.resumenTitle}>Resumen del día</Text>
+      <View style={styles.daySummaryGrid}>
+        {getMetricasBienestar(allSignos).map(s => (
+          <View key={s.id} style={styles.daySummaryCard}>
+            {s.iconName ? (
+              <View style={[styles.daySummaryIconCircle, {backgroundColor: s.iconBgColor + '20'}]}>
+                <AppIcon name={s.iconName as AppIconName} size={s.iconSize ?? 26} />
+              </View>
+            ) : (
+              <Text style={styles.daySummaryIcon}>{s.icon}</Text>
+            )}
+            <Text style={styles.daySummaryValue}>{s.value}</Text>
+            <Text style={styles.daySummaryLabel}>{s.label}</Text>
+          </View>
+        ))}
+      </View>
+
       {/* ── Signos Vitales ── */}
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Signos vitales</Text>
-        <TouchableOpacity>
-          <Text style={styles.seeAll}>Ver todos</Text>
-        </TouchableOpacity>
+        <View style={styles.sectionActions}>
+          <TouchableOpacity
+            style={styles.refreshButton}
+            onPress={refreshData}
+            disabled={loading}>
+            <AppIcon
+              name="recargar"
+              size={20}
+              style={[
+                {tintColor: colors.success},
+                loading ? {opacity: 0.5} : undefined,
+              ]}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation.navigate('TodosLosSignos')}>
+            <Text style={styles.seeAll}>Ver todos</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
+      {/* ── Grid de signos vitales ── */}
       <View style={styles.vitalsGrid}>
-        {mockVitals.map((v, i) => (
+        {vitals.map((v, i) => (
           <VitalSignCard
             key={i}
             {...v}
@@ -100,20 +243,14 @@ const InicioScreen: React.FC = () => {
         ))}
       </View>
 
-      {/* ── Health Connect data ── */}
-      {summary && (
-        <Card style={styles.hcCard}>
-          <Text style={styles.hcTitle}>Health Connect</Text>
-          <Text style={styles.hcText}>
-            Pasos: {(summary.steps ?? 0).toLocaleString('es-ES')} |{' '}
-            Calorías: {(summary.caloriesKcal ?? 0).toFixed(0)} kcal
-          </Text>
-        </Card>
-      )}
-
-      {loading && (
+      {!permissionsGranted && hcStatus === 'available' && !loading && !error && (
         <Card>
-          <Text style={styles.hcText}>Cargando datos de Health Connect...</Text>
+          <Text style={styles.hcText}>Conectá con Health Connect para ver tus datos reales.</Text>
+          <PrimaryButton
+            title="Conectar Health Connect"
+            onPress={requestPermissionsAndLoad}
+            style={{marginTop: 8}}
+          />
         </Card>
       )}
 
@@ -122,20 +259,100 @@ const InicioScreen: React.FC = () => {
         <Text style={styles.sectionTitle}>Última actividad</Text>
       </View>
 
-      <Card>
-        <View style={styles.activityRow}>
-          <View style={styles.activityInfo}>
-            <Text style={styles.activityTitle}>Medicación registrada</Text>
-            <Text style={styles.activityTime}>Hoy 08:30</Text>
-          </View>
-          <View style={styles.activityCheck}>
-            <Text style={styles.checkIcon}>✓</Text>
-          </View>
-        </View>
-      </Card>
+      {(() => {
+        if (!lastSync) {
+          return (
+            <Card>
+              <View style={styles.activityRow}>
+                <View style={styles.activityInfo}>
+                  <Text style={styles.activityTitle}>Sin actividad registrada</Text>
+                  <Text style={styles.activityTime}>
+                    {loading
+                      ? 'Cargando datos...'
+                      : 'Conectá Health Connect para ver tu actividad'}
+                  </Text>
+                </View>
+              </View>
+            </Card>
+          );
+        }
+
+        const items: {title: string; detail: string; iconName?: AppIconName}[] = [
+          {
+            title: 'Sincronización Health Connect',
+            detail: lastSync.toLocaleDateString('es-ES', {
+              weekday: 'long',
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
+          },
+        ];
+
+        if (summary) {
+          if (summary.steps > 0) {
+            items.push({
+              iconName: 'pasos',
+              title: 'Pasos registrados',
+              detail: `${summary.steps.toLocaleString('es-ES')} pasos`,
+            });
+          }
+          if (summary.caloriesKcal > 0) {
+            items.push({
+              iconName: 'calorias',
+              title: 'Calorías quemadas',
+              detail: `${summary.caloriesKcal.toFixed(0)} kcal`,
+            });
+          }
+          if (summary.distanceMeters > 0) {
+            items.push({
+              iconName: 'distancia',
+              title: 'Distancia recorrida',
+              detail: `${(summary.distanceMeters / 1000).toFixed(2)} km`,
+            });
+          }
+          if (summary.sleepMinutes > 0) {
+            items.push({
+              iconName: 'sueno',
+              title: 'Sueño registrado',
+              detail: `${Math.floor(summary.sleepMinutes / 60)}h ${summary.sleepMinutes % 60}m`,
+            });
+          }
+          if (summary.averageBpm != null) {
+            items.push({
+              title: '❤️ Frecuencia cardíaca',
+              detail: `${Math.round(summary.averageBpm)} lpm promedio`,
+            });
+          }
+        }
+
+        return (
+          <Card>
+            {items.map((item, i) => (
+              <View
+                key={i}
+                style={[styles.activityRow, i === items.length - 1 && styles.activityRowLast]}>
+                {item.iconName ? (
+                  <View style={[styles.activityIconCircle, {backgroundColor: (allSignos.find(s => s.id === item.iconName)?.iconBgColor || '#ccc') + '20'}]}>
+                    <AppIcon name={item.iconName} size={18} />
+                  </View>
+                ) : null}
+                <View style={styles.activityInfo}>
+                  <Text style={styles.activityTitle}>{item.title}</Text>
+                  <Text style={styles.activityTime}>{item.detail}</Text>
+                </View>
+                {i === 0 && (
+                  <StatusIndicator status="ok" size={20} />
+                )}
+              </View>
+            ))}
+          </Card>
+        );
+      })()}
 
       <View style={{height: 24}} />
-    </ScrollView>
+      </>
+    )}
+  />
   );
 };
 
@@ -147,6 +364,7 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: spacing.screenPaddingHorizontal,
     paddingTop: spacing.screenPaddingTop,
+    paddingBottom: 100,
   },
 
   // ── Header ──
@@ -175,8 +393,6 @@ const styles = StyleSheet.create({
   notifButton: {
     width: 44,
     height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -229,6 +445,21 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.textPrimary,
   },
+  sectionActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  refreshButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
   seeAll: {
     fontSize: fontSize.caption,
     color: colors.primary,
@@ -240,28 +471,97 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
 
-  // ── Health Connect ──
-  hcCard: {
-    marginTop: 4,
+  // ── Warning / Error ──
+  warningCard: {
+    backgroundColor: colors.warningLight,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.warning,
   },
-  hcTitle: {
+  errorCard: {
+    backgroundColor: colors.dangerLight,
+    borderLeftColor: colors.danger,
+  },
+  warningTitle: {
     fontSize: fontSize.body,
     fontWeight: '600',
     color: colors.textPrimary,
     marginBottom: 4,
   },
-  hcText: {
+  warningText: {
     fontSize: fontSize.caption,
     color: colors.textSecondary,
   },
 
-  // ── Última Actividad ──
-  activityRow: {
+  // ── Resumen del día ──
+  resumenTitle: {
+    fontSize: fontSize.body,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginBottom: 12,
+    marginTop: 4,
+  },
+  daySummaryGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  daySummaryCard: {
+    backgroundColor: colors.surface,
+    borderRadius: spacing.cardBorderRadius,
+    padding: 12,
+    width: '23%',
     alignItems: 'center',
   },
-  activityInfo: {},
+  daySummaryIconCircle: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  daySummaryIcon: {
+    fontSize: 22,
+    marginBottom: 6,
+  },
+  daySummaryValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  daySummaryLabel: {
+    fontSize: fontSize.caption,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  hcText: {
+    fontSize: fontSize.caption,
+    color: colors.textSecondary,
+    marginVertical: 1,
+  },
+
+  // ── Última Actividad ──
+  activityIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  activityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  activityRowLast: {
+    borderBottomWidth: 0,
+  },
+  activityInfo: {
+    flex: 1,
+  },
   activityTitle: {
     fontSize: fontSize.body,
     fontWeight: '500',
@@ -271,19 +571,6 @@ const styles = StyleSheet.create({
     fontSize: fontSize.caption,
     color: colors.textSecondary,
     marginTop: 2,
-  },
-  activityCheck: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.successLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  checkIcon: {
-    fontSize: 14,
-    color: colors.success,
-    fontWeight: '700',
   },
 });
 

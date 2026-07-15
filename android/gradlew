@@ -173,9 +173,10 @@ fi
 #   * DEFAULT_JVM_OPTS, JAVA_OPTS, and GRADLE_OPTS environment variables.
 
 # For WSL, switch paths to Windows format before running java
-if grep -qi microsoft /proc/version 2>/dev/null; then
-    APP_HOME=$(wslpath -w "$APP_HOME" 2>/dev/null || echo "$APP_HOME")
-fi
+# DISABLED: CI uses Linux natively, this conversion breaks paths on GitHub Actions
+# if grep -qi microsoft /proc/version 2>/dev/null; then
+#     APP_HOME=$(wslpath -w "$APP_HOME" 2>/dev/null || echo "$APP_HOME")
+# fi
 
 # For Cygwin or MSYS, switch paths to Windows format before running java
 if "$cygwin" || "$msys" ; then

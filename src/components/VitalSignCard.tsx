@@ -1,12 +1,16 @@
 import React from 'react';
 import {View, Text, Pressable, StyleSheet} from 'react-native';
 import {colors, spacing, fontSize, shadows} from '../theme';
+import AppIcon, {type AppIconName} from './AppIcon';
+import FlechaIcon from './FlechaIcon';
 
 interface VitalSignCardProps {
   label: string;
   value: string;
   unit?: string;
-  icon: string;        // emoji placeholder
+  icon: string;        // emoji placeholder (fallback)
+  iconName?: AppIconName; // icono PNG (reemplaza al emoji)
+  iconSize?: number;   // tamaño del icono PNG (default: 24)
   iconBgColor: string; // color de fondo del icono
   trend?: 'up' | 'down' | 'stable';
   onPress?: () => void;
@@ -21,6 +25,8 @@ const VitalSignCard: React.FC<VitalSignCardProps> = ({
   value,
   unit,
   icon,
+  iconName,
+  iconSize = 24,
   iconBgColor,
   trend,
   onPress,
@@ -29,24 +35,31 @@ const VitalSignCard: React.FC<VitalSignCardProps> = ({
 
   const content = (
     <>
-      {/* Icono */}
-      <View style={[styles.iconContainer, {backgroundColor: iconBgColor + '20'}]}>
-        <Text style={[styles.icon, {color: iconBgColor}]}>{icon}</Text>
+      {/* Fila superior: icono + flecha de tendencia */}
+      <View style={styles.topRow}>
+        <View style={[styles.iconContainer, {backgroundColor: iconBgColor + '20'}]}>
+          {iconName ? (
+            <AppIcon name={iconName} size={iconSize} />
+          ) : (
+            <Text style={[styles.icon, {color: iconBgColor}]}>{icon}</Text>
+          )}
+        </View>
+        {trend && (
+          <FlechaIcon
+            direction={trend === 'up' ? 'up' : trend === 'down' ? 'down' : 'right'}
+            size={14}
+            color={trendColor}
+            style={{opacity: 0.65}}
+          />
+        )}
       </View>
 
       {/* Valor */}
       <Text style={styles.value}>{value}</Text>
       {unit && <Text style={styles.unit}>{unit}</Text>}
 
-      {/* Label + tendencia */}
-      <View style={styles.bottomRow}>
-        <Text style={styles.label}>{label}</Text>
-        {trend && (
-          <Text style={[styles.trend, {color: trendColor}]}>
-            {trend === 'up' ? '↑' : trend === 'down' ? '↓' : '→'}
-          </Text>
-        )}
-      </View>
+      {/* Label */}
+      <Text style={styles.label}>{label}</Text>
     </>
   );
 
@@ -65,13 +78,18 @@ const styles = StyleSheet.create({
     marginBottom: spacing.gridGap,
     ...shadows.card,
   },
-  iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    justifyContent: 'center',
+  topRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
+  },
+  iconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   icon: {
     fontSize: 20,
@@ -87,21 +105,10 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: 2,
   },
-  bottomRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 6,
-  },
   label: {
     fontSize: fontSize.metricLabel,
     color: colors.textSecondary,
-    flex: 1,
-  },
-  trend: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 4,
+    marginTop: 6,
   },
 });
 

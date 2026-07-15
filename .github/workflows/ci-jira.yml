@@ -1,0 +1,72 @@
+name: CI - Jira Sync (Push)
+
+on:
+  push:
+    branches:
+      - 'scrum-*'
+
+env:
+  JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+  JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+  JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+
+jobs:
+  build-and-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Make transition script executable
+        run: chmod +x scripts/jira-transition.sh
+
+      - name: Extract Jira issue key
+        id: extract
+        run: |
+          BRANCH="${GITHUB_REF_NAME}"
+          if [[ "$BRANCH" =~ scrum-([0-9]+) ]]; then
+            ISSUE_NUM="${BASH_REMATCH[1]}"
+            echo "issue_key=SCRUM-${ISSUE_NUM}" >> "$GITHUB_OUTPUT"
+            echo "✅ Extracted issue key: SCRUM-${ISSUE_NUM}"
+          else
+            echo "⚠️ Branch '$BRANCH' does not match scrum-{number}. Skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Transition to In Progress
+        if: steps.extract.outputs.skip != 'true'
+        run: ./scripts/jira-transition.sh "${{ steps.extract.outputs.issue_key }}" "In Progress"
+
+      - name: Build Android (debug)
+        id: build
+        if: steps.extract.outputs.skip != 'true'
+        run: cd android && ./gradlew assembleDebug
+        continue-on-error: true
+
+      - name: Transition to Bugs (build failed)
+        if: steps.extract.outputs.skip != 'true' && steps.build.outcome == 'failure'
+        run: |
+          echo "❌ Build failed → Bugs"
+          ./scripts/jira-transition.sh "${{ steps.extract.outputs.issue_key }}" "Bugs"
+
+      - name: Fail workflow if build failed
+        if: steps.build.outcome == 'failure'
+        run: exit 1

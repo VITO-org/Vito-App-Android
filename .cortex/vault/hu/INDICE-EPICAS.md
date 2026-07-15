@@ -104,7 +104,7 @@
 
 | HU | Título | Sprint | Fechas | Release | Capa |
 |----|--------|--------|--------|---------|------|
-| HU-91 | Definición de features para modelos ML | S2 | 3 jun - 9 jun | R1 | IA |
+| HU-91 | Predicción de Riesgo Cardiovascular con ML | S2 | 3 jun - 9 jun | R1 | IA |
 | HU-92 | Diseño de modelo de datos orientado a ML | S2 | 3 jun - 9 jun | R1 | Back / IA |
 | HU-93 | Selección de tecnologías de IA/ML | S2 | 3 jun - 9 jun | R1 | IA |
 | HU-94 | Captura estructurada para pipeline ML | S5 | 24 jun - 30 jun | R2 | Back / IA |

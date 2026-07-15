@@ -4,9 +4,12 @@ import android.content.Intent
 import android.net.Uri
 import android.util.Log
 import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.records.BloodPressureRecord
+import androidx.health.connect.client.records.BodyTemperatureRecord
 import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
+import androidx.health.connect.client.records.OxygenSaturationRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
@@ -44,6 +47,9 @@ class HealthDataProvider(
             androidx.health.connect.client.permission.HealthPermission.getReadPermission(SleepSessionRecord::class),
             androidx.health.connect.client.permission.HealthPermission.getReadPermission(ExerciseSessionRecord::class),
             androidx.health.connect.client.permission.HealthPermission.getReadPermission(TotalCaloriesBurnedRecord::class),
+            androidx.health.connect.client.permission.HealthPermission.getReadPermission(BloodPressureRecord::class),
+            androidx.health.connect.client.permission.HealthPermission.getReadPermission(OxygenSaturationRecord::class),
+            androidx.health.connect.client.permission.HealthPermission.getReadPermission(BodyTemperatureRecord::class),
         )
 
         /**
@@ -86,6 +92,7 @@ class HealthDataProvider(
      */
     suspend fun loadTodayData(): HealthSummary {
         val timeRange = todayTimeRange()
+        Log.d(TAG, "=== loadTodayData ===")
 
         // Aggregate: pasos, distancia, calorías
         val aggregate = healthConnectClient.aggregate(
@@ -145,15 +152,109 @@ class HealthDataProvider(
             .takeIf { samples -> samples.isNotEmpty() }
             ?.average()
 
+        // Leer presión arterial
+        Log.d(TAG, "Cargando presión arterial...")
+        Log.d(TAG, "TimeRange (hoy): $timeRange")
+        val bloodPressureRecords = try {
+            val records = healthConnectClient.readRecords(
+                ReadRecordsRequest(
+                    recordType = BloodPressureRecord::class,
+                    timeRangeFilter = timeRange,
+                ),
+            ).records
+            Log.d(TAG, "Registros BP hoy: ${records.size}")
+            if (records.isNotEmpty()) {
+                val r = records.first()
+                Log.d(TAG, "Primer BP hoy - systolic: ${r.systolic?.inMillimetersOfMercury}, diastolic: ${r.diastolic?.inMillimetersOfMercury}, time: ${r.time}")
+            }
+            records
+        } catch (e: Exception) {
+            Log.w(TAG, "Error leyendo BP hoy, continuando...", e)
+            emptyList()
+        }
+        // También buscar en últimos 7 días (Health Sync puede tener delay)
+        val weekTimeRange = TimeRangeFilter.between(
+            Instant.now().minus(java.time.Duration.ofDays(7)),
+            Instant.now()
+        )
+        val bpRecordsWeek = try {
+            val records = healthConnectClient.readRecords(
+                ReadRecordsRequest(
+                    recordType = BloodPressureRecord::class,
+                    timeRangeFilter = weekTimeRange,
+                ),
+            ).records
+            Log.d(TAG, "Registros BP últimos 7 días: ${records.size}")
+            if (records.isNotEmpty()) {
+                val r = records.last()
+                Log.d(TAG, "Último BP 7d - systolic: ${r.systolic?.inMillimetersOfMercury}, diastolic: ${r.diastolic?.inMillimetersOfMercury}, time: ${r.time}")
+            }
+            records
+        } catch (e: Exception) {
+            Log.w(TAG, "Error leyendo BP 7d, continuando...", e)
+            emptyList()
+        }
+        // Usar el más reciente entre ambos rangos
+        val allBpRecords = bloodPressureRecords + bpRecordsWeek
+        val latestBp = allBpRecords.maxByOrNull { it.time }
+        val bloodPressureSystolic = latestBp?.systolic?.inMillimetersOfMercury
+        val bloodPressureDiastolic = latestBp?.diastolic?.inMillimetersOfMercury
+        Log.d(TAG, "BP final (combinado) - systolic: $bloodPressureSystolic, diastolic: $bloodPressureDiastolic")
+
+        // Leer saturación de oxígeno
+        val spo2Records = try {
+            healthConnectClient.readRecords(
+                ReadRecordsRequest(
+                    recordType = OxygenSaturationRecord::class,
+                    timeRangeFilter = timeRange,
+                ),
+            ).records
+        } catch (e: Exception) {
+            Log.w(TAG, "Error leyendo SpO2, continuando...", e)
+            emptyList()
+        }
+        val latestSpo2 = spo2Records.maxByOrNull { it.time }
+        val spo2Percent = latestSpo2?.percentage?.value
+
+        // Leer temperatura corporal
+        val temperatureRecords = try {
+            healthConnectClient.readRecords(
+                ReadRecordsRequest(
+                    recordType = BodyTemperatureRecord::class,
+                    timeRangeFilter = timeRange,
+                ),
+            ).records
+        } catch (e: Exception) {
+            Log.w(TAG, "Error leyendo temperatura, continuando...", e)
+            emptyList()
+        }
+        val latestTemp = temperatureRecords.maxByOrNull { it.time }
+        val bodyTemperatureCelsius = latestTemp?.temperature?.inCelsius
+
+        // Descartar calorías huérfanas: si no hay pasos ni distancia,
+        // cualquier caloría reportada probablemente es un residual de otro sensor.
+        val steps = aggregate[StepsRecord.COUNT_TOTAL] ?: 0L
+        val distanceMeters = aggregate[DistanceRecord.DISTANCE_TOTAL]?.inMeters ?: 0.0
+        var caloriesKcal = aggregate[TotalCaloriesBurnedRecord.ENERGY_TOTAL]?.inKilocalories ?: 0.0
+
+        if (steps == 0L && distanceMeters == 0.0 && caloriesKcal > 0.0) {
+            Log.w(TAG, "Calories=$caloriesKcal con steps=0 y distance=0, forzando a 0.0")
+            caloriesKcal = 0.0
+        }
+
         return HealthSummary(
-            steps = aggregate[StepsRecord.COUNT_TOTAL] ?: 0L,
-            distanceMeters = aggregate[DistanceRecord.DISTANCE_TOTAL]?.inMeters ?: 0.0,
-            caloriesKcal = aggregate[TotalCaloriesBurnedRecord.ENERGY_TOTAL]?.inKilocalories ?: 0.0,
+            steps = steps,
+            distanceMeters = distanceMeters,
+            caloriesKcal = caloriesKcal,
             sleepMinutes = sleepSessions.sumOf { session ->
                 Duration.between(session.startTime, session.endTime).toMinutes()
             },
             averageBpm = averageBpm,
             exerciseSessions = exercises.size,
+            bloodPressureSystolic = bloodPressureSystolic,
+            bloodPressureDiastolic = bloodPressureDiastolic,
+            spo2Percent = spo2Percent,
+            bodyTemperatureCelsius = bodyTemperatureCelsius,
         )
     }
 
@@ -164,3 +265,4 @@ class HealthDataProvider(
         return healthConnectClient.permissionController.getGrantedPermissions()
     }
 }
+
