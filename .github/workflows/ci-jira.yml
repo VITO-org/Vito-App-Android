@@ -111,3 +111,60 @@ jobs:
         id: build
         run: cd android && ./gradlew assembleDebug --no-daemon --parallel --build-cache
         continue-on-error: true
+
+  discord-notify:
+    needs: [jira-sync, js-lint-test, android-build]
+    runs-on: ubuntu-latest
+    if: always() && github.event.head_commit != null
+    env:
+      DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_FEATURES }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Make discord-notify.sh executable
+        run: chmod +x scripts/discord-notify.sh
+
+      - name: Determine status
+        id: status
+        run: |
+          if [[ "${{ needs.js-lint-test.result }}" == "failure" ]] || [[ "${{ needs.android-build.result }}" == "failure" ]]; then
+            echo "emoji=❌" >> "$GITHUB_OUTPUT"
+            echo "color=15158332" >> "$GITHUB_OUTPUT"
+            echo "build_status=Fallido" >> "$GITHUB_OUTPUT"
+            echo "jira_status=Bugs" >> "$GITHUB_OUTPUT"
+          else
+            echo "emoji=✅" >> "$GITHUB_OUTPUT"
+            echo "color=3066993" >> "$GITHUB_OUTPUT"
+            echo "build_status=Exitoso" >> "$GITHUB_OUTPUT"
+            echo "jira_status=In Progress" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Notify Discord
+        if: env.DISCORD_WEBHOOK != ''
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_FEATURES }}
+        run: |
+          COMMIT_MSG=$(echo "${{ github.event.head_commit.message }}" | head -1)
+          FIELDS=$(jq -n \
+            --arg author "${{ github.actor }}" \
+            --arg branch "${{ github.ref_name }}" \
+            --arg commit "$COMMIT_MSG" \
+            --arg link "${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}" \
+            --arg build "${{ steps.status.outputs.emoji }} ${{ steps.status.outputs.build_status }}" \
+            --arg jira "${{ steps.status.outputs.jira_status }}" \
+            '[
+              {name: "👤 Autor", value: $author, inline: true},
+              {name: "🌿 Rama", value: $branch, inline: true},
+              {name: "💬 Commit", value: $commit, inline: false},
+              {name: "🔗 Link", value: $link, inline: false},
+              {name: "🔨 Build", value: $build, inline: true},
+              {name: "📋 Jira", value: $jira, inline: true}
+            ]')
+          ./scripts/discord-notify.sh \
+            "$DISCORD_WEBHOOK" \
+            "${{ steps.status.outputs.emoji }} Push a rama ${{ github.ref_name }}" \
+            "" \
+            "${{ steps.status.outputs.color }}" \
+            "$FIELDS"
+        continue-on-error: true

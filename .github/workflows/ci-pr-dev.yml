@@ -115,3 +115,58 @@ jobs:
         id: build
         run: cd android && ./gradlew assembleDebug --no-daemon --parallel --build-cache
         continue-on-error: true
+
+  discord-notify:
+    needs: [jira-sync, js-lint-test, android-build]
+    runs-on: ubuntu-latest
+    if: always()
+    env:
+      DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_PR }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Make discord-notify.sh executable
+        run: chmod +x scripts/discord-notify.sh
+
+      - name: Determine status
+        id: status
+        run: |
+          if [[ "${{ needs.js-lint-test.result }}" == "failure" ]] || [[ "${{ needs.android-build.result }}" == "failure" ]]; then
+            echo "emoji=❌" >> "$GITHUB_OUTPUT"
+            echo "color=15158332" >> "$GITHUB_OUTPUT"
+            echo "ci_status=Fallido" >> "$GITHUB_OUTPUT"
+            echo "jira_status=Bugs" >> "$GITHUB_OUTPUT"
+          else
+            echo "emoji=✅" >> "$GITHUB_OUTPUT"
+            echo "color=3066993" >> "$GITHUB_OUTPUT"
+            echo "ci_status=Exitoso" >> "$GITHUB_OUTPUT"
+            echo "jira_status=Done" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Notify Discord
+        if: env.DISCORD_WEBHOOK != ''
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_PR }}
+        run: |
+          FIELDS=$(jq -n \
+            --arg pr "${{ github.event.pull_request.title }}" \
+            --arg pr_link "${{ github.event.pull_request.html_url }}" \
+            --arg author "${{ github.event.pull_request.user.login }}" \
+            --arg branch "${{ github.head_ref }} → ${{ github.base_ref }}" \
+            --arg ci "${{ steps.status.outputs.emoji }} ${{ steps.status.outputs.ci_status }}" \
+            --arg jira "${{ steps.status.outputs.jira_status }}" \
+            '[
+              {name: "📄 PR", value: ($pr + "\n" + $pr_link), inline: false},
+              {name: "👤 Autor", value: $author, inline: true},
+              {name: "🔀 Branch", value: $branch, inline: true},
+              {name: "✅ CI", value: $ci, inline: true},
+              {name: "📋 Jira", value: $jira, inline: true}
+            ]')
+          ./scripts/discord-notify.sh \
+            "$DISCORD_WEBHOOK" \
+            "${{ steps.status.outputs.emoji }} Pull Request a ${{ github.base_ref }}" \
+            "" \
+            "${{ steps.status.outputs.color }}" \
+            "$FIELDS"
+        continue-on-error: true
