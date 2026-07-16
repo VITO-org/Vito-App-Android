@@ -1,5 +1,7 @@
 # Vito Health Connect
 
+Probando integracion discord
+
 Aplicación móvil de salud y bienestar que integra **Google Health Connect** para leer métricas biométricas (pasos, distancia, calorías, sueño, frecuencia cardíaca y ejercicio).
 
 ## Índice
