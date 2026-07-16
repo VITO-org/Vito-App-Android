@@ -5,53 +5,19 @@ on:
     branches:
       - 'scrum-*'
 
-env:
-  JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
-  JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
-  JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-
 jobs:
-  build-and-sync:
+  jira-sync:
     runs-on: ubuntu-latest
+    env:
+      JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+      JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Gradle cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
-          restore-keys: gradle-${{ runner.os }}-
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-
       - name: Make transition script executable
         run: chmod +x scripts/jira-transition.sh
-
-      - name: Fix gradlew line endings
-        run: sed -i 's/\r$//' android/gradlew
 
       - name: Extract Jira issue key
         id: extract
@@ -70,30 +36,78 @@ jobs:
         if: steps.extract.outputs.skip != 'true'
         run: ./scripts/jira-transition.sh "${{ steps.extract.outputs.issue_key }}" "In Progress"
 
-      - name: Run Jest tests
+      - name: Transition to Bugs (any job failed)
+        if: steps.extract.outputs.skip != 'true' && (needs.js-lint-test.result == 'failure' || needs.android-build.result == 'failure')
+        run: |
+          echo "❌ Tests or build failed → Bugs"
+          ./scripts/jira-transition.sh "${{ steps.extract.outputs.issue_key }}" "Bugs"
+
+      - name: Fail workflow if any job failed
+        if: needs.js-lint-test.result == 'failure' || needs.android-build.result == 'failure'
+        run: exit 1
+
+  js-lint-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.11.0'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Type-check
+        run: npx tsc --noEmit
+        continue-on-error: true
+
+      - name: Unit tests (Jest)
         id: jest
-        if: steps.extract.outputs.skip != 'true'
         run: npx jest --passWithNoTests
         continue-on-error: true
 
-      - name: Run Android unit tests
+  android-build:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || contains(github.event.head_commit.modified, 'android/') || contains(github.event.head_commit.added, 'android/') || contains(github.event.head_commit.removed, 'android/')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Gradle cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Fix gradlew line endings
+        run: sed -i 's/\r$//' android/gradlew
+
+      - name: Android unit tests
         id: android_test
-        if: steps.extract.outputs.skip != 'true'
         run: cd android && ./gradlew testDebugUnitTest --no-daemon
         continue-on-error: true
 
       - name: Build Android (debug)
         id: build
-        if: steps.extract.outputs.skip != 'true'
         run: cd android && ./gradlew assembleDebug --no-daemon --parallel --build-cache
         continue-on-error: true
-
-      - name: Transition to Bugs (tests or build failed)
-        if: steps.extract.outputs.skip != 'true' && (steps.jest.outcome == 'failure' || steps.android_test.outcome == 'failure' || steps.build.outcome == 'failure')
-        run: |
-          echo "❌ Tests or build failed → Bugs"
-          ./scripts/jira-transition.sh "${{ steps.extract.outputs.issue_key }}" "Bugs"
-
-      - name: Fail workflow if tests or build failed
-        if: steps.jest.outcome == 'failure' || steps.android_test.outcome == 'failure' || steps.build.outcome == 'failure'
-        run: exit 1
