@@ -1,0 +1,3 @@
+# HU-122 - Prueba de integracion CI/CD con Jira
+# Branch: scrum-122
+# Fecha: 2026-07-15
