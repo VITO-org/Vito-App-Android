@@ -121,7 +121,7 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     env:
-      DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_PR }}
+      DISCORD_WEBHOOK: ${{ secrets.DISCORD_PR_WEBHOOK }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -147,7 +147,7 @@ jobs:
       - name: Notify Discord
         if: env.DISCORD_WEBHOOK != ''
         env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_PR }}
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_PR_WEBHOOK }}
         run: |
           FIELDS=$(jq -n \
             --arg pr "${{ github.event.pull_request.title }}" \
