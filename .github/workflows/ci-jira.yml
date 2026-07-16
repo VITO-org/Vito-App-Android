@@ -17,6 +17,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Gradle cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -38,6 +47,9 @@ jobs:
       - name: Make transition script executable
         run: chmod +x scripts/jira-transition.sh
 
+      - name: Fix gradlew line endings
+        run: sed -i 's/\r$//' android/gradlew
+
       - name: Extract Jira issue key
         id: extract
         run: |
@@ -55,22 +67,30 @@ jobs:
         if: steps.extract.outputs.skip != 'true'
         run: ./scripts/jira-transition.sh "${{ steps.extract.outputs.issue_key }}" "In Progress"
 
-      - name: Fix gradlew line endings
+      - name: Run Jest tests
+        id: jest
         if: steps.extract.outputs.skip != 'true'
-        run: sed -i 's/\r$//' android/gradlew
+        run: npx jest --passWithNoTests
+        continue-on-error: true
+
+      - name: Run Android unit tests
+        id: android_test
+        if: steps.extract.outputs.skip != 'true'
+        run: cd android && ./gradlew testDebugUnitTest --no-daemon
+        continue-on-error: true
 
       - name: Build Android (debug)
         id: build
         if: steps.extract.outputs.skip != 'true'
-        run: cd android && ./gradlew assembleDebug
+        run: cd android && ./gradlew assembleDebug --no-daemon --parallel --build-cache
         continue-on-error: true
 
-      - name: Transition to Bugs (build failed)
-        if: steps.extract.outputs.skip != 'true' && steps.build.outcome == 'failure'
+      - name: Transition to Bugs (tests or build failed)
+        if: steps.extract.outputs.skip != 'true' && (steps.jest.outcome == 'failure' || steps.android_test.outcome == 'failure' || steps.build.outcome == 'failure')
         run: |
-          echo "❌ Build failed → Bugs"
+          echo "❌ Tests or build failed → Bugs"
           ./scripts/jira-transition.sh "${{ steps.extract.outputs.issue_key }}" "Bugs"
 
-      - name: Fail workflow if build failed
-        if: steps.build.outcome == 'failure'
+      - name: Fail workflow if tests or build failed
+        if: steps.jest.outcome == 'failure' || steps.android_test.outcome == 'failure' || steps.build.outcome == 'failure'
         run: exit 1
