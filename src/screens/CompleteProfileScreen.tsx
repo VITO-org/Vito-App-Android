@@ -159,26 +159,19 @@ const CompleteProfileScreen: React.FC = () => {
     try {
       const fechaNac = `${anio}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
       const profileData = {
-        user_id: userId,
+        id_usuario: userId,
         nombre: nombre.trim(),
         apellido: apellido.trim() || null,
         dni: dni.trim() || null,
         telefono: telefono.trim() || null,
         fecha_nac: fechaNac,
         sexo,
+        altura_cm: altura.trim() ? parseFloat(altura) : null,
+        peso_kg: peso.trim() ? parseFloat(peso) : null,
       };
 
       // updateProfile ahora usa raw fetch internamente (bypassea bug de @supabase/supabase-js)
       await updateProfile(profileData);
-
-      // Guardar altura/peso en segundo plano (no crítico)
-      if (altura.trim() || peso.trim()) {
-        updateClinicalConfig({
-          id_usuario: userId,
-          altura_cm: altura.trim() ? parseFloat(altura) : null,
-          peso_kg: peso.trim() ? parseFloat(peso) : null,
-        }).catch(() => {});
-      }
 
       requestDoneRef.current = true;
       navigation.goBack();

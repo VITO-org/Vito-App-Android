@@ -170,21 +170,21 @@ export async function getProfile(
 ): Promise<PerfilUsuario | null> {
   const { data, error } = await rawSupabaseFetch<PerfilUsuario[]>(
     'perfil_usuario',
-    { query: `?user_id=eq.${userId}`, accessToken },
+    { query: `?id_usuario=eq.${userId}`, accessToken },
   );
   if (error) throw error;
   return (data ?? [])[0] ?? null;
 }
 
 export async function upsertProfile(
-  profile: Partial<PerfilUsuario> & { user_id: string },
+  profile: Partial<PerfilUsuario> & { id_usuario: string },
   accessToken?: string | null,
 ): Promise<PerfilUsuario> {
   const { data, error } = await rawSupabaseFetch<PerfilUsuario>(
     'perfil_usuario',
     {
       method: 'POST',
-      query: '?on_conflict=user_id',
+      query: '?on_conflict=id_usuario',
       body: profile,
       prefer: 'resolution=merge-duplicates,return=representation',
       accessToken,

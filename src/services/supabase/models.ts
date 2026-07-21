@@ -30,7 +30,7 @@ export type UsuarioInsert = Omit<Usuario, 'id' | 'created_at' | 'updated_at'> & 
 // ─── TABLA: perfil_usuario (con patologia, peso_kg, altura_cm) ───
 export interface PerfilUsuario {
   id: string;
-  user_id: string;
+  id_usuario: string;
   nombre: string | null;
   apellido: string | null;
   dni: string | null;

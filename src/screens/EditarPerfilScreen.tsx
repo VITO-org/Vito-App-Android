@@ -1,4 +1,4 @@
-import React, {useState, useCallback, useEffect} from 'react';
+import React, {useState, useCallback, useEffect, useMemo} from 'react';
 import {
   View,
   Text,
@@ -32,7 +32,7 @@ const SEXOS: {key: SexoBiologico; label: string}[] = [
  */
 const EditarPerfilScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const {session, profile, updateProfile, getUserId} = useSupabase();
+  const {session, profile, updateProfile, updateClinicalConfig, getUserId} = useSupabase();
 
   // ── Estado del formulario ──
   const [nombre, setNombre] = useState('');
@@ -78,6 +78,24 @@ const EditarPerfilScreen: React.FC = () => {
       : session?.user?.email?.split('@')[0] ?? 'Usuario';
 
   const email = session?.user?.email ?? '';
+
+  // ── Calcular edad ──
+  const calcularEdad = useCallback((): number | null => {
+    const d = parseInt(dia, 10);
+    const m = parseInt(mes, 10);
+    const a = parseInt(anio, 10);
+    if (!d || !m || !a) return null;
+    const hoy = new Date();
+    const nac = new Date(a, m - 1, d);
+    let edad = hoy.getFullYear() - nac.getFullYear();
+    const mesDiff = hoy.getMonth() - nac.getMonth();
+    if (mesDiff < 0 || (mesDiff === 0 && hoy.getDate() < nac.getDate())) {
+      edad--;
+    }
+    return edad;
+  }, [dia, mes, anio]);
+
+  const edad = calcularEdad();
 
   // ── Validación ──
   const validar = (): string | null => {
@@ -126,8 +144,9 @@ const EditarPerfilScreen: React.FC = () => {
         fechaNac = `${anio}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
       }
 
+      // 1. Guardar datos del perfil en perfil_usuario (incluye altura/peso)
       await updateProfile({
-        user_id: userId,
+        id_usuario: userId,
         nombre: nombre.trim(),
         apellido: apellido.trim() || null,
         dni: dni.trim() || null,
@@ -266,6 +285,13 @@ const EditarPerfilScreen: React.FC = () => {
               />
             </View>
           </View>
+
+          {/* Edad calculada */}
+          {edad != null && (
+            <View style={styles.ageBadge}>
+              <Text style={styles.ageText}>Edad: {edad} años</Text>
+            </View>
+          )}
 
           {/* Sexo biológico */}
           <Text style={styles.label}>Sexo biológico</Text>
@@ -428,6 +454,19 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: 24,
     fontWeight: '600',
+  },
+  ageBadge: {
+    backgroundColor: colors.successLight,
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    alignSelf: 'flex-start',
+    marginTop: 8,
+  },
+  ageText: {
+    fontSize: fontSize.caption,
+    fontWeight: '600',
+    color: colors.success,
   },
 
   // ── Sexo ──

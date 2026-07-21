@@ -21,7 +21,7 @@ interface SupabaseContextValue {
 
   // Profile actions
   refreshProfile: () => Promise<void>;
-  updateProfile: (data: Partial<PerfilUsuario> & { user_id: string }) => Promise<void>;
+  updateProfile: (data: Partial<PerfilUsuario> & { id_usuario: string }) => Promise<void>;
   updateClinicalConfig: (data: Partial<DatosClinicosConfig> & { id_usuario: string }) => Promise<void>;
 
   // Utilidad
@@ -48,10 +48,16 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
   // loadProfile: ahora recibe el access_token para bypassear @supabase/supabase-js
   const loadProfile = async (userId: string, accessToken?: string | null) => {
     try {
+      console.log(`[DIAG] loadProfile called: userId=${userId}, token=${accessToken?.slice(0,10)}...`);
       const p = await api.getProfile(userId, accessToken);
+      console.log(`[DIAG] getProfile returned: ${JSON.stringify(p)}`);
       setProfile(p);
-      setNeedsProfile(!p);
-    } catch {
+      const newNeedsProfile = !p;
+      console.log(`[DIAG] setting needsProfile=${newNeedsProfile} (p is ${p ? 'truthy' : 'null'})`);
+      setNeedsProfile(newNeedsProfile);
+    } catch (e: unknown) {
+      const err = e as Error;
+      console.log(`[DIAG] getProfile THREW: ${err.message}`);
       setNeedsProfile(false);
     }
   };
@@ -65,7 +71,9 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
 
     const recoverSession = async (): Promise<void> => {
       try {
+        console.log('[DIAG] recoverSession: calling getSession...');
         const { data: { session } } = await supabase.auth.getSession();
+        console.log(`[DIAG] recoverSession: session=${session ? 'FOUND (userId=' + session.user.id + ')' : 'NULL'}`);
         if (session?.user) {
           setSession(session);
           await loadProfile(session.user.id, session.access_token);
@@ -94,6 +102,7 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
 
     const { data: listener } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
+        console.log(`[DIAG] onAuthStateChange: event=${_event}, session=${session ? 'FOUND' : 'NULL'}`);
         setSession(session);
         if (session?.user) {
           try {
@@ -102,8 +111,11 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
             // Si loadProfile falla acá, no es crítico — el listener de getSession ya avanzó
           }
         } else {
+          // Solo limpiar si el usuario cerro sesion explicitamente.
+          // INITIAL_SESSION con null NO debe poner needsProfile=false
+          // porque un usuario nuevo tendria el valor por defecto (true).
+          console.log('[DIAG] onAuthStateChange: session null, clearing profile (NOT changing needsProfile)');
           setProfile(null);
-          setNeedsProfile(false);
         }
       },
     );
@@ -175,7 +187,7 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
   }, [getUserId, session]);
 
   const updateProfile = useCallback(
-    async (data: Partial<PerfilUsuario> & { user_id: string }) => {
+    async (data: Partial<PerfilUsuario> & { id_usuario: string }) => {
       const token = session?.access_token;
       const updated = await api.upsertProfile(data, token);
       setProfile(updated);
