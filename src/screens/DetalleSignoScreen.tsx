@@ -1,17 +1,17 @@
-import React, {useState, useEffect, useCallback} from 'react';
-import {View, Text, ScrollView, TouchableOpacity, StyleSheet, LayoutChangeEvent} from 'react-native';
+import React, {useState, useEffect, useCallback, useMemo} from 'react';
+import {View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator} from 'react-native';
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
+import {LineChart} from 'react-native-gifted-charts';
 import {colors, fontSize, spacing} from '../theme';
 import Card from '../components/Card';
 import FlechaIcon from '../components/FlechaIcon';
-import LineChart from '../components/LineChart';
 import ResumenEstadistico from '../components/ResumenEstadistico';
 import {useSupabase} from '../context/SupabaseProvider';
-import {getDatosReloj} from '../services/supabase/api';
-import type {DatoReloj} from '../services/supabase/models';
+import {getDatosReloj, getBaseline} from '../services/supabase/api';
+import type {DatoReloj, BaselineClinico} from '../services/supabase/models';
+import {getDailyAveragesForRange} from '../services/HealthDataCache';
 import {
   VistaReporte,
-  MockRegistro,
   TipoSignoVital,
   NORMAL_RANGES,
 } from '../data/mockReportes';
@@ -36,9 +36,7 @@ const VISTAS: {key: VistaReporte; label: string}[] = [
 
 const DAY_LABELS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
-/**
- * Extrae el valor numérico de un DatoReloj según el tipo de signo vital.
- */
+/** Extrae el valor numérico de un DatoReloj según el tipo de signo vital. */
 function extraerValor(dato: DatoReloj, tipo: TipoSignoVital): number | null {
   switch (tipo) {
     case 'frecuencia_cardiaca': return dato.frec_cardiaca_bpm;
@@ -49,18 +47,31 @@ function extraerValor(dato: DatoReloj, tipo: TipoSignoVital): number | null {
   }
 }
 
-/**
- * Agrupa registros por día (según recorded_at) y devuelve el promedio de cada día.
- */
+/** Extrae el valor del cache local según el tipo de signo vital. */
+function extraerValorCache(
+  avg: {averageBpm: number | null; bloodPressureSystolic: number | null; bloodPressureDiastolic: number | null; spo2Percent: number | null; bodyTemperatureCelsius: number | null},
+  tipo: TipoSignoVital,
+): number | null {
+  switch (tipo) {
+    case 'frecuencia_cardiaca': return avg.averageBpm;
+    case 'presion_sistolica':   return avg.bloodPressureSystolic;
+    case 'presion_diastolica':  return avg.bloodPressureDiastolic;
+    case 'saturacion_oxigeno':  return avg.spo2Percent;
+    case 'temperatura':         return avg.bodyTemperatureCelsius;
+  }
+}
+
+/** Agrupa registros por día y devuelve el promedio. */
 function agruparPorDia(
   datos: DatoReloj[],
   tipo: TipoSignoVital,
-  rango: {min: number; max: number},
-): MockRegistro[] {
+  normalMin: number,
+  normalMax: number,
+): {label: string; value: number; isAbnormal: boolean; timestamp: Date}[] {
   const map = new Map<string, number[]>();
   for (const d of datos) {
     if (!d.recorded_at) continue;
-    const dia = d.recorded_at.slice(0, 10); // "2026-06-10"
+    const dia = d.recorded_at.slice(0, 10);
     const val = extraerValor(d, tipo);
     if (val == null) continue;
     const arr = map.get(dia) ?? [];
@@ -68,14 +79,14 @@ function agruparPorDia(
     map.set(dia, arr);
   }
 
-  const result: MockRegistro[] = [];
+  const result: {label: string; value: number; isAbnormal: boolean; timestamp: Date}[] = [];
   for (const [dia, valores] of map) {
     const avg = valores.reduce((a, b) => a + b, 0) / valores.length;
     const fecha = new Date(dia);
     result.push({
       label: DAY_LABELS[fecha.getDay()],
       value: tipo === 'temperatura' ? parseFloat(avg.toFixed(1)) : Math.round(avg),
-      isAbnormal: avg < rango.min || avg > rango.max,
+      isAbnormal: avg < normalMin || avg > normalMax,
       timestamp: fecha,
     });
   }
@@ -84,13 +95,40 @@ function agruparPorDia(
 
 export default function DetalleSignoScreen({route, navigation}: Props) {
   const {tipoSigno, label, unit} = route.params;
-  const {getUserId} = useSupabase();
+  const {getUserId, session} = useSupabase();
 
   const [vista, setVista] = useState<VistaReporte>('daily');
-  const [data, setData] = useState<MockRegistro[]>([]);
-  const [chartWidth, setChartWidth] = useState(0);
-  const [loadingDatos, setLoadingDatos] = useState(false);
+  const [chartData, setChartData] = useState<{value: number; label: string; dataPointText: string}[]>([]);
+  const [values, setValues] = useState<number[]>([]);
+  const [normalMin, setNormalMin] = useState(NORMAL_RANGES[tipoSigno as TipoSignoVital].min);
+  const [normalMax, setNormalMax] = useState(NORMAL_RANGES[tipoSigno as TipoSignoVital].max);
+  const [loading, setLoading] = useState(false);
+  const [hasData, setHasData] = useState(false);
 
+  const t = tipoSigno as TipoSignoVital;
+  const isTemperature = t === 'temperatura';
+
+  // Cargar baseline del paciente
+  useEffect(() => {
+    let cancelled = false;
+    async function loadBaseline() {
+      const userId = getUserId();
+      if (!userId) return;
+      try {
+        const baseline = await getBaseline(userId);
+        if (cancelled || !baseline) return;
+        const ranges = getBaselineRange(baseline, t);
+        if (ranges) {
+          setNormalMin(ranges.min);
+          setNormalMax(ranges.max);
+        }
+      } catch {}
+    }
+    loadBaseline();
+    return () => { cancelled = true; };
+  }, [getUserId, t]);
+
+  // Cargar datos según la vista seleccionada
   useEffect(() => {
     let cancelled = false;
 
@@ -98,11 +136,8 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
       const userId = getUserId();
       if (!userId) return;
 
-      setLoadingDatos(true);
-      const t = tipoSigno as TipoSignoVital;
-      const rango = NORMAL_RANGES[t];
+      setLoading(true);
       const now = new Date();
-
       let desde: Date;
       let limite: number;
 
@@ -122,7 +157,7 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
       }
 
       try {
-        const datos = await getDatosReloj(userId, {
+        let datos = await getDatosReloj(userId, {
           from: desde.toISOString(),
           to: now.toISOString(),
           limit: limite,
@@ -130,51 +165,75 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
 
         if (cancelled) return;
 
+        // Fallback a cache local si Supabase no tiene datos
         if (datos.length === 0) {
-          setData([]);
+          datos = await getCacheData(desde, now, t);
+        }
+
+        if (datos.length === 0) {
+          setChartData([]);
+          setValues([]);
+          setHasData(false);
           return;
         }
 
-        let registros: MockRegistro[];
+        let registros: {label: string; value: number; isAbnormal: boolean}[];
 
         if (vista === 'daily') {
-          // Vista diaria: puntos individuales con hora
           registros = datos.map(d => {
             const val = extraerValor(d, t) ?? 0;
             const fecha = new Date(d.recorded_at!);
             return {
               label: `${String(fecha.getHours()).padStart(2, '0')}:${String(fecha.getMinutes()).padStart(2, '0')}`,
               value: val,
-              isAbnormal: val < rango.min || val > rango.max,
-              timestamp: fecha,
+              isAbnormal: val < normalMin || val > normalMax,
             };
-          }).sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+          }).sort((a, b) => {
+            const timeA = a.label;
+            const timeB = b.label;
+            return timeA.localeCompare(timeB);
+          });
         } else {
-          // Semanal / Mensual: agrupar por día y promediar
-          registros = agruparPorDia(datos, t, rango);
+          registros = agruparPorDia(datos, t, normalMin, normalMax);
         }
 
-        setData(registros);
-      } catch (err) {
-        if (!cancelled) setData([]);
+        // Transformar a formato gifted-charts
+        const giftedData = registros.map(r => ({
+          value: r.value,
+          label: r.label,
+          dataPointText: '',
+        }));
+
+        if (!cancelled) {
+          setChartData(giftedData);
+          setValues(registros.map(r => r.value));
+          setHasData(registros.length > 0);
+        }
+      } catch {
+        if (!cancelled) {
+          setChartData([]);
+          setValues([]);
+          setHasData(false);
+        }
       } finally {
-        if (!cancelled) setLoadingDatos(false);
+        if (!cancelled) setLoading(false);
       }
     }
 
     fetchData();
     return () => { cancelled = true; };
-  }, [vista, tipoSigno, getUserId]);
+  }, [vista, tipoSigno, getUserId, normalMin, normalMax, t]);
 
-  const normalRange = NORMAL_RANGES[tipoSigno as TipoSignoVital];
-  const values = data.map(d => d.value);
+  const refLineValue = useMemo(() => (normalMin + normalMax) / 2, [normalMin, normalMax]);
 
-  const onLayout = useCallback((e: LayoutChangeEvent) => {
-    setChartWidth(e.nativeEvent.layout.width);
-  }, []);
+  const formatYLabel = useCallback((v: string) => {
+    const num = parseFloat(v);
+    return isTemperature ? num.toFixed(1) : String(Math.round(num));
+  }, [isTemperature]);
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <FlechaIcon direction="left" size={14} color={colors.primary} style={{marginRight: 6}} />
@@ -184,6 +243,7 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
         {unit ? <Text style={styles.unit}>{unit}</Text> : null}
       </View>
 
+      {/* Filtro Diario / Semanal / Mensual */}
       <View style={styles.segmentRow}>
         {VISTAS.map(v => (
           <TouchableOpacity
@@ -197,41 +257,90 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
         ))}
       </View>
 
-      {data.length === 0 && !loadingDatos && (
+      {/* Estado vacío */}
+      {chartData.length === 0 && !loading && (
         <Card>
           <Text style={styles.emptyText}>
-            Aún no hay datos históricos para mostrar.
-            {'\n'}Los datos del reloj se sincronizarán automáticamente cada 10 minutos.
+            Aun no hay datos historicos para mostrar.
+            {'\n'}Los datos del reloj se sincronizaran automaticamente.
           </Text>
         </Card>
       )}
 
-      {loadingDatos && (
-        <Card>
-          <Text style={styles.emptyText}>Cargando datos...</Text>
+      {/* Loading */}
+      {loading && (
+        <Card style={styles.loadingCard}>
+          <ActivityIndicator size="small" color={colors.primary} />
+          <Text style={styles.loadingText}>Cargando datos...</Text>
         </Card>
       )}
 
-      <View style={styles.chartWrapper} onLayout={onLayout}>
-        {chartWidth > 0 && data.length > 0 && (
+      {/* Gráfico gifted-charts */}
+      {chartData.length > 0 && (
+        <Card style={styles.chartCard}>
           <LineChart
-            data={data}
-            normalRange={normalRange}
-            width={chartWidth}
-            height={280}
-            viewMode={vista}
+            data={chartData}
+            width={spacing.screenPaddingHorizontal * 2 + 200}
+            height={220}
+            spacing={vista === 'daily' ? 40 : 60}
+            color={colors.primary}
+            thickness={2}
+            curved
+            areaChart
+            startFillColor={colors.primary}
+            endFillColor={colors.backgroundLight}
+            startOpacity={0.3}
+            endOpacity={0.0}
+            dataPointsColor={colors.primary}
+            dataPointsRadius={4}
+            textColor={colors.textSecondary}
+            textFontSize={10}
+            yAxisColor={colors.border}
+            xAxisColor={colors.border}
+            yAxisTextStyle={{color: colors.textSecondary, fontSize: 10}}
+            xAxisLabelTextStyle={{color: colors.textSecondary, fontSize: 9}}
+            noOfSections={5}
+            yAxisOffset={0}
+            formatYLabel={formatYLabel}
+            referenceLine={{
+              config: {
+                color: colors.primarySoft,
+                thickness: 1.5,
+                dashWidth: 6,
+                dashGap: 4,
+                labelComponent: () => (
+                  <Text style={styles.refLabel}>
+                    Normal: {normalMin}–{normalMax}
+                  </Text>
+                ),
+              },
+              value: refLineValue,
+            }}
+            onFocus={(item: {value: number; label: string; dataPointText: string}) => {}}
+            pressPointIndex={-1}
+            hideRules={false}
+            rulesColor={colors.border}
+            rulesType="dashed"
+            animateOnDataChange
+            animationDuration={800}
           />
-        )}
-      </View>
-
-      {data.length > 0 && (
-        <ResumenEstadistico values={values} unit={unit} normalRange={normalRange} />
+        </Card>
       )}
 
+      {/* Resumen estadístico */}
+      {values.length > 0 && (
+        <ResumenEstadistico
+          values={values}
+          unit={unit}
+          normalRange={{min: normalMin, max: normalMax}}
+        />
+      )}
+
+      {/* Rango normal */}
       <Card>
         <Text style={styles.rangeTitle}>Rango normal</Text>
         <Text style={styles.rangeText}>
-          Valores normales: {normalRange.min} - {normalRange.max} {unit}
+          Valores normales: {normalMin} - {normalMax} {unit}
         </Text>
       </Card>
 
@@ -239,6 +348,74 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
     </ScrollView>
   );
 }
+
+// ─── Helpers ───
+
+/** Obtiene el rango normal desde el baseline del paciente */
+function getBaselineRange(baseline: BaselineClinico, tipo: TipoSignoVital): {min: number; max: number} | null {
+  switch (tipo) {
+    case 'frecuencia_cardiaca':
+      if (baseline.hr_min != null && baseline.hr_max != null) {
+        return {min: baseline.hr_min, max: baseline.hr_max};
+      }
+      break;
+    case 'presion_sistolica':
+      if (baseline.bp_sist_min != null && baseline.bp_sist_max != null) {
+        return {min: baseline.bp_sist_min, max: baseline.bp_sist_max};
+      }
+      break;
+    case 'presion_diastolica':
+      if (baseline.bp_diast_min != null && baseline.bp_diast_max != null) {
+        return {min: baseline.bp_diast_min, max: baseline.bp_diast_max};
+      }
+      break;
+    case 'saturacion_oxigeno':
+      if (baseline.spo2_min != null) {
+        return {min: baseline.spo2_min, max: 100};
+      }
+      break;
+    case 'temperatura':
+      if (baseline.temp_min != null && baseline.temp_max != null) {
+        return {min: baseline.temp_min, max: baseline.temp_max};
+      }
+      break;
+  }
+  return null;
+}
+
+/** Obtiene datos del cache local y los convierte a DatoReloj[] */
+async function getCacheData(
+  desde: Date,
+  hasta: Date,
+  tipo: TipoSignoVital,
+): Promise<DatoReloj[]> {
+  try {
+    const cached = await getDailyAveragesForRange(desde, hasta);
+    const datos: DatoReloj[] = [];
+    for (const day of cached) {
+      const val = extraerValorCache(day.averages, tipo);
+      if (val != null && val > 0) {
+        datos.push({
+          id: `cache-${day.date}`,
+          id_usuario: '',
+          frec_cardiaca_bpm: day.averages.averageBpm,
+          bp_sistolica: day.averages.bloodPressureSystolic,
+          bp_diastolica: day.averages.bloodPressureDiastolic,
+          spo2_pct: day.averages.spo2Percent,
+          temperatura: day.averages.bodyTemperatureCelsius,
+          actividad_pasos: day.averages.steps,
+          horas_sueno: day.averages.sleepMinutes / 60,
+          recorded_at: `${day.date}T12:00:00Z`,
+        });
+      }
+    }
+    return datos;
+  } catch {
+    return [];
+  }
+}
+
+// ─── Styles ───
 
 const styles = StyleSheet.create({
   scroll: {
@@ -270,7 +447,7 @@ const styles = StyleSheet.create({
   unit: {
     fontSize: fontSize.subtitle,
     color: colors.textSecondary,
-    marginTop: 4,
+    marginTop: 2,
   },
   segmentRow: {
     flexDirection: 'row',
@@ -296,8 +473,27 @@ const styles = StyleSheet.create({
   segmentTextActive: {
     color: colors.surface,
   },
-  chartWrapper: {
+  chartCard: {
     marginBottom: 16,
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+  },
+  loadingCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 20,
+  },
+  loadingText: {
+    fontSize: fontSize.body,
+    color: colors.textSecondary,
+  },
+  refLabel: {
+    fontSize: 10,
+    color: colors.primarySoft,
+    fontWeight: '600',
   },
   rangeTitle: {
     fontSize: fontSize.body,
