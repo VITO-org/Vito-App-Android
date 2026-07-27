@@ -8,6 +8,8 @@ import RegisterScreen from '../screens/RegisterScreen';
 import CompleteProfileScreen from '../screens/CompleteProfileScreen';
 import EditarPerfilScreen from '../screens/EditarPerfilScreen';
 import TodosLosSignosScreen from '../screens/TodosLosSignosScreen';
+import RegistrarSintomaScreen from '../screens/RegistrarSintomaScreen';
+import HistorialSintomasScreen from '../screens/HistorialSintomasScreen';
 import {useSupabase} from '../context/SupabaseProvider';
 
 export type RootStackParamList = {
@@ -23,6 +25,8 @@ export type RootStackParamList = {
   Register: undefined;
   CompleteProfile: undefined;
   EditarPerfil: undefined;
+  RegistrarSintoma: undefined;
+  HistorialSintomas: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -74,6 +78,20 @@ function RootNavigatorContent() {
         <Stack.Screen
           name="TodosLosSignos"
           component={TodosLosSignosScreen}
+          options={{animation: 'slide_from_right'}}
+        />
+      )}
+      {session && (
+        <Stack.Screen
+          name="RegistrarSintoma"
+          component={RegistrarSintomaScreen}
+          options={{animation: 'slide_from_bottom'}}
+        />
+      )}
+      {session && (
+        <Stack.Screen
+          name="HistorialSintomas"
+          component={HistorialSintomasScreen}
           options={{animation: 'slide_from_right'}}
         />
       )}

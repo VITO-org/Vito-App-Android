@@ -99,17 +99,34 @@ CREATE TABLE baseline_clinico (
 );
 
 -- ============================================
--- 6. SINTOMAS_USUARIO (texto libre, sin catálogo)
---     La IA inserta aquí lo que detecta en la conversación.
---     Categoriza en fisico/emocional.
+-- 6. SINTOMAS (catálogo controlado de síntomas)
+--     Precargado con síntomas agrupados por categoría.
+-- ============================================
+CREATE TABLE sintomas (
+  id_sintomas  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nombre       VARCHAR(100) NOT NULL,
+  descripcion  VARCHAR(255),
+  categoria    cat_sintoma NOT NULL,
+  icono        VARCHAR(10),
+  activo       BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================
+-- 6b. SINTOMAS_USUARIO (registro de síntomas del paciente)
+--     Vinculado al catálogo + texto libre + intensidad.
 -- ============================================
 CREATE TABLE sintomas_usuario (
-  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  id_usuario  UUID NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
-  descripcion TEXT NOT NULL,
-  categoria   cat_sintoma NOT NULL,
-  origen      origen_sintoma NOT NULL DEFAULT 'chat_ia',
-  recorded_at TIMESTAMPTZ DEFAULT NOW()
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id_usuario    UUID NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
+  id_sintomas   UUID REFERENCES sintomas(id_sintomas),
+  descripcion   TEXT,
+  categoria     cat_sintoma NOT NULL,
+  intensidad    INTEGER CHECK (intensidad BETWEEN 1 AND 5),
+  fecha         DATE NOT NULL DEFAULT CURRENT_DATE,
+  hora          TIME,
+  origen        origen_sintoma NOT NULL DEFAULT 'manual',
+  recorded_at   TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX idx_sintomas_usuario_fecha

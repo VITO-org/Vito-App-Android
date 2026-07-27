@@ -9,6 +9,7 @@ import type {
   FactoresRiesgoCardiacoInsert,
   PromedioSemanalML,
   PrediccionRiesgo,
+  Sintoma,
   SintomasUsuario,
   SintomasUsuarioInsert,
   CatSintoma,
@@ -293,7 +294,28 @@ export async function getFactoresRiesgoCardiaco(
 }
 
 // ═══════════════════════════════════════════
-// SÍNTOMAS USUARIO (texto libre, sin catálogo)
+// SÍNTOMAS (catálogo controlado)
+// ═══════════════════════════════════════════
+
+export async function getSintomasCatalogo(
+  options?: { categoria?: CatSintoma },
+): Promise<Sintoma[]> {
+  let query = supabase
+    .from('sintomas')
+    .select('*')
+    .eq('activo', true)
+    .order('categoria')
+    .order('nombre');
+
+  if (options?.categoria) query = query.eq('categoria', options.categoria);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data as Sintoma[]) ?? [];
+}
+
+// ═══════════════════════════════════════════
+// SÍNTOMAS USUARIO (registro del paciente)
 // ═══════════════════════════════════════════
 
 export async function insertSintomaUsuario(
@@ -326,6 +348,18 @@ export async function getSintomasUsuario(
   const { data, error } = await query;
   if (error) throw error;
   return (data as SintomasUsuario[]) ?? [];
+}
+
+export async function deleteSintomaUsuario(
+  idUsuario: string,
+  recordedAt: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('sintomas_usuario')
+    .delete()
+    .eq('id_usuario', idUsuario)
+    .eq('recorded_at', recordedAt);
+  if (error) throw error;
 }
 
 // ═══════════════════════════════════════════
