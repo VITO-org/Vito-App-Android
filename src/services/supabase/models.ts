@@ -61,6 +61,7 @@ export interface DatosReloj {
   actividad_pasos: number | null;
   horas_sueno: number | null;
   recorded_at: string | null;
+  sospechoso: boolean | null;
 }
 export type DatosRelojInsert = Omit<DatosReloj, 'id'> & { id?: string };
 

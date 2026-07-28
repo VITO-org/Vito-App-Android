@@ -74,7 +74,8 @@ CREATE TABLE datos_reloj (
   nivel_estres INTEGER,
   actividad_pasos INTEGER,
   horas_sueno DECIMAL(4,1),
-  recorded_at TIMESTAMPTZ DEFAULT NOW()
+  recorded_at TIMESTAMPTZ DEFAULT NOW(),
+  sospechoso BOOLEAN DEFAULT FALSE
 );
 
 CREATE INDEX idx_datos_reloj_usuario_fecha
