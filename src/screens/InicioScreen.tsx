@@ -10,7 +10,7 @@ import PrimaryButton from '../components/PrimaryButton';
 import AppIcon, {type AppIconName} from '../components/AppIcon';
 import VitoAvatar from '../components/VitoAvatar';
 import StatusIndicator from '../components/StatusIndicator';
-import {colors, spacing, fontSize} from '../theme';
+import {colors, spacing, fontSize, shadows} from '../theme';
 import {buildSignosFromSummary, getMetricasBienestar} from '../utils/signosVitales';
 
 type RootStackParamList = {
@@ -21,6 +21,8 @@ type RootStackParamList = {
     unit: string;
     icon: string;
   };
+  RegistrarSintoma: undefined;
+  HistorialSintomas: undefined;
 };
 
 /**
@@ -203,6 +205,32 @@ const InicioScreen: React.FC = () => {
           </View>
         ))}
       </View>
+
+      {/* ── Registrar Síntoma ── */}
+      <TouchableOpacity
+        style={styles.sintomaBtn}
+        onPress={() => navigation.navigate('RegistrarSintoma')}
+        activeOpacity={0.8}>
+        <Text style={styles.sintomaBtnIcon}>🩺</Text>
+        <View style={styles.sintomaBtnInfo}>
+          <Text style={styles.sintomaBtnTitle}>Registrar Síntoma</Text>
+          <Text style={styles.sintomaBtnSubtitle}>¿Sentís algo? Registralo acá</Text>
+        </View>
+        <Text style={styles.sintomaBtnArrow}>›</Text>
+      </TouchableOpacity>
+
+      {/* ── Consultar Síntomas ── */}
+      <TouchableOpacity
+        style={styles.sintomaBtn}
+        onPress={() => navigation.navigate('HistorialSintomas')}
+        activeOpacity={0.8}>
+        <Text style={styles.sintomaBtnIcon}>📋</Text>
+        <View style={styles.sintomaBtnInfo}>
+          <Text style={styles.sintomaBtnTitle}>Consultar Síntomas</Text>
+          <Text style={styles.sintomaBtnSubtitle}>Historial para mostrar a tu médico</Text>
+        </View>
+        <Text style={styles.sintomaBtnArrow}>›</Text>
+      </TouchableOpacity>
 
       {/* ── Signos Vitales ── */}
       <View style={styles.sectionHeader}>
@@ -538,6 +566,41 @@ const styles = StyleSheet.create({
     fontSize: fontSize.caption,
     color: colors.textSecondary,
     marginVertical: 1,
+  },
+
+  // ── Registrar Síntoma ──
+  sintomaBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: spacing.cardBorderRadius,
+    padding: spacing.cardPadding,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.card,
+  },
+  sintomaBtnIcon: {
+    fontSize: 28,
+    marginRight: 14,
+  },
+  sintomaBtnInfo: {
+    flex: 1,
+  },
+  sintomaBtnTitle: {
+    fontSize: fontSize.body,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  sintomaBtnSubtitle: {
+    fontSize: fontSize.caption,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  sintomaBtnArrow: {
+    fontSize: 28,
+    fontWeight: '300',
+    color: colors.textSecondary,
   },
 
   // ── Última Actividad ──

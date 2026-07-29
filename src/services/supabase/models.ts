@@ -82,17 +82,34 @@ export interface BaselineClinico {
 }
 export type BaselineClinicoInsert = Omit<BaselineClinico, 'id'> & { id?: string };
 
-// ─── TABLA: sintomas_usuario (texto libre, sin catálogo) ───
-export interface SintomasUsuario {
-  id: string;
-  id_usuario: string;
-  descripcion: string;
+// ─── TABLA: sintomas (catálogo controlado) ───
+export interface Sintoma {
+  id_sintomas: string;
+  nombre: string;
+  descripcion: string | null;
   categoria: CatSintoma;
+  icono: string | null;
+  activo: boolean;
+  created_at: string | null;
+}
+export type SintomaInsert = Omit<Sintoma, 'id_sintomas' | 'created_at'> & {
+  id_sintomas?: string;
+  created_at?: string;
+};
+
+// ─── TABLA: sintomas_usuario (registro del paciente) ───
+export interface SintomasUsuario {
+  id_usuario: string;
+  id_sintomas: string | null;
+  descripcion: string | null;
+  categoria: CatSintoma;
+  intensidad: number | null;
+  fecha: string | null;
+  hora: string | null;
   origen: OrigenSintoma;
   recorded_at: string | null;
 }
-export type SintomasUsuarioInsert = Omit<SintomasUsuario, 'id' | 'recorded_at'> & {
-  id?: string;
+export type SintomasUsuarioInsert = Omit<SintomasUsuario, 'recorded_at'> & {
   recorded_at?: string;
 };
 
