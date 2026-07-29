@@ -22,7 +22,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Debug: list repo and android dir
+      - name: "Debug: list repo and android dir"
         run: |
           echo "Commit: $(git rev-parse --short HEAD)"
           ls -la .
