@@ -98,7 +98,6 @@ export async function upsertProfile(
     .upsert(profile, { onConflict: 'id_usuario' })
     .select()
     .single();
->>>>>>> origin/dev
   if (error) throw error;
   return data as PerfilUsuario;
 }
