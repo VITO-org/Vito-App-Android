@@ -40,6 +40,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Fix gradlew line endings
+        run: sed -i 's/\r$//' android/gradlew
+
       - name: Build Android Debug APK (con expo-dev-client)
         run: |
           cd android

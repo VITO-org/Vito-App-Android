@@ -15,8 +15,9 @@ import {
   HealthModuleNotAvailableError,
 } from '../services/VitoHealthNative';
 import {useSupabase} from './SupabaseProvider';
-import {insertDatosReloj as insertDatoReloj, upsertDatosClinicosConfig} from '../services/supabase/api';
-import type {DatosRelojInsert as DatoRelojInsert} from '../services/supabase/models';
+import {insertDatosReloj, upsertDatosClinicosConfig} from '../services/supabase/api';
+import { normalizeVital } from '../services/vitals';
+import type {DatosRelojInsert} from '../services/supabase/models';
 import {saveHealthSnapshot, pruneOldEntries} from '../services/HealthDataCache';
 
 type ErrorSeverity = 'error' | 'warning';
@@ -99,9 +100,10 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
       // Sincronizar automáticamente con Supabase (datos_reloj)
       const userId = getUserId();
       if (userId) {
+        // Normalizar y preparar los datos para insertar en Supabase [documentación manual]
         try {
-          const redondear = (v: number | null): number | null =>
-            v != null ? Math.round(v) : null;
+          const spo2 = normalizeVital('saturacion_oxigeno', data.spo2Percent ?? null);
+          const temp = normalizeVital('temperatura', data.bodyTemperatureCelsius ?? null);
 
           // Asegurar que datos_clinicos_config tiene fila por si existe
           // un trigger en datos_reloj que la referencia (workaround error 23505)
@@ -111,19 +113,20 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
             // ignorar error del upsert preparatorio
           }
 
-          const lectura: DatoRelojInsert = {
+          const lectura: DatosRelojInsert = {
             id_usuario: userId,
-            bp_sistolica: redondear(data.bloodPressureSystolic),
-            bp_diastolica: redondear(data.bloodPressureDiastolic),
-            frec_cardiaca_bpm: redondear(data.averageBpm),
-            spo2_pct: data.spo2Percent ?? null,
-            temperatura: data.bodyTemperatureCelsius ?? null,
+            bp_sistolica: data.bloodPressureSystolic != null ? Math.round(data.bloodPressureSystolic) : null,
+            bp_diastolica: data.bloodPressureDiastolic != null ? Math.round(data.bloodPressureDiastolic) : null,
+            frec_cardiaca_bpm: hr.value,
+            spo2_pct: spo2.value,
+            temperatura: temp.value,
             nivel_estres: null,
-            actividad_pasos: redondear(data.steps),
+            actividad_pasos: data.steps != null ? Math.round(data.steps) : null,
             horas_sueno: data.sleepMinutes != null ? data.sleepMinutes / 60 : null,
             recorded_at: new Date().toISOString(),
+            sospechoso: hr.sospechoso || spo2.sospechoso || temp.sospechoso,
           };
-          await insertDatoReloj(lectura);
+          await insertDatosReloj(lectura);
         } catch (syncErr) {
           // No bloquear la UI si falla la sincronización
           console.warn('HealthProvider: error al sincronizar con datos_reloj', syncErr);

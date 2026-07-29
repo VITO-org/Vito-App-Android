@@ -296,6 +296,18 @@ adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 | Pulso medio | `HeartRateRecord.samples` | bpm |
 | Ejercicios | `ExerciseSessionRecord` | cantidad de sesiones |
 
+## Magnitudes canónicas de signos vitales
+
+| Signo vital | Unidad canónica |
+|-------------|-----------------|
+| Frecuencia cardíaca | lpm |
+| Presión arterial sistólica | mmHg |
+| Presión arterial diastólica | mmHg |
+| Saturación de oxígeno | % |
+| Temperatura corporal | °C |
+
+Todos los `recorded_at` de `datos_reloj` se almacenan en UTC usando `TIMESTAMPTZ` y `toISOString()`.
+
 ## Resolución de problemas
 
 ### Error: `JAVA_HOME is set to an invalid directory`

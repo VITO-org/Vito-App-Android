@@ -1,0 +1,6 @@
+# Gradle wrapper scripts — must stay executable with LF endings on all OS
+android/gradlew text eol=lf
+
+# Handle line endings for shell scripts
+scripts/*.sh text eol=lf
+*.sh text eol=lf

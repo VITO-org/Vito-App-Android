@@ -1,5 +1,5 @@
 import { supabase } from './client';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { normalizeVital } from '../vitals';
 import type {
   PerfilUsuario,
   BaselineClinico,
@@ -14,90 +14,6 @@ import type {
   CatSintoma,
   RolUsuario,
 } from './models';
-
-// ═══════════════════════════════════════════
-// RAW FETCH HELPER (bypass @supabase/supabase-js bug con Hermes)
-// ═══════════════════════════════════════════
-
-const SUPABASE_URL = 'https://rkgbedehkfpiylaubjbo.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJrZ2JlZGVoa2ZwaXlsYXViamJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3NjE1NzYsImV4cCI6MjA5MTMzNzU3Nn0.8f9CewFjP6dtTbxAvmj5nCNn8JipXJpQWHjM7k_oeQo';
-
-/**
- * Obtener el access_token del cliente Supabase.
- */
-async function getAccessToken(): Promise<string | null> {
-  const keys = [
-    'sb-rkgbedehkfpiylaubjbo.supabase.co-auth-token',
-    'sb-rkgbedehkfpiylaubjbo-auth-token',
-  ];
-  for (const key of keys) {
-    try {
-      const raw = await AsyncStorage.getItem(key);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        return parsed[0] ?? parsed?.access_token ?? null;
-      }
-    } catch {}
-  }
-  return null;
-}
-
-/**
- * Raw fetch a la Data API de Supabase (PostgREST).
- * NO usa @supabase/supabase-js — evita el bug que cuelga requests.
- */
-async function rawSupabaseFetch<T>(
-  table: string,
-  options: {
-    method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
-    query?: string;
-    body?: unknown;
-    prefer?: string;
-    accessToken?: string | null;
-  } = {},
-): Promise<{ data: T | null; error: Error | null }> {
-  try {
-    let token = options.accessToken ?? null;
-    if (!token) token = await getAccessToken();
-    if (!token) return { data: null, error: new Error('No hay token de sesión') };
-
-    const url = `${SUPABASE_URL}/rest/v1/${table}${options.query ?? ''}`;
-    const headers: Record<string, string> = {
-      'Authorization': `Bearer ${token}`,
-      'apikey': SUPABASE_ANON_KEY,
-    };
-    if (options.prefer) headers['Prefer'] = options.prefer;
-    if (options.body) headers['Content-Type'] = 'application/json';
-
-    const controller = new AbortController();
-    const tid = setTimeout(() => controller.abort(), 15000);
-
-    const res = await fetch(url, {
-      method: options.method ?? 'GET',
-      headers,
-      body: options.body ? JSON.stringify(options.body) : undefined,
-      signal: controller.signal,
-    });
-    clearTimeout(tid);
-
-    if (res.status === 204) return { data: null, error: null };
-
-    const text = await res.text();
-    if (!res.ok) {
-      let msg = `HTTP ${res.status}`;
-      try {
-        const j = JSON.parse(text);
-        msg = j.message ?? j.error ?? msg;
-      } catch {}
-      return { data: null, error: new Error(msg) };
-    }
-
-    const result = text ? (JSON.parse(text) as T) : null;
-    return { data: result, error: null };
-  } catch (e) {
-    return { data: null, error: e instanceof Error ? e : new Error(String(e)) };
-  }
-}
 
 // ═══════════════════════════════════════════
 // AUTH
@@ -161,39 +77,30 @@ export async function getSession() {
 }
 
 // ═══════════════════════════════════════════
-// PERFIL DE USUARIO (usa raw fetch para evitar bug de la librería)
+// PERFIL DE USUARIO
 // ═══════════════════════════════════════════
 
-export async function getProfile(
-  userId: string,
-  accessToken?: string | null,
-): Promise<PerfilUsuario | null> {
-  const { data, error } = await rawSupabaseFetch<PerfilUsuario[]>(
-    'perfil_usuario',
-    { query: `?id_usuario=eq.${userId}`, accessToken },
-  );
+export async function getProfile(userId: string): Promise<PerfilUsuario | null> {
+  const { data, error } = await supabase
+    .from('perfil_usuario')
+    .select('*')
+    .eq('id_usuario', userId)
+    .maybeSingle();
   if (error) throw error;
-  return (data ?? [])[0] ?? null;
+  return data as PerfilUsuario | null;
 }
 
 export async function upsertProfile(
   profile: Partial<PerfilUsuario> & { id_usuario: string },
-  accessToken?: string | null,
 ): Promise<PerfilUsuario> {
-  const { data, error } = await rawSupabaseFetch<PerfilUsuario>(
-    'perfil_usuario',
-    {
-      method: 'POST',
-      query: '?on_conflict=id_usuario',
-      body: profile,
-      prefer: 'resolution=merge-duplicates,return=representation',
-      accessToken,
-    },
-  );
+  const { data, error } = await supabase
+    .from('perfil_usuario')
+    .upsert(profile, { onConflict: 'id_usuario' })
+    .select()
+    .single();
+>>>>>>> origin/dev
   if (error) throw error;
-  if (Array.isArray(data)) return (data as PerfilUsuario[])[0];
-  if (data) return data as PerfilUsuario;
-  throw new Error('No se pudo guardar el perfil');
+  return data as PerfilUsuario;
 }
 
 // ═══════════════════════════════════════════
@@ -201,9 +108,10 @@ export async function upsertProfile(
 // ═══════════════════════════════════════════
 
 export async function insertDatosReloj(dato: DatosRelojInsert): Promise<DatosReloj> {
+  const safeDato = { ...dato, sospechoso: dato.sospechoso ?? false }; /* [documentación manual] se pasan los datos crudos y la función devuelve los datos normalizados */
   const { data, error } = await supabase
     .from('datos_reloj')
-    .insert(dato)
+    .insert(safeDato)
     .select()
     .single();
   if (error) throw error;
@@ -211,9 +119,10 @@ export async function insertDatosReloj(dato: DatosRelojInsert): Promise<DatosRel
 }
 
 export async function insertDatosRelojBatch(datos: DatosRelojInsert[]): Promise<DatosReloj[]> {
+  const safeDatos = datos.map(dato => ({ ...dato, sospechoso: dato.sospechoso ?? false }));
   const { data, error } = await supabase
     .from('datos_reloj')
-    .insert(datos)
+    .insert(safeDatos)
     .select();
   if (error) throw error;
   return (data as DatosReloj[]) ?? [];
@@ -403,13 +312,15 @@ export async function syncHealthSummaryToSupabase(
   },
 ): Promise<DatosReloj> {
   const now = new Date().toISOString();
+  const hr = normalizeVital('frecuencia_cardiaca', summary.averageBpm);
 
   const dato: DatosRelojInsert = {
     id_usuario: userId,
-    frec_cardiaca_bpm: summary.averageBpm,
+    frec_cardiaca_bpm: hr.value,
     actividad_pasos: summary.steps,
     horas_sueno: summary.sleepMinutes > 0 ? summary.sleepMinutes / 60 : null,
     recorded_at: now,
+    sospechoso: hr.sospechoso,
   };
 
   return insertDatosReloj(dato);

@@ -35,10 +35,17 @@ android/.kotlin/
 # Build reports
 **/build/reports/
 
+# ML Trainer
+ml-trainer/models/
+
+# Supabase/Vitals tests
+/src/services/vitals.test.ts
+/src/services/supabase/api.test.ts
+
 # Cortex AI cache (transient)
 .cortex/memory/
 .cortex/sessions/
 .cortex/vault/.cortex_index.json
 
+*.deb
 *.apk
-
