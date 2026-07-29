@@ -13,6 +13,7 @@ import androidx.health.connect.client.records.OxygenSaturationRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
+import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
@@ -46,7 +47,7 @@ class HealthDataProvider(
             androidx.health.connect.client.permission.HealthPermission.getReadPermission(HeartRateRecord::class),
             androidx.health.connect.client.permission.HealthPermission.getReadPermission(SleepSessionRecord::class),
             androidx.health.connect.client.permission.HealthPermission.getReadPermission(ExerciseSessionRecord::class),
-            androidx.health.connect.client.permission.HealthPermission.getReadPermission(TotalCaloriesBurnedRecord::class),
+            androidx.health.connect.client.permission.HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class),
             androidx.health.connect.client.permission.HealthPermission.getReadPermission(BloodPressureRecord::class),
             androidx.health.connect.client.permission.HealthPermission.getReadPermission(OxygenSaturationRecord::class),
             androidx.health.connect.client.permission.HealthPermission.getReadPermission(BodyTemperatureRecord::class),
@@ -100,7 +101,7 @@ class HealthDataProvider(
                 metrics = setOf(
                     StepsRecord.COUNT_TOTAL,
                     DistanceRecord.DISTANCE_TOTAL,
-                    TotalCaloriesBurnedRecord.ENERGY_TOTAL,
+                    ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL,
                 ),
                 timeRangeFilter = timeRange,
             ),
@@ -233,9 +234,11 @@ class HealthDataProvider(
 
         // Descartar calorías huérfanas: si no hay pasos ni distancia,
         // cualquier caloría reportada probablemente es un residual de otro sensor.
+        // Usamos ActiveCaloriesBurnedRecord (solo actividad) en vez de
+        // TotalCaloriesBurnedRecord (que incluye metabolismo basal ~1000+ kcal).
         val steps = aggregate[StepsRecord.COUNT_TOTAL] ?: 0L
         val distanceMeters = aggregate[DistanceRecord.DISTANCE_TOTAL]?.inMeters ?: 0.0
-        var caloriesKcal = aggregate[TotalCaloriesBurnedRecord.ENERGY_TOTAL]?.inKilocalories ?: 0.0
+        var caloriesKcal = aggregate[ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL]?.inKilocalories ?: 0.0
 
         if (steps == 0L && distanceMeters == 0.0 && caloriesKcal > 0.0) {
             Log.w(TAG, "Calories=$caloriesKcal con steps=0 y distance=0, forzando a 0.0")
