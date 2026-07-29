@@ -28,7 +28,9 @@ export type RootStackParamList = {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 function RootNavigatorContent() {
-  const {session, isLoading} = useSupabase();
+  const {session, isLoading, needsProfile} = useSupabase();
+
+  console.log(`[DIAG-NAV] isLoading=${isLoading}, session=${session ? 'ACTIVE' : 'NULL'}, needsProfile=${needsProfile}`);
 
   if (isLoading) {
     return (
@@ -46,10 +48,10 @@ function RootNavigatorContent() {
       */}
       {!session && <Stack.Screen name="Login" component={LoginScreen} />}
       {!session && <Stack.Screen name="Register" component={RegisterScreen} />}
-      {session && (
+      {session && !needsProfile && (
         <Stack.Screen name="MainTabs" component={BottomTabNavigator} />
       )}
-      {session && (
+      {session && needsProfile && (
         <Stack.Screen
           name="CompleteProfile"
           component={CompleteProfileScreen}

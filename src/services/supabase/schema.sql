@@ -32,7 +32,7 @@ CREATE TABLE usuario (
 -- ============================================
 CREATE TABLE perfil_usuario (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL UNIQUE REFERENCES usuario(id) ON DELETE CASCADE,
+  id_usuario UUID NOT NULL UNIQUE REFERENCES usuario(id) ON DELETE CASCADE,
   nombre VARCHAR(100),
   apellido VARCHAR(100),
   dni VARCHAR(20),

@@ -84,20 +84,21 @@ export async function getProfile(userId: string): Promise<PerfilUsuario | null> 
   const { data, error } = await supabase
     .from('perfil_usuario')
     .select('*')
-    .eq('user_id', userId)
+    .eq('id_usuario', userId)
     .maybeSingle();
   if (error) throw error;
   return data as PerfilUsuario | null;
 }
 
 export async function upsertProfile(
-  profile: Partial<PerfilUsuario> & { user_id: string },
+  profile: Partial<PerfilUsuario> & { id_usuario: string },
 ): Promise<PerfilUsuario> {
   const { data, error } = await supabase
     .from('perfil_usuario')
-    .upsert(profile, { onConflict: 'user_id' })
+    .upsert(profile, { onConflict: 'id_usuario' })
     .select()
     .single();
+>>>>>>> origin/dev
   if (error) throw error;
   return data as PerfilUsuario;
 }
