@@ -14,6 +14,7 @@ import type {
   SintomasUsuarioInsert,
   CatSintoma,
   RolUsuario,
+  OrigenDato,
 } from './models';
 
 // ═══════════════════════════════════════════
@@ -108,7 +109,7 @@ export async function upsertProfile(
 // ═══════════════════════════════════════════
 
 export async function insertDatosReloj(dato: DatosRelojInsert): Promise<DatosReloj> {
-  const safeDato = { ...dato, sospechoso: dato.sospechoso ?? false }; /* [documentación manual] se pasan los datos crudos y la función devuelve los datos normalizados */
+  const safeDato = { ...dato, sospechoso: dato.sospechoso ?? false, origen: dato.origen ?? 'wearable' }; /* [documentación manual] se pasan los datos crudos y la función devuelve los datos normalizados */
   const { data, error } = await supabase
     .from('datos_reloj')
     .insert(safeDato)
@@ -119,7 +120,7 @@ export async function insertDatosReloj(dato: DatosRelojInsert): Promise<DatosRel
 }
 
 export async function insertDatosRelojBatch(datos: DatosRelojInsert[]): Promise<DatosReloj[]> {
-  const safeDatos = datos.map(dato => ({ ...dato, sospechoso: dato.sospechoso ?? false }));
+  const safeDatos = datos.map(dato => ({ ...dato, sospechoso: dato.sospechoso ?? false, origen: dato.origen ?? 'wearable' }));
   const { data, error } = await supabase
     .from('datos_reloj')
     .insert(safeDatos)
@@ -130,7 +131,7 @@ export async function insertDatosRelojBatch(datos: DatosRelojInsert[]): Promise<
 
 export async function getDatosReloj(
   userId: string,
-  options?: { from?: string; to?: string; limit?: number },
+  options?: { from?: string; to?: string; limit?: number; origen?: OrigenDato },
 ): Promise<DatosReloj[]> {
   let query = supabase
     .from('datos_reloj')
@@ -138,6 +139,7 @@ export async function getDatosReloj(
     .eq('id_usuario', userId)
     .order('recorded_at', { ascending: false });
 
+  if (options?.origen) query = query.eq('origen', options.origen);
   if (options?.from) query = query.gte('recorded_at', options.from);
   if (options?.to) query = query.lte('recorded_at', options.to);
   if (options?.limit) query = query.limit(options.limit);
@@ -145,6 +147,18 @@ export async function getDatosReloj(
   const { data, error } = await query;
   if (error) throw error;
   return (data as DatosReloj[]) ?? [];
+}
+
+/**
+ * Marca un registro (manual) como reemplazado por otro (wearable) tras un conflicto (HU-25 CA-03).
+ * Se usa para auditar el versionado de origen: reemplazado_por apunta al id del ganador.
+ */
+export async function markDatosRelojReemplazado(id: string, reemplazadoPor: string): Promise<void> {
+  const { error } = await supabase
+    .from('datos_reloj')
+    .update({ reemplazado_por: reemplazadoPor })
+    .eq('id', id);
+  if (error) throw error;
 }
 
 // ═══════════════════════════════════════════
@@ -332,6 +346,10 @@ export async function getPromedioSemanalML(
 
 /**
  * Convierte el resumen de Health Connect en un registro de datos_reloj.
+ *
+ * @deprecated Desde HU-25 usar `syncWearableToBackend()` de `src/services/healthSync.ts`
+ * (unifica normalización + dedupe + resolución de conflictos con prioridad wearable > manual).
+ * Se mantiene para compatibilidad; el registro se marca con origen 'wearable'.
  */
 export async function syncHealthSummaryToSupabase(
   userId: string,
@@ -349,11 +367,17 @@ export async function syncHealthSummaryToSupabase(
 
   const dato: DatosRelojInsert = {
     id_usuario: userId,
+    bp_sistolica: null,
+    bp_diastolica: null,
     frec_cardiaca_bpm: hr.value,
+    spo2_pct: null,
+    temperatura: null,
+    nivel_estres: null,
     actividad_pasos: summary.steps,
     horas_sueno: summary.sleepMinutes > 0 ? summary.sleepMinutes / 60 : null,
     recorded_at: now,
     sospechoso: hr.sospechoso,
+    origen: 'wearable',
   };
 
   return insertDatosReloj(dato);

@@ -9,6 +9,8 @@ export type SexoBiologico = 'M' | 'F' | 'otro';
 export type TipoPatologia = 'ninguna' | 'diabetes' | 'hipertension' | 'alzheimer' | 'otra';
 export type CatSintoma = 'fisico' | 'emocional';
 export type OrigenSintoma = 'chat_ia' | 'manual';
+/** Origen de un registro de datos_reloj (HU-25 CA-02/CA-03). */
+export type OrigenDato = 'wearable' | 'manual';
 
 // ─── TABLA: usuario ───
 export interface Usuario {
@@ -45,6 +47,8 @@ export interface PerfilUsuario {
   altura_cm: number | null;
   patologia: TipoPatologia | null;
   patologia_descripcion: string | null;
+  /** Intervalo de sincronización automática en minutos (HU-25 CA-01). NULL => default 10 min en la app. */
+  intervalo_sync_min?: number | null;
 }
 export type PerfilUsuarioInsert = Omit<PerfilUsuario, 'id'> & { id?: string };
 
@@ -62,6 +66,10 @@ export interface DatosReloj {
   horas_sueno: number | null;
   recorded_at: string | null;
   sospechoso: boolean | null;
+  /** Origen de dato: 'wearable' | 'manual' (HU-25, versionado/auditoría). Nullable para no romper lecturas previas a la migración. */
+  origen?: OrigenDato | null;
+  /** id del registro wearable que ganó el conflicto y reemplazó a este (CA-03). */
+  reemplazado_por?: string | null;
 }
 export type DatosRelojInsert = Omit<DatosReloj, 'id'> & { id?: string };
 

@@ -15,14 +15,20 @@ import {
   HealthModuleNotAvailableError,
 } from '../services/VitoHealthNative';
 import {useSupabase} from './SupabaseProvider';
-import {insertDatosReloj, upsertDatosClinicosConfig} from '../services/supabase/api';
-import { normalizeVital } from '../services/vitals';
-import type {DatosRelojInsert} from '../services/supabase/models';
+import {
+  getDatosReloj,
+  getProfile,
+  insertDatosReloj,
+  markDatosRelojReemplazado,
+} from '../services/supabase/api';
+import {
+  syncWearableToBackend,
+  DEFAULT_SYNC_INTERVAL_MIN,
+  MIN_SYNC_INTERVAL_MS,
+} from '../services/healthSync';
 import {saveHealthSnapshot, pruneOldEntries} from '../services/HealthDataCache';
 
 type ErrorSeverity = 'error' | 'warning';
-
-const AUTO_REFRESH_INTERVAL_MS = 600_000; // 10 minutos
 
 interface HealthContextValue {
   /** Current health summary, null before first successful load. */
@@ -39,6 +45,8 @@ interface HealthContextValue {
   permissionsGranted: boolean;
   /** Timestamp of the last successful data sync, null if never synced. */
   lastSync: Date | null;
+  /** Intervalo de sincronización configurado en minutos (HU-25 CA-01), default 10. */
+  syncIntervalMin: number;
   /** Request permissions and load data. */
   requestPermissionsAndLoad: () => Promise<void>;
   /** Refresh health data (requires permissions already granted). */
@@ -59,10 +67,28 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
   const [errorSeverity, setErrorSeverity] = useState<ErrorSeverity | null>(null);
   const [permissionsGranted, setPermissionsGranted] = useState(false);
   const [lastSync, setLastSync] = useState<Date | null>(null);
+  const [syncIntervalMin, setSyncIntervalMin] = useState(DEFAULT_SYNC_INTERVAL_MIN);
   const {getUserId} = useSupabase();
 
   // Referencia para el intervalo de auto-refresh
   const autoRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Cargar intervalo configurable desde perfil_usuario.intervalo_sync_min (HU-25 CA-01)
+  useEffect(() => {
+    const userId = getUserId();
+    if (!userId) return;
+    getProfile(userId)
+      .then(profile => {
+        const config = profile?.intervalo_sync_min;
+        if (config != null && config > 0) {
+          // Clamp al mínimo soportado (modo casi-tiempo-real)
+          setSyncIntervalMin(Math.max(config, Math.ceil(MIN_SYNC_INTERVAL_MS / 60_000)));
+        }
+      })
+      .catch(() => {
+        // Configuración no disponible → se mantiene el default
+      });
+  }, [getUserId]);
 
   // Check Health Connect availability on mount
   useEffect(() => {
@@ -87,6 +113,7 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
     setLoading(true);
     setError(null);
     setErrorSeverity(null);
+    const userId = getUserId();
     try {
       const data = await getHealthData();
       setSummary(data);
@@ -97,42 +124,25 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
       // Podar entradas viejas 1 vez al día (lo ejecutamos pero ignoramos error)
       pruneOldEntries(60).catch(() => {});
 
-      // Sincronizar automáticamente con Supabase (datos_reloj)
-      const userId = getUserId();
-      if (userId) {
-        // Normalizar y preparar los datos para insertar en Supabase [documentación manual]
-        try {
-          const spo2 = normalizeVital('saturacion_oxigeno', data.spo2Percent ?? null);
-          const temp = normalizeVital('temperatura', data.bodyTemperatureCelsius ?? null);
-
-          // Asegurar que datos_clinicos_config tiene fila por si existe
-          // un trigger en datos_reloj que la referencia (workaround error 23505)
-          try {
-            await upsertDatosClinicosConfig({id_usuario: userId});
-          } catch {
-            // ignorar error del upsert preparatorio
-          }
-
-          const lectura: DatosRelojInsert = {
-            id_usuario: userId,
-            bp_sistolica: data.bloodPressureSystolic != null ? Math.round(data.bloodPressureSystolic) : null,
-            bp_diastolica: data.bloodPressureDiastolic != null ? Math.round(data.bloodPressureDiastolic) : null,
-            frec_cardiaca_bpm: hr.value,
-            spo2_pct: spo2.value,
-            temperatura: temp.value,
-            nivel_estres: null,
-            actividad_pasos: data.steps != null ? Math.round(data.steps) : null,
-            horas_sueno: data.sleepMinutes != null ? data.sleepMinutes / 60 : null,
-            recorded_at: new Date().toISOString(),
-            sospechoso: hr.sospechoso || spo2.sospechoso || temp.sospechoso,
-          };
-          await insertDatosReloj(lectura);
-        } catch (syncErr) {
-          // No bloquear la UI si falla la sincronización
-          console.warn('HealthProvider: error al sincronizar con datos_reloj', syncErr);
+      // Sincronizar automáticamente con Supabase (datos_reloj) — motor central HU-25
+      try {
+        const result = await syncWearableToBackend(userId, data, {
+          insertDatosReloj,
+          getDatosRelojInWindow: (uid, from, to) => getDatosReloj(uid, {from, to}),
+          markDatosRelojReemplazado,
+        });
+        if (result.conflictResolved) {
+          console.warn(
+            'HealthProvider: conflicto resuelto a favor del wearable',
+            result.manualReplaced,
+          );
         }
+      } catch (syncErr) {
+        // Fuente de escritura (Supabase) caída: no bloquear la UI; reintenta en el próximo tick
+        console.warn('HealthProvider: error al sincronizar con datos_reloj', syncErr);
       }
     } catch (e) {
+      // Fuente de lectura (Health Connect) desconectada: conservar estado previo y avisar
       const message = e instanceof Error ? e.message : String(e ?? 'unknown error');
       setError('Error al leer datos: ' + message);
       setErrorSeverity('error');
@@ -175,13 +185,15 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
     }
   }, [permissionsGranted, requestPermissionsAndLoad, loadHealthData]);
 
-  // Auto-refresh periódico cuando HC está disponible y permisos concedidos
+  // Auto-refresh periódico cuando HC está disponible y permisos concedidos.
+  // El intervalo es configurable (perfil_usuario.intervalo_sync_min, default 10 min)
+  // con un mínimo de 60s para modo casi-tiempo-real (HU-25 CA-01).
   useEffect(() => {
     if (hcStatus === 'available' && permissionsGranted) {
-      // Iniciar intervalo
+      const intervalMs = Math.max(syncIntervalMin * 60_000, MIN_SYNC_INTERVAL_MS);
       autoRefreshRef.current = setInterval(() => {
         loadHealthData();
-      }, AUTO_REFRESH_INTERVAL_MS);
+      }, intervalMs);
     }
 
     return () => {
@@ -190,7 +202,7 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
         autoRefreshRef.current = null;
       }
     };
-  }, [hcStatus, permissionsGranted, loadHealthData]);
+  }, [hcStatus, permissionsGranted, syncIntervalMin, loadHealthData]);
 
   const value: HealthContextValue = {
     summary,
@@ -200,6 +212,7 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
     errorSeverity,
     permissionsGranted,
     lastSync,
+    syncIntervalMin,
     requestPermissionsAndLoad,
     refreshData,
   };
