@@ -1,4 +1,4 @@
-import { supabase } from './client';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from './client';
 import { normalizeVital } from '../vitals';
 import type {
   PerfilUsuario,
@@ -79,10 +79,100 @@ export async function getSession() {
 }
 
 // ═══════════════════════════════════════════
+// RAW REST (bypass de supabase-js en React Native)
+// ═══════════════════════════════════════════
+// Los writes del query builder de @supabase/supabase-js cuelgan la promesa
+// en React Native (issues #1620/#1693: la promise nunca se resuelve aunque el
+// server responde — los GETs funcionan, pero upsert/insert + .select() no).
+// Mitigación: llamar directo al REST de PostgREST con fetch + JWT (mismo
+// header `apikey` que supabase-js + `Authorization: Bearer`).
+
+const REST_BASE = `${SUPABASE_URL}/rest/v1`;
+
+interface RawRestOptions {
+  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  body?: unknown;
+  prefer?: string;
+  query?: string; // query string sin el "?" inicial (p. ej. "id=eq.123")
+  accessToken?: string | null;
+}
+
+/**
+ * Token de sesión para el header `Authorization: Bearer`.
+ * Se usa el parámetro explícito si viene, o se resuelve de la sesión
+ * persistida (AsyncStorage) vía supabase-js — que en auth sí funciona.
+ */
+async function resolveAccessToken(accessToken?: string | null): Promise<string> {
+  if (accessToken) return accessToken;
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new Error('No hay sesión activa para operar sobre Supabase');
+  return token;
+}
+
+/**
+ * Fetch directo al REST de PostgREST.
+ * Lanza un Error con las props { message, status, code } como supabase-js,
+ * para no romper los catchs existentes (ver CompleteProfileScreen).
+ */
+async function rawRestFetch<T>(
+  tablePath: string,
+  options: RawRestOptions = {},
+): Promise<T> {
+  const { method = 'GET', body, prefer, query = '', accessToken } = options;
+  const token = await resolveAccessToken(accessToken);
+
+  const url = `${REST_BASE}/${tablePath}${query ? `?${query}` : ''}`;
+  const headers: Record<string, string> = {
+    apikey: SUPABASE_ANON_KEY,
+    Authorization: `Bearer ${token}`,
+    'Content-Type': 'application/json',
+  };
+  if (prefer) headers.Prefer = prefer;
+
+  const res = await fetch(url, {
+    method,
+    headers,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+
+  if (!res.ok) {
+    let message = `HTTP ${res.status}`;
+    let code: string | undefined;
+    try {
+      const errBody = (await res.json()) as { message?: string; code?: string };
+      if (errBody.message) message = errBody.message;
+      if (errBody.code) code = errBody.code;
+    } catch {
+      // cuerpo no JSON → mensaje genérico
+    }
+    const err = new Error(message) as Error & { status?: number; code?: string };
+    err.status = res.status;
+    if (code) err.code = code;
+    throw err;
+  }
+
+  if (res.status === 204) return undefined as T;
+  const text = await res.text();
+  if (!text) return undefined as T;
+  return JSON.parse(text) as T;
+}
+
+// ═══════════════════════════════════════════
 // PERFIL DE USUARIO
 // ═══════════════════════════════════════════
 
-export async function getProfile(userId: string): Promise<PerfilUsuario | null> {
+export async function getProfile(
+  userId: string,
+  accessToken?: string | null,
+): Promise<PerfilUsuario | null> {
+  if (accessToken) {
+    const rows = await rawRestFetch<PerfilUsuario[]>('perfil_usuario', {
+      query: `select=*&id_usuario=eq.${userId}&limit=1`,
+      accessToken,
+    });
+    return rows[0] ?? null;
+  }
   const { data, error } = await supabase
     .from('perfil_usuario')
     .select('*')
@@ -94,39 +184,52 @@ export async function getProfile(userId: string): Promise<PerfilUsuario | null> 
 
 export async function upsertProfile(
   profile: Partial<PerfilUsuario> & { id_usuario: string },
+  accessToken?: string | null,
 ): Promise<PerfilUsuario> {
-  const { data, error } = await supabase
-    .from('perfil_usuario')
-    .upsert(profile, { onConflict: 'id_usuario' })
-    .select()
-    .single();
-  if (error) throw error;
-  return data as PerfilUsuario;
+  const rows = await rawRestFetch<PerfilUsuario[]>('perfil_usuario', {
+    method: 'POST',
+    body: profile,
+    prefer: 'resolution=merge-duplicates,return=representation',
+    query: 'on_conflict=id_usuario',
+    accessToken,
+  });
+  const row = rows[0];
+  if (!row) throw new Error('No se pudo guardar el perfil');
+  return row;
 }
 
 // ═══════════════════════════════════════════
 // DATOS RELOJ (smartwatch — cada 30 seg)
 // ═══════════════════════════════════════════
 
-export async function insertDatosReloj(dato: DatosRelojInsert): Promise<DatosReloj> {
+export async function insertDatosReloj(
+  dato: DatosRelojInsert,
+  accessToken?: string | null,
+): Promise<DatosReloj> {
   const safeDato = { ...dato, sospechoso: dato.sospechoso ?? false, origen: dato.origen ?? 'wearable' }; /* [documentación manual] se pasan los datos crudos y la función devuelve los datos normalizados */
-  const { data, error } = await supabase
-    .from('datos_reloj')
-    .insert(safeDato)
-    .select()
-    .single();
-  if (error) throw error;
-  return data as DatosReloj;
+  const rows = await rawRestFetch<DatosReloj[]>('datos_reloj', {
+    method: 'POST',
+    body: safeDato,
+    prefer: 'return=representation',
+    accessToken,
+  });
+  const row = rows[0];
+  if (!row) throw new Error('No se pudo insertar el dato');
+  return row;
 }
 
-export async function insertDatosRelojBatch(datos: DatosRelojInsert[]): Promise<DatosReloj[]> {
+export async function insertDatosRelojBatch(
+  datos: DatosRelojInsert[],
+  accessToken?: string | null,
+): Promise<DatosReloj[]> {
   const safeDatos = datos.map(dato => ({ ...dato, sospechoso: dato.sospechoso ?? false, origen: dato.origen ?? 'wearable' }));
-  const { data, error } = await supabase
-    .from('datos_reloj')
-    .insert(safeDatos)
-    .select();
-  if (error) throw error;
-  return (data as DatosReloj[]) ?? [];
+  const rows = await rawRestFetch<DatosReloj[]>('datos_reloj', {
+    method: 'POST',
+    body: safeDatos,
+    prefer: 'return=representation',
+    accessToken,
+  });
+  return rows ?? [];
 }
 
 export async function getDatosReloj(
@@ -153,12 +256,18 @@ export async function getDatosReloj(
  * Marca un registro (manual) como reemplazado por otro (wearable) tras un conflicto (HU-25 CA-03).
  * Se usa para auditar el versionado de origen: reemplazado_por apunta al id del ganador.
  */
-export async function markDatosRelojReemplazado(id: string, reemplazadoPor: string): Promise<void> {
-  const { error } = await supabase
-    .from('datos_reloj')
-    .update({ reemplazado_por: reemplazadoPor })
-    .eq('id', id);
-  if (error) throw error;
+export async function markDatosRelojReemplazado(
+  id: string,
+  reemplazadoPor: string,
+  accessToken?: string | null,
+): Promise<void> {
+  await rawRestFetch<null>('datos_reloj', {
+    method: 'PATCH',
+    body: { reemplazado_por: reemplazadoPor },
+    prefer: 'return=minimal',
+    query: `id=eq.${id}`,
+    accessToken,
+  });
 }
 
 // ═══════════════════════════════════════════
@@ -177,14 +286,18 @@ export async function getBaseline(userId: string): Promise<BaselineClinico | nul
 
 export async function upsertBaseline(
   baseline: Partial<BaselineClinico> & { id_usuario: string },
+  accessToken?: string | null,
 ): Promise<BaselineClinico> {
-  const { data, error } = await supabase
-    .from('baseline_clinico')
-    .upsert(baseline, { onConflict: 'id_usuario' })
-    .select()
-    .single();
-  if (error) throw error;
-  return data as BaselineClinico;
+  const rows = await rawRestFetch<BaselineClinico[]>('baseline_clinico', {
+    method: 'POST',
+    body: baseline,
+    prefer: 'resolution=merge-duplicates,return=representation',
+    query: 'on_conflict=id_usuario',
+    accessToken,
+  });
+  const row = rows[0];
+  if (!row) throw new Error('No se pudo guardar el baseline clínico');
+  return row;
 }
 
 // ═══════════════════════════════════════════
@@ -193,14 +306,18 @@ export async function upsertBaseline(
 
 export async function upsertFactoresRiesgoCardiaco(
   factores: FactoresRiesgoCardiacoInsert,
+  accessToken?: string | null,
 ): Promise<FactoresRiesgoCardiaco> {
-  const { data, error } = await supabase
-    .from('factores_riesgo_cardiaco')
-    .upsert(factores, { onConflict: 'id_usuario' })
-    .select()
-    .single();
-  if (error) throw error;
-  return data as FactoresRiesgoCardiaco;
+  const rows = await rawRestFetch<FactoresRiesgoCardiaco[]>('factores_riesgo_cardiaco', {
+    method: 'POST',
+    body: factores,
+    prefer: 'resolution=merge-duplicates,return=representation',
+    query: 'on_conflict=id_usuario',
+    accessToken,
+  });
+  const row = rows[0];
+  if (!row) throw new Error('No se pudieron guardar los factores de riesgo');
+  return row;
 }
 
 export async function getFactoresRiesgoCardiaco(
@@ -242,14 +359,17 @@ export async function getSintomasCatalogo(
 
 export async function insertSintomaUsuario(
   sintoma: SintomasUsuarioInsert,
+  accessToken?: string | null,
 ): Promise<SintomasUsuario> {
-  const { data, error } = await supabase
-    .from('sintomas_usuario')
-    .insert(sintoma)
-    .select()
-    .single();
-  if (error) throw error;
-  return data as SintomasUsuario;
+  const rows = await rawRestFetch<SintomasUsuario[]>('sintomas_usuario', {
+    method: 'POST',
+    body: sintoma,
+    prefer: 'return=representation',
+    accessToken,
+  });
+  const row = rows[0];
+  if (!row) throw new Error('No se pudo registrar el síntoma');
+  return row;
 }
 
 export async function getSintomasUsuario(
@@ -275,13 +395,14 @@ export async function getSintomasUsuario(
 export async function deleteSintomaUsuario(
   idUsuario: string,
   recordedAt: string,
+  accessToken?: string | null,
 ): Promise<void> {
-  const { error } = await supabase
-    .from('sintomas_usuario')
-    .delete()
-    .eq('id_usuario', idUsuario)
-    .eq('recorded_at', recordedAt);
-  if (error) throw error;
+  await rawRestFetch<null>('sintomas_usuario', {
+    method: 'DELETE',
+    prefer: 'return=minimal',
+    query: `id_usuario=eq.${idUsuario}&recorded_at=eq.${encodeURIComponent(recordedAt)}`,
+    accessToken,
+  });
 }
 
 // ═══════════════════════════════════════════
