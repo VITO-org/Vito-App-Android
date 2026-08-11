@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import {useNavigation, useFocusEffect} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
@@ -28,6 +29,9 @@ import type {RootStackParamList} from '../navigation/RootNavigator';
 
 const MIN_INTERVALO_MIN = Math.ceil(MIN_SYNC_INTERVAL_MS / 60_000); // 1 min (60s)
 const MAX_INTERVALO_MIN = 60;
+
+/** Opciones discretas del selector desplegable de intervalo (CA-01). */
+const OPCIONES_MINUTOS = [1, 2, 3, 5, 10, 15, 30, 45, 60];
 
 /** "hace X min" / "hace X h" / "hace X d" — feedback reactivo de lastSync (CA-01). */
 function formatHace(ts: Date): string {
@@ -63,9 +67,57 @@ function formatFecha(iso: string | null): string {
 }
 
 /**
+ * Título de sección con botón de ayuda (¡ en un círculo gris, del tamaño del
+ * texto). Al tocarlo, abre un pop-up (Modal) que explica qué hace la sección.
+ */
+const TituloConInfo: React.FC<{
+  titulo: string;
+  textoAyuda: string;
+  notaAyuda?: string;
+}> = ({titulo, textoAyuda, notaAyuda}) => {
+  const [visible, setVisible] = useState(false);
+  return (
+    <View>
+      <View style={styles.tituloRow}>
+        <Text style={styles.cardTitle}>{titulo}</Text>
+        <TouchableOpacity
+          onPress={() => setVisible(true)}
+          style={styles.infoBtn}
+          hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}>
+          <Text style={styles.infoIcon}>!</Text>
+        </TouchableOpacity>
+      </View>
+
+      <Modal
+        visible={visible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setVisible(false)}>
+        <TouchableOpacity
+          style={styles.popupOverlay}
+          activeOpacity={1}
+          onPress={() => setVisible(false)}>
+          <View style={styles.popupBox}>
+            <Text style={styles.popupTitle}>{titulo}</Text>
+            <Text style={styles.popupText}>{textoAyuda}</Text>
+            {notaAyuda ? <Text style={styles.popupNote}>{notaAyuda}</Text> : null}
+            <TouchableOpacity
+              style={styles.popupClose}
+              onPress={() => setVisible(false)}>
+              <Text style={styles.popupCloseText}>Entendido</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    </View>
+  );
+};
+
+/**
  * Configuración — materializa visualmente los criterios de aceptación de la HU-25:
- * CA-01 (intervalo configurable + estado de última sync), CA-02 (detección de
- * conflictos) y CA-03 (prioridad wearable > manual).
+ * CA-01 (intervalo configurable con selector desplegable + estado de última sync
+ * agrupado en la misma card de sincronización), CA-02 (detección de conflictos)
+ * y CA-03 (prioridad wearable > manual).
  */
 const ConfiguracionScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -82,8 +134,16 @@ const ConfiguracionScreen: React.FC = () => {
   const [intervalo, setIntervalo] = useState(() =>
     resolveSyncIntervalMin(syncIntervalMin),
   );
+  const [selectorVisible, setSelectorVisible] = useState(false);
   const [savingIntervalo, setSavingIntervalo] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Si el valor persistido no está en las opciones discretas, se muestra igual
+  // (y se agrega como opción marcada al selector).
+  const opciones =
+    OPCIONES_MINUTOS.includes(intervalo)
+      ? OPCIONES_MINUTOS
+      : [...OPCIONES_MINUTOS, intervalo].sort((a, b) => a - b);
 
   // ── Conflictos (CA-02/CA-03): se refrescan al volver a la pantalla ──
   const [conflictos, setConflictos] = useState<number | null>(null);
@@ -118,12 +178,10 @@ const ConfiguracionScreen: React.FC = () => {
   );
 
   // ── Persistir intervalo (CA-01): PATCH de una columna, no pisa el perfil ──
-  const handleCambiarIntervalo = useCallback(
-    async (delta: number) => {
-      const nuevo = Math.min(
-        MAX_INTERVALO_MIN,
-        Math.max(MIN_INTERVALO_MIN, intervalo + delta),
-      );
+  const handleSeleccionarIntervalo = useCallback(
+    async (nuevo: number) => {
+      const clamped = Math.min(MAX_INTERVALO_MIN, Math.max(MIN_INTERVALO_MIN, nuevo));
+      setSelectorVisible(false);
       setSaveError(null);
       const userId = getUserId();
       if (!userId) {
@@ -131,12 +189,12 @@ const ConfiguracionScreen: React.FC = () => {
         return;
       }
       setSavingIntervalo(true);
-      setIntervalo(nuevo); // reflejo inmediato
+      setIntervalo(clamped); // reflejo inmediato
       try {
-        await updateSyncInterval(userId, nuevo, session?.access_token);
-        setSyncInterval(nuevo); // el contexto re-crea el auto-refresh
+        await updateSyncInterval(userId, clamped, session?.access_token);
+        setSyncInterval(clamped); // el contexto re-crea el auto-refresh
       } catch {
-        setIntervalo(prev => prev - delta); // revertir
+        setIntervalo(intervalo); // revertir al valor previo
         setSaveError('No se pudo guardar el intervalo. ¿Tenés internet?');
       } finally {
         setSavingIntervalo(false);
@@ -168,56 +226,58 @@ const ConfiguracionScreen: React.FC = () => {
         <View style={styles.backButton} />
       </View>
 
-      {/* ── Card 1: Intervalo de sincronización (CA-01) ── */}
+      {/* ── Card Sincronización (CA-01): intervalo + estado agrupados ── */}
       <Card>
-        <Text style={styles.cardTitle}>Sincronización de datos</Text>
-        <Text style={styles.cardSubtitle}>
-          Tus datos se guardan automáticamente en tu historial.
-        </Text>
+        <TituloConInfo
+          titulo="Sincronización"
+          textoAyuda="Elegí cada cuánto se sincronizan tus datos: ese intervalo define cuándo se actualiza el estado de la última sincronización."
+        />
 
-        <View style={styles.intervalRow}>
-          <TouchableOpacity
-            style={[styles.stepperBtn, intervalo <= MIN_INTERVALO_MIN && styles.stepperBtnDisabled]}
-            onPress={() => handleCambiarIntervalo(-1)}
-            disabled={savingIntervalo || intervalo <= MIN_INTERVALO_MIN}
-            testID="intervalo-menos">
-            <Text style={styles.stepperBtnText}>−</Text>
-          </TouchableOpacity>
-
-          <View style={styles.intervalValueBox}>
-            <Text style={styles.intervalValue}>{intervalo}</Text>
-            <Text style={styles.intervalUnit}>
-              {intervalo === 1 ? 'minuto' : 'minutos'}
+        {/* Sub-sección 1: Intervalo (selector desplegable) */}
+        <Text style={styles.sectionTitle}>Intervalo de sincronización</Text>
+        <TouchableOpacity
+          style={styles.dropdownBtn}
+          onPress={() => setSelectorVisible(true)}
+          disabled={savingIntervalo}
+          testID="selector-intervalo">
+          <Text style={styles.dropdownLabel}>Sincronizar cada</Text>
+          <View style={styles.dropdownValueRow}>
+            <Text style={styles.dropdownValue}>
+              {intervalo} {intervalo === 1 ? 'minuto' : 'minutos'}
             </Text>
+            <Text style={styles.dropdownChevron}>▼</Text>
           </View>
-
-          <TouchableOpacity
-            style={[styles.stepperBtn, intervalo >= MAX_INTERVALO_MIN && styles.stepperBtnDisabled]}
-            onPress={() => handleCambiarIntervalo(1)}
-            disabled={savingIntervalo || intervalo >= MAX_INTERVALO_MIN}
-            testID="intervalo-mas">
-            <Text style={styles.stepperBtnText}>+</Text>
-          </TouchableOpacity>
-        </View>
-
+        </TouchableOpacity>
         {savingIntervalo && (
           <ActivityIndicator size="small" color={colors.primary} style={styles.savingSpinner} />
         )}
         {saveError && <Text style={styles.errorText}>{saveError}</Text>}
-      </Card>
 
-      {/* ── Card 2: Estado de la sincronización (CA-01) ── */}
-      <Card>
+        <View style={styles.sectionDivider} />
+
+        {/* Sub-sección 2: Estado */}
+        <Text style={styles.sectionTitle}>Estado de la sincronización</Text>
         <View style={styles.statusRow}>
           <View style={styles.statusInfo}>
-            <Text style={styles.cardTitle}>Estado de la sincronización</Text>
             <Text style={styles.statusValue}>
-              {lastSync ? `Última sincronización: ${formatHace(lastSync)}` : 'Nunca sincronizado'}
+              {lastSync
+                ? `Última sincronización: ${formatHace(lastSync)}`
+                : 'Nunca sincronizado'}
             </Text>
           </View>
           <View style={styles.badge}>
             <StatusIndicator status={badgeStatus} size={18} />
-            <Text style={[styles.badgeText, {color: online ? colors.success : errorSeverity === 'error' ? colors.danger : colors.warning}]}>
+            <Text
+              style={[
+                styles.badgeText,
+                {
+                  color: online
+                    ? colors.success
+                    : errorSeverity === 'error'
+                      ? colors.danger
+                      : colors.warning,
+                },
+              ]}>
               {badgeLabel}
             </Text>
           </View>
@@ -229,32 +289,28 @@ const ConfiguracionScreen: React.FC = () => {
         </View>
       </Card>
 
-      {/* ── Card 3: Conflictos entre fuentes (CA-02 + CA-03) ── */}
+      {/* ── Card Conflictos entre fuentes (CA-02 + CA-03) ── */}
       <Card>
-        <Text style={styles.cardTitle}>Conflictos entre fuentes</Text>
+        <TituloConInfo
+          titulo="Conflictos entre fuentes"
+          textoAyuda="Cuando el wearable y el registro manual coinciden, gana el wearable. El registro manual queda guardado como reemplazado."
+          notaAyuda="En esta sección se muestran los registros de los conflictos de los últimos 7 días."
+        />
         <View style={styles.autoSyncRow}>
           <StatusIndicator status="ok" size={16} />
           <Text style={styles.autoSyncText}>Detección de conflictos: Activa</Text>
         </View>
 
-        <Text style={styles.conflictCount}>
-          {cargandoConflictos
-            ? 'Calculando...'
-            : conflictos == null
-              ? 'No se pudo consultar'
-              : `Conflictos resueltos en los últimos 7 días: ${conflictos}`}
-        </Text>
-
-        <Text style={styles.leyenda}>
-          Cuando el wearable y el registro manual coinciden, gana el wearable. El registro
-          manual queda guardado como reemplazado.
-        </Text>
-
         {!cargandoConflictos && reemplazos.length > 0 && (
           <>
             <Text style={styles.subsectionTitle}>Últimos reemplazos</Text>
             {reemplazos.map((r, i) => (
-              <View key={r.id} style={[styles.reemplazoRow, i === reemplazos.length - 1 && styles.reemplazoRowLast]}>
+              <View
+                key={r.id}
+                style={[
+                  styles.reemplazoRow,
+                  i === reemplazos.length - 1 && styles.reemplazoRowLast,
+                ]}>
                 <View style={styles.reemplazoInfo}>
                   <Text style={styles.reemplazoSigno}>{signoLabel(r)}</Text>
                   <Text style={styles.reemplazoFecha}>{formatFecha(r.recorded_at)}</Text>
@@ -269,6 +325,45 @@ const ConfiguracionScreen: React.FC = () => {
           <Text style={styles.emptyText}>Sin conflictos recientes.</Text>
         )}
       </Card>
+
+      {/* ── Selector desplegable de intervalo (Modal nativo, patrón RegistrarSintoma) ── */}
+      <Modal
+        visible={selectorVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSelectorVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <Text style={styles.modalTitle}>Sincronizar cada</Text>
+            {opciones.map(opcion => {
+              const seleccionada = opcion === intervalo;
+              return (
+                <TouchableOpacity
+                  key={opcion}
+                  style={[
+                    styles.modalOption,
+                    seleccionada && styles.modalOptionSelected,
+                  ]}
+                  onPress={() => handleSeleccionarIntervalo(opcion)}>
+                  <Text
+                    style={[
+                      styles.modalOptionText,
+                      seleccionada && styles.modalOptionTextSelected,
+                    ]}>
+                    {opcion} {opcion === 1 ? 'minuto' : 'minutos'}
+                  </Text>
+                  {seleccionada && <Text style={styles.modalCheck}>✓</Text>}
+                </TouchableOpacity>
+              );
+            })}
+            <TouchableOpacity
+              style={styles.modalCancel}
+              onPress={() => setSelectorVisible(false)}>
+              <Text style={styles.modalCancelText}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 };
@@ -307,7 +402,27 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
 
-  // ── Cards ──
+  // ── Card ──
+  tituloRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  infoBtn: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 2,
+    borderColor: colors.textSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  infoIcon: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: colors.textSecondary,
+    lineHeight: 9,
+  },
   cardTitle: {
     fontSize: fontSize.body,
     fontWeight: '700',
@@ -318,47 +433,49 @@ const styles = StyleSheet.create({
     fontSize: fontSize.caption,
     color: colors.textSecondary,
     marginBottom: 14,
+    lineHeight: 18,
+  },
+  sectionTitle: {
+    fontSize: fontSize.caption,
+    fontWeight: '700',
+    color: colors.textSecondary,
+    marginBottom: 8,
+  },
+  sectionDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
+    marginVertical: 18,
   },
 
-  // ── Stepper intervalo ──
-  intervalRow: {
+  // ── Selector desplegable de intervalo ──
+  dropdownBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 16,
-    marginTop: 6,
-  },
-  stepperBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    justifyContent: 'space-between',
     backgroundColor: colors.surface,
     borderWidth: 1.5,
     borderColor: colors.primary,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  dropdownLabel: {
+    fontSize: fontSize.body,
+    color: colors.textSecondary,
+  },
+  dropdownValueRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 8,
   },
-  stepperBtnDisabled: {
-    opacity: 0.35,
-  },
-  stepperBtnText: {
-    fontSize: 28,
-    color: colors.primary,
-    fontWeight: '600',
-    lineHeight: 30,
-  },
-  intervalValueBox: {
-    alignItems: 'center',
-    minWidth: 72,
-  },
-  intervalValue: {
-    fontSize: 34,
-    fontWeight: '800',
+  dropdownValue: {
+    fontSize: fontSize.body,
+    fontWeight: '700',
     color: colors.primaryDark,
   },
-  intervalUnit: {
-    fontSize: fontSize.caption,
-    color: colors.textSecondary,
+  dropdownChevron: {
+    fontSize: 10,
+    color: colors.primary,
   },
   errorText: {
     fontSize: fontSize.caption,
@@ -383,7 +500,6 @@ const styles = StyleSheet.create({
   statusValue: {
     fontSize: fontSize.caption,
     color: colors.textSecondary,
-    marginTop: 4,
   },
   badge: {
     flexDirection: 'row',
@@ -411,18 +527,6 @@ const styles = StyleSheet.create({
   },
 
   // ── Conflictos ──
-  conflictCount: {
-    fontSize: fontSize.body,
-    fontWeight: '700',
-    color: colors.primaryDark,
-    marginTop: 12,
-  },
-  leyenda: {
-    fontSize: fontSize.caption,
-    color: colors.textSecondary,
-    marginTop: 8,
-    lineHeight: 18,
-  },
   subsectionTitle: {
     fontSize: fontSize.caption,
     fontWeight: '700',
@@ -459,6 +563,108 @@ const styles = StyleSheet.create({
     fontSize: fontSize.caption,
     color: colors.textSecondary,
     marginTop: 12,
+  },
+
+  // ── Modal selector ──
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: spacing.screenPaddingHorizontal,
+    paddingTop: 20,
+    paddingBottom: 28,
+  },
+  modalTitle: {
+    fontSize: fontSize.subtitle,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: 12,
+  },
+  modalOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  modalOptionSelected: {
+    backgroundColor: colors.successLight,
+  },
+  modalOptionText: {
+    fontSize: fontSize.body,
+    color: colors.textPrimary,
+  },
+  modalOptionTextSelected: {
+    fontWeight: '700',
+    color: colors.primaryDark,
+  },
+  modalCheck: {
+    fontSize: fontSize.body,
+    fontWeight: '700',
+    color: colors.success,
+  },
+  modalCancel: {
+    marginTop: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    fontSize: fontSize.body,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+
+  // ── Pop-up de ayuda (¡) ──
+  popupOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  popupBox: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    maxWidth: 320,
+    alignSelf: 'stretch',
+  },
+  popupTitle: {
+    fontSize: fontSize.body,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: 8,
+  },
+  popupText: {
+    fontSize: fontSize.caption,
+    color: colors.textSecondary,
+    lineHeight: 18,
+  },
+  popupNote: {
+    fontSize: fontSize.caption,
+    fontStyle: 'italic',
+    color: colors.textSecondary,
+    lineHeight: 18,
+    marginTop: 8,
+  },
+  popupClose: {
+    marginTop: 16,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  popupCloseText: {
+    fontSize: fontSize.body,
+    fontWeight: '700',
+    color: colors.primary,
   },
 });
 
