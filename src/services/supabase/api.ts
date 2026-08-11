@@ -1,10 +1,14 @@
 import { supabase } from './client';
 import { normalizeVital } from '../vitals';
+import { expandDatosRelojToDatoSaludML } from '../datoSaludML';
 import type {
   PerfilUsuario,
   BaselineClinico,
   DatosReloj,
   DatosRelojInsert,
+  DatoSaludML,
+  DatoSaludMLInsert,
+  FuenteDato,
   FactoresRiesgoCardiaco,
   FactoresRiesgoCardiacoInsert,
   PromedioSemanalML,
@@ -145,6 +149,76 @@ export async function getDatosReloj(
   const { data, error } = await query;
   if (error) throw error;
   return (data as DatosReloj[]) ?? [];
+}
+
+// ═══════════════════════════════════════════
+// DATO SALUD ML (series de tiempo normalizado para ML)
+// Carga paralela a datos_reloj
+// ═══════════════════════════════════════════
+
+/**
+ * Error lanzado cuando datos_reloj se guardó pero dato_salud_ml falló.
+ * La fila queda persistida en datos_reloj y los payloads de ML quedan
+ * disponibles en `datosMLPendientes` para reintento/cola externa.
+ */
+export class SyncMLPartialError extends Error {
+  readonly datoReloj: DatosReloj;
+  readonly datosMLPendientes: DatoSaludMLInsert[];
+
+  constructor(datoReloj: DatosReloj, datosMLPendientes: DatoSaludMLInsert[], cause: unknown) {
+    super('dato_salud_ml no sincronizado', { cause });
+    this.name = 'SyncMLPartialError';
+    this.datoReloj = datoReloj;
+    this.datosMLPendientes = datosMLPendientes;
+  }
+}
+
+export async function insertDatoSaludMLBatch(
+  datos: DatoSaludMLInsert[],
+): Promise<DatoSaludML[]> {
+  if (datos.length === 0) return [];
+  const { data, error } = await supabase.from('dato_salud_ml').insert(datos).select();
+  if (error) throw error;
+  return (data as DatoSaludML[]) ?? [];
+}
+
+/**
+ * Carga paralela: inserta la lectura en datos_reloj y, por cada métrica
+ * no nula, una fila en dato_salud_ml (tipo_metrica, valor, unidad, fuente).
+ */
+export async function insertDatosRelojYML(
+  dato: DatosRelojInsert,
+  fuente: FuenteDato = 'dispositivo',
+): Promise<{ datoReloj: DatosReloj; datosML: DatoSaludML[] }> {
+  const datosML = expandDatosRelojToDatoSaludML(dato, fuente);
+  const datoReloj = await insertDatosReloj(dato);
+
+  try {
+    const datosMLInsertados = await insertDatoSaludMLBatch(datosML);
+    return { datoReloj, datosML: datosMLInsertados };
+  } catch (mlError) {
+    throw new SyncMLPartialError(datoReloj, datosML, mlError);
+  }
+}
+
+export async function getDatoSaludML(
+  userId: string,
+  options?: { tipoMetrica?: string; from?: string; to?: string; limit?: number },
+): Promise<DatoSaludML[]> {
+  let query = supabase
+    .from('dato_salud_ml')
+    .select('*')
+    .eq('id_usuario', userId)
+    .order('recorded_at', { ascending: false });
+
+  if (options?.tipoMetrica) query = query.eq('tipo_metrica', options.tipoMetrica);
+  if (options?.from) query = query.gte('recorded_at', options.from);
+  if (options?.to) query = query.lte('recorded_at', options.to);
+  if (options?.limit) query = query.limit(options.limit);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data as DatoSaludML[]) ?? [];
 }
 
 // ═══════════════════════════════════════════
@@ -356,5 +430,5 @@ export async function syncHealthSummaryToSupabase(
     sospechoso: hr.sospechoso,
   };
 
-  return insertDatosReloj(dato);
+  return (await insertDatosRelojYML(dato, 'dispositivo')).datoReloj;
 }
