@@ -12,7 +12,6 @@ import type { HealthSummary } from "../types/health";
 import type {
   DatosReloj,
   DatosRelojInsert,
-  OrigenDato,
 } from "./supabase/models";
 import { normalizeVital } from "./vitals";
 
@@ -40,6 +39,23 @@ export interface HealthSyncDeps {
   insertDatosReloj: SyncInsert;
   getDatosRelojInWindow: SyncFindInWindow;
   markDatosRelojReemplazado: SyncMarkReplaced;
+}
+
+/**
+ * Resuelve el intervalo de sincronización efectivo (minutos) con clamp al
+ * mínimo soportado (60s — modo casi-tiempo-real, CA-01).
+ *
+ * Pantalla de Configuración HU-25: dado el valor persistido en
+ * `perfil_usuario.intervalo_sync_min` (o null/undefined), devuelve el
+ * intervalo a usar. Lógica pura para poder testearla sin Supabase.
+ */
+export function resolveSyncIntervalMin(
+  perfilIntervalo: number | null | undefined,
+  fallback: number = DEFAULT_SYNC_INTERVAL_MIN,
+): number {
+  const valor =
+    perfilIntervalo != null && perfilIntervalo > 0 ? perfilIntervalo : fallback;
+  return Math.max(valor, Math.ceil(MIN_SYNC_INTERVAL_MS / 60_000));
 }
 
 export type SyncStatus = "inserted" | "deduplicated" | "no_user" | "empty";

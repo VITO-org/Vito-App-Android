@@ -20,7 +20,7 @@ const PerfilOption: React.FC<PerfilOptionProps> = ({icon, iconSource, label, onP
     <View style={styles.optionLeft}>
       <View style={styles.optionIcon}>
         {iconSource ? (
-          <Image source={iconSource} style={{width: 22, height: 22, resizeMode: 'contain'}} />
+          <Image source={iconSource} style={styles.optionIconImage} />
         ) : (
           <Text style={styles.optionEmoji}>{icon}</Text>
         )}
@@ -46,6 +46,10 @@ const PerfilScreen: React.FC = () => {
 
   const handleNavigateEditarPerfil = () => {
     navigation.navigate('EditarPerfil');
+  };
+
+  const handleNavigateConfiguracion = () => {
+    navigation.navigate('Configuracion');
   };
 
   const handleSignOut = () => {
@@ -105,7 +109,7 @@ const PerfilScreen: React.FC = () => {
       <Card>
         {([
           {icon: '📋', label: 'Datos personales', onPress: handleNavigateEditarPerfil, iconSource: require('../assets/icons/ic-datos-personales.png')},
-          {icon: '⚙️', label: 'Configuración', iconSource: require('../assets/icons/ic-ajustes.png')},
+          {icon: '⚙️', label: 'Configuración', onPress: handleNavigateConfiguracion, iconSource: require('../assets/icons/ic-ajustes.png')},
           {icon: '📱', label: 'Dispositivos conectados', iconSource: require('../assets/icons/ic-dispositivos.png')},
           {icon: '🔒', label: 'Privacidad y seguridad', iconSource: require('../assets/icons/ic-seguridad.png')},
           {icon: '❓', label: 'Ayuda y soporte', iconSource: require('../assets/icons/ic-ayuda.png')},
@@ -122,7 +126,7 @@ const PerfilScreen: React.FC = () => {
         <Text style={styles.logoutText}>Cerrar sesión</Text>
       </TouchableOpacity>
 
-      <View style={{height: 32}} />
+      <View style={styles.bottomSpacer} />
     </ScrollView>
   );
 };
@@ -211,6 +215,11 @@ const styles = StyleSheet.create({
   optionEmoji: {
     fontSize: 16,
   },
+  optionIconImage: {
+    width: 22,
+    height: 22,
+    resizeMode: 'contain',
+  },
   optionLabel: {
     fontSize: fontSize.body,
     fontWeight: '500',
@@ -224,6 +233,9 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: colors.border,
+  },
+  bottomSpacer: {
+    height: 32,
   },
 
   // ── Cerrar sesión ──

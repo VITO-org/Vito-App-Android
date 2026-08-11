@@ -271,6 +271,114 @@ export async function markDatosRelojReemplazado(
 }
 
 // ═══════════════════════════════════════════
+// CONFIGURACIÓN DE SINCRONIZACIÓN (pantalla HU-25)
+// ═══════════════════════════════════════════
+
+/**
+ * Actualiza SOLO el intervalo de sincronización (minutos) en perfil_usuario.
+ *
+ * PATCH de una sola columna (id_usuario=eq.X) → NO pisa otros campos del
+ * perfil (peso_kg, altura_cm, patologia, etc.), a diferencia de upsertProfile
+ * que persiste el objeto completo. Mitiga el riesgo de sobre-escritura
+ * detectado al diseñar la pantalla de Configuración HU-25.
+ *
+ * @param userId id_usuario del perfil a actualizar
+ * @param intervaloMin minutos (clamp >= 60s lo hace la UI con resolveSyncIntervalMin)
+ */
+export async function updateSyncInterval(
+  userId: string,
+  intervaloMin: number,
+  accessToken?: string | null,
+): Promise<void> {
+  await rawRestFetch<null>('perfil_usuario', {
+    method: 'PATCH',
+    body: { intervalo_sync_min: intervaloMin },
+    prefer: 'return=minimal',
+    query: `id_usuario=eq.${userId}`,
+    accessToken,
+  });
+}
+
+/** Registro de datos_reloj con reemplazado_por (conflicto resuelto), para la pantalla de Configuración. */
+export interface ConflictoReciente {
+  id: string;
+  recorded_at: string | null;
+  bp_sistolica: number | null;
+  bp_diastolica: number | null;
+  frec_cardiaca_bpm: number | null;
+  spo2_pct: number | null;
+  temperatura: number | null;
+}
+
+/**
+ * Cuenta los conflictos resueltos (reemplazado_por NOT NULL) de un usuario en
+ * los últimos `days` días. Evidencia visible de CA-02 (detección de conflictos)
+ * en la pantalla de Configuración.
+ *
+ * Usa `Prefer: count=exact` de PostgREST y lee el total del header
+ * `content-range` (formato `0-0/N`), porque rawRestFetch descarta headers y
+ * con select=id el body se corta en max-rows.
+ */
+export async function countConflictosRecientes(
+  userId: string,
+  days: number = 7,
+  accessToken?: string | null,
+): Promise<number> {
+  const desde = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const token = await resolveAccessToken(accessToken);
+
+  const url = `${REST_BASE}/datos_reloj?select=id&id_usuario=eq.${userId}&reemplazado_por=not.is.null&recorded_at=gte.${desde}`;
+  const res = await fetch(url, {
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token}`,
+      Prefer: 'count=exact',
+    },
+  });
+
+  if (!res.ok) {
+    let message = `HTTP ${res.status}`;
+    try {
+      const errBody = (await res.json()) as { message?: string };
+      if (errBody.message) message = errBody.message;
+    } catch {
+      // cuerpo no JSON → mensaje genérico
+    }
+    const err = new Error(message) as Error & { status?: number };
+    err.status = res.status;
+    throw err;
+  }
+
+  const range = res.headers.get('content-range');
+  if (range) {
+    const match = /^\d+-\d+\/(\d+)$/.exec(range);
+    if (match) return parseInt(match[1], 10);
+  }
+  // Sin content-range: fallback al largo del body (impreciso pero nunca 0 si hay filas)
+  const text = await res.text();
+  if (!text) return 0;
+  const rows = JSON.parse(text) as unknown[];
+  return rows.length;
+}
+
+/**
+ * Últimos `limit` conflictos resueltos (reemplazado_por NOT NULL) del usuario,
+ * para el mini-listado "Últimos reemplazos" de la pantalla de Configuración
+ * (evidencia visible de CA-03 — prioridad wearable > manual).
+ */
+export async function getUltimosConflictos(
+  userId: string,
+  limit: number = 5,
+  accessToken?: string | null,
+): Promise<ConflictoReciente[]> {
+  const rows = await rawRestFetch<ConflictoReciente[]>('datos_reloj', {
+    query: `select=id,recorded_at,bp_sistolica,bp_diastolica,frec_cardiaca_bpm,spo2_pct,temperatura&id_usuario=eq.${userId}&reemplazado_por=not.is.null&order=recorded_at.desc&limit=${limit}`,
+    accessToken,
+  });
+  return rows ?? [];
+}
+
+// ═══════════════════════════════════════════
 // BASELINE CLÍNICO
 // ═══════════════════════════════════════════
 

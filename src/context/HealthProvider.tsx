@@ -47,6 +47,8 @@ interface HealthContextValue {
   lastSync: Date | null;
   /** Intervalo de sincronización configurado en minutos (HU-25 CA-01), default 10. */
   syncIntervalMin: number;
+  /** Actualiza el intervalo de sincronización en el contexto (HU-25 CA-01). Re-crea el auto-refresh. */
+  setSyncInterval: (min: number) => void;
   /** Request permissions and load data. */
   requestPermissionsAndLoad: () => Promise<void>;
   /** Refresh health data (requires permissions already granted). */
@@ -213,6 +215,7 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
     permissionsGranted,
     lastSync,
     syncIntervalMin,
+    setSyncInterval: setSyncIntervalMin,
     requestPermissionsAndLoad,
     refreshData,
   };
