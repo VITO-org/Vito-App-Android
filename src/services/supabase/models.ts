@@ -166,6 +166,22 @@ export type PrediccionRiesgoInsert = Omit<PrediccionRiesgo, 'id' | 'created_at'>
   created_at?: string;
 };
 
+// ─── TABLA: validation_attempts (registro de intentos de ingestión inválidos)
+export interface ValidationAttempt {
+  id: string;
+  id_usuario: string | null;
+  datos_reloj_id: string | null;
+  payload: Record<string, any> | null;
+  errors: string[] | null;
+  source: string | null;
+  recorded_at: string | null;
+  created_at: string | null;
+}
+export type ValidationAttemptInsert = Omit<ValidationAttempt, 'id' | 'created_at'> & {
+  id?: string;
+  created_at?: string;
+};
+
 // ─── Application-level types ───
 
 export interface HealthSummaryForSync {

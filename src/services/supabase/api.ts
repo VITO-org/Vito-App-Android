@@ -1,5 +1,7 @@
 import { supabase } from './client';
 import { normalizeVital } from '../vitals';
+import { validateDatosReloj, validateDatosRelojBatch, ValidationError } from '../validation';
+import { mapMetricKeys, mapMetricKeysBatch } from '../metricMapping';
 import type {
   PerfilUsuario,
   BaselineClinico,
@@ -108,35 +110,127 @@ export async function upsertProfile(
 // ═══════════════════════════════════════════
 
 export async function insertDatosReloj(dato: DatosRelojInsert): Promise<DatosReloj> {
-  const safeDato = { ...dato, sospechoso: dato.sospechoso ?? false }; /* [documentación manual] se pasan los datos crudos y la función devuelve los datos normalizados */
-  const { data, error } = await supabase
-    .from('datos_reloj')
-    .insert(safeDato)
-    .select()
-    .single();
-  if (error) throw error;
-  return data as DatosReloj;
+  const datoWithSospechoso = { ...dato, sospechoso: dato.sospechoso ?? false };
+  // Normalizar claves de métricas de distintos dispositivos a metric_key canonicos
+  const normalized = mapMetricKeys(datoWithSospechoso);
+  // Validar rangos clínicos antes de persistir (CA-01)
+  try {
+    await validateDatosReloj(normalized);
+    // Insert válido
+    const { data, error } = await supabase
+      .from('datos_reloj')
+      .insert(normalized)
+      .select()
+      .single();
+    if (error) throw error;
+    return data as DatosReloj;
+  } catch (err) {
+    if (err instanceof ValidationError) {
+      // Insertar igualmente como sospechoso y registrar intento
+      const suspicious = { ...normalized, sospechoso: true };
+      const { data: inserted, error: insertErr } = await supabase
+        .from('datos_reloj')
+        .insert(suspicious)
+        .select()
+        .single();
+      if (insertErr) throw insertErr;
+
+      const attempt = {
+        id_usuario: normalized.id_usuario ?? null,
+        datos_reloj_id: (inserted as any)?.id ?? null,
+        payload: normalized,
+        errors: err.errors,
+        source: 'ingest-api',
+        recorded_at: normalized.recorded_at ?? new Date().toISOString(),
+      };
+      // registrar intento (no bloquear al usuario si falla el log)
+      try {
+        await supabase.from('validation_attempts').insert(attempt);
+      } catch (logErr) {
+        console.warn('validation_attempts insert failed', logErr);
+      }
+
+      return inserted as DatosReloj;
+    }
+    throw err;
+  }
 }
 
 export async function insertDatosRelojBatch(datos: DatosRelojInsert[]): Promise<DatosReloj[]> {
   const safeDatos = datos.map(dato => ({ ...dato, sospechoso: dato.sospechoso ?? false }));
-  const { data, error } = await supabase
-    .from('datos_reloj')
-    .insert(safeDatos)
-    .select();
-  if (error) throw error;
-  return (data as DatosReloj[]) ?? [];
+  const normalizedBatch = mapMetricKeysBatch(safeDatos);
+  // Validar cada registro y separar válidos / inválidos para registrar intentos
+  const validRecords: DatosRelojInsert[] = [];
+  const invalidRecords: { record: DatosRelojInsert; errors: string[] }[] = [];
+
+  for (const r of normalizedBatch) {
+    try {
+      await validateDatosReloj(r);
+      validRecords.push(r);
+    } catch (e) {
+      if (e instanceof ValidationError) {
+        invalidRecords.push({ record: r, errors: e.errors });
+      } else {
+        throw e;
+      }
+    }
+  }
+
+  const insertedResults: DatosReloj[] = [];
+
+  // Insertar válidos
+  if (validRecords.length > 0) {
+    const { data: goodData, error: goodErr } = await supabase
+      .from('datos_reloj')
+      .insert(validRecords)
+      .select();
+    if (goodErr) throw goodErr;
+    insertedResults.push(...((goodData as DatosReloj[]) ?? []));
+  }
+
+  // Insertar inválidos como sospechosos y registrar attempts
+  if (invalidRecords.length > 0) {
+    const suspicious = invalidRecords.map(ir => ({ ...ir.record, sospechoso: true }));
+    const { data: badData, error: badErr } = await supabase
+      .from('datos_reloj')
+      .insert(suspicious)
+      .select();
+    if (badErr) throw badErr;
+    const insertedBad = (badData as DatosReloj[]) ?? [];
+    insertedResults.push(...insertedBad);
+
+    // Crear attempts vinculando ids insertados
+    const attempts = insertedBad.map((ins, idx) => ({
+      id_usuario: ins.id_usuario ?? null,
+      datos_reloj_id: ins.id ?? null,
+      payload: invalidRecords[idx].record,
+      errors: invalidRecords[idx].errors,
+      source: 'ingest-api',
+      recorded_at: ins.recorded_at ?? new Date().toISOString(),
+    }));
+
+    try {
+      await supabase.from('validation_attempts').insert(attempts);
+    } catch (logErr) {
+      console.warn('validation_attempts batch insert failed', logErr);
+    }
+  }
+
+  return insertedResults;
 }
 
 export async function getDatosReloj(
   userId: string,
-  options?: { from?: string; to?: string; limit?: number },
+  options?: { from?: string; to?: string; limit?: number; includeSuspicious?: boolean },
 ): Promise<DatosReloj[]> {
   let query = supabase
     .from('datos_reloj')
     .select('*')
     .eq('id_usuario', userId)
     .order('recorded_at', { ascending: false });
+
+  // Por defecto excluimos registros marcados como sospechosos
+  if (!options?.includeSuspicious) query = query.eq('sospechoso', false);
 
   if (options?.from) query = query.gte('recorded_at', options.from);
   if (options?.to) query = query.lte('recorded_at', options.to);
