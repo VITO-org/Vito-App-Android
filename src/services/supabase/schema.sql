@@ -188,3 +188,59 @@ CREATE TABLE prediccion_riesgo (
 
 CREATE INDEX idx_prediccion_riesgo_usuario
   ON prediccion_riesgo(id_usuario, created_at DESC);
+
+-- ============================================
+-- 10. VALIDATION_RULES (reglas de plausibilidad por métrica)
+--     Tabla que contiene rangos clínicos aceptables y metadata
+--     Las reglas son consultadas en runtime por la aplicación
+-- ============================================
+CREATE TABLE IF NOT EXISTS validation_rules (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  metric_key    VARCHAR(50) NOT NULL UNIQUE,
+  display_name  VARCHAR(100) NOT NULL,
+  data_type     VARCHAR(20) NOT NULL,
+  unit          VARCHAR(20) NOT NULL,
+  min_value     NUMERIC,
+  max_value     NUMERIC,
+  format_regex  VARCHAR(255),
+  is_active     BOOLEAN NOT NULL DEFAULT true,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+COMMENT ON TABLE validation_rules IS
+  'Límites clínicos absolutos de plausibilidad física para datos ingresados. No confundir con baseline_clinico.';
+
+-- Seed con reglas iniciales (propuesta clínica, revisar antes de aplicar)
+INSERT INTO validation_rules (metric_key, display_name, data_type, unit, min_value, max_value) VALUES
+  ('bp_sistolica',       'Presión arterial sistólica',     'integer', 'mmHg',        60,   250),
+  ('bp_diastolica',      'Presión arterial diastólica',    'integer', 'mmHg',        30,   150),
+  ('frec_cardiaca_bpm',  'Frecuencia cardíaca',            'integer', 'lpm',         25,   220),
+  ('spo2_pct',           'Saturación de oxígeno',          'decimal', '%',           50,   100),
+  ('temperatura',        'Temperatura corporal',           'decimal', '°C',          30,   43),
+  ('actividad_pasos',    'Pasos diarios',                  'integer', 'pasos',        0,   50000),
+  ('horas_sueno',        'Horas de sueño',                 'decimal', 'horas',        0,   24),
+  ('nivel_estres',       'Nivel de estrés',                'integer', 'escala 1-10',  1,   10),
+  ('peso_kg',            'Peso',                           'decimal', 'kg',           2,   300),
+  ('altura_cm',          'Altura',                         'decimal', 'cm',          30,   250)
+ON CONFLICT (metric_key) DO NOTHING;
+
+-- ============================================
+-- 11. VALIDATION_ATTEMPTS (registro de intentos fallidos)
+--     Guarda payload original, errores y metadatos para auditoría
+-- ============================================
+CREATE TABLE IF NOT EXISTS validation_attempts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id_usuario UUID,
+  datos_reloj_id UUID, -- si el registro fue creado en datos_reloj podemos linkearlo
+  payload JSONB,
+  errors JSONB,
+  source VARCHAR(100),
+  recorded_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX idx_validation_attempts_usuario
+  ON validation_attempts(id_usuario, created_at DESC);
+
+
