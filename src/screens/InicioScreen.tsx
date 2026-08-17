@@ -23,6 +23,7 @@ type RootStackParamList = {
   };
   RegistrarSintoma: undefined;
   HistorialSintomas: undefined;
+  ExportHistorial: undefined;
 };
 
 /**
@@ -228,6 +229,19 @@ const InicioScreen: React.FC = () => {
         <View style={styles.sintomaBtnInfo}>
           <Text style={styles.sintomaBtnTitle}>Consultar Síntomas</Text>
           <Text style={styles.sintomaBtnSubtitle}>Historial para mostrar a tu médico</Text>
+        </View>
+        <Text style={styles.sintomaBtnArrow}>›</Text>
+      </TouchableOpacity>
+
+      {/* ── Exportar Histórico ── */}
+      <TouchableOpacity
+        style={styles.sintomaBtn}
+        onPress={() => navigation.navigate('ExportHistorial')}
+        activeOpacity={0.8}>
+        <Text style={styles.sintomaBtnIcon}>📊</Text>
+        <View style={styles.sintomaBtnInfo}>
+          <Text style={styles.sintomaBtnTitle}>Exportar Histórico</Text>
+          <Text style={styles.sintomaBtnSubtitle}>Descargá tus datos para análisis ML</Text>
         </View>
         <Text style={styles.sintomaBtnArrow}>›</Text>
       </TouchableOpacity>

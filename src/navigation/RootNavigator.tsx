@@ -10,6 +10,7 @@ import EditarPerfilScreen from '../screens/EditarPerfilScreen';
 import TodosLosSignosScreen from '../screens/TodosLosSignosScreen';
 import RegistrarSintomaScreen from '../screens/RegistrarSintomaScreen';
 import HistorialSintomasScreen from '../screens/HistorialSintomasScreen';
+import ExportHistorialScreen from '../screens/ExportHistorialScreen';
 import {useSupabase} from '../context/SupabaseProvider';
 
 export type RootStackParamList = {
@@ -27,6 +28,7 @@ export type RootStackParamList = {
   EditarPerfil: undefined;
   RegistrarSintoma: undefined;
   HistorialSintomas: undefined;
+  ExportHistorial: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -94,6 +96,13 @@ function RootNavigatorContent() {
         <Stack.Screen
           name="HistorialSintomas"
           component={HistorialSintomasScreen}
+          options={{animation: 'slide_from_right'}}
+        />
+      )}
+      {session && (
+        <Stack.Screen
+          name="ExportHistorial"
+          component={ExportHistorialScreen}
           options={{animation: 'slide_from_right'}}
         />
       )}
