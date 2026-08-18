@@ -9,7 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import {useNavigation} from '@react-navigation/native';
+import {useNavigation, CommonActions} from '@react-navigation/native';
 import Card from '../components/Card';
 import PrimaryButton from '../components/PrimaryButton';
 import VitoAvatar from '../components/VitoAvatar';
@@ -17,6 +17,7 @@ import {useSupabase} from '../context/SupabaseProvider';
 import {colors, spacing, fontSize} from '../theme';
 import type {SexoBiologico} from '../services/supabase/models';
 import {supabase} from '../services/supabase/client';
+import {upsertBaseline} from '../services/supabase/api';
 
 /** Test rápido: hace un HEAD a la API de Supabase para ver si responde */
 async function testSupabaseConnection(): Promise<boolean> {
@@ -59,10 +60,19 @@ const SEXOS: {key: SexoBiologico; label: string}[] = [
   {key: 'otro', label: 'Otro'},
 ];
 
+/** Rangos normales orientativos para cada signo vital */
+const VITAL_RANGES = {
+  presionSist: {min: 90, max: 119, unit: 'mmHg', label: 'Presión sistólica'},
+  presionDiast: {min: 60, max: 79, unit: 'mmHg', label: 'Presión diastólica'},
+  frecCardiaca: {min: 60, max: 100, unit: 'lpm', label: 'Frec. cardíaca'},
+  temperatura: {min: 36.5, max: 37.3, unit: '°C', label: 'Temperatura'},
+  oxigenacion: {min: 95, max: 100, unit: '%', label: 'SpO₂'},
+};
+
 /**
  * Pantalla de finalización de perfil que aparece después del registro.
  * Recopila datos personales (nombre, apellido, fecha de nacimiento, sexo)
- * y datos clínicos básicos (altura, peso).
+ * y datos clínicos básicos (altura, peso + signos vitales iniciales).
  */
 const CompleteProfileScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -79,9 +89,29 @@ const CompleteProfileScreen: React.FC = () => {
   const [altura, setAltura] = useState('');
   const [peso, setPeso] = useState('');
 
+  // ── Signos vitales iniciales (baseline) ──
+  const [showVitals, setShowVitals] = useState(false);
+  const [presionSist, setPresionSist] = useState('');
+  const [presionDiast, setPresionDiast] = useState('');
+  const [frecCardiaca, setFrecCardiaca] = useState('');
+  const [temperatura, setTemperatura] = useState('');
+  const [oxigenacion, setOxigenacion] = useState('');
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestDoneRef = useRef(false); // Evita race-condition timeout vs respuesta
+
+  /** Verifica si un valor numérico está fuera del rango normal */
+  const isOutOfRange = (value: string, min: number, max: number): boolean => {
+    const num = parseFloat(value);
+    if (isNaN(num) || !value.trim()) return false;
+    return num < min || num > max;
+  };
+
+  /** Estilo dinámico para inputs: borde rojo si fuera de rango */
+  const getVitalInputStyle = (value: string, min: number, max: number) => {
+    return isOutOfRange(value, min, max) ? styles.inputOutOfRange : styles.input;
+  };
 
   const calcularEdad = useCallback((): number | null => {
     const d = parseInt(dia, 10);
@@ -124,6 +154,35 @@ const CompleteProfileScreen: React.FC = () => {
       if (isNaN(w) || w < 10 || w > 500) return 'El peso debe estar entre 10 y 500 kg';
     }
 
+    // ── Validación de signos vitales (solo si se ingresaron) ──
+    if (showVitals) {
+      if (presionSist.trim()) {
+        const ps = parseInt(presionSist, 10);
+        if (isNaN(ps) || ps < 60 || ps > 300) return 'La presión sistólica debe estar entre 60 y 300 mmHg';
+      }
+      if (presionDiast.trim()) {
+        const pd = parseInt(presionDiast, 10);
+        if (isNaN(pd) || pd < 30 || pd > 200) return 'La presión diastólica debe estar entre 30 y 200 mmHg';
+      }
+      if (presionSist.trim() && presionDiast.trim()) {
+        const ps = parseInt(presionSist, 10);
+        const pd = parseInt(presionDiast, 10);
+        if (!isNaN(ps) && !isNaN(pd) && pd >= ps) return 'La presión diastólica debe ser menor a la sistólica';
+      }
+      if (frecCardiaca.trim()) {
+        const fc = parseInt(frecCardiaca, 10);
+        if (isNaN(fc) || fc < 30 || fc > 250) return 'La frecuencia cardíaca debe estar entre 30 y 250 lpm';
+      }
+      if (temperatura.trim()) {
+        const t = parseFloat(temperatura);
+        if (isNaN(t) || t < 30 || t > 45) return 'La temperatura debe estar entre 30 y 45 °C';
+      }
+      if (oxigenacion.trim()) {
+        const o = parseInt(oxigenacion, 10);
+        if (isNaN(o) || o < 50 || o > 100) return 'La oxigenación debe estar entre 50 y 100 %';
+      }
+    }
+
     return null;
   };
 
@@ -147,14 +206,14 @@ const CompleteProfileScreen: React.FC = () => {
     setLoading(true);
     requestDoneRef.current = false;
 
-    // Timeout extendido a 30s para diagnóstico
+    // Timeout extendido a 45s
     const timeout = setTimeout(() => {
       if (!requestDoneRef.current) {
-        console.warn('[CompleteProfile] TIMEOUT 30s alcanzado — la request no respondió');
-        setError('La conexión está tardando demasiado. ¿Tenés internet? (30s)');
+        console.warn('[CompleteProfile] TIMEOUT 45s alcanzado — la request no respondió');
+        setError('La conexión está tardando demasiado. ¿Tenés internet? (45s)');
         setLoading(false);
       }
-    }, 30000);
+    }, 45000);
 
     try {
       const fechaNac = `${anio}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
@@ -170,11 +229,44 @@ const CompleteProfileScreen: React.FC = () => {
         peso_kg: peso.trim() ? parseFloat(peso) : null,
       };
 
-      // updateProfile ahora usa raw fetch internamente (bypassea bug de @supabase/supabase-js)
-      await updateProfile(profileData);
+      // ── Preparar baseline si hay datos de signos vitales ──
+      const hasVitals = showVitals && (
+        presionSist.trim() ||
+        presionDiast.trim() ||
+        frecCardiaca.trim() ||
+        temperatura.trim() ||
+        oxigenacion.trim()
+      );
+
+      const baselinePromise = hasVitals
+        ? upsertBaseline({
+            id_usuario: userId,
+            hr_min: frecCardiaca.trim() ? parseInt(frecCardiaca, 10) : null,
+            hr_max: frecCardiaca.trim() ? parseInt(frecCardiaca, 10) : null,
+            bp_sist_min: presionSist.trim() ? parseInt(presionSist, 10) : null,
+            bp_sist_max: presionSist.trim() ? parseInt(presionSist, 10) : null,
+            bp_diast_min: presionDiast.trim() ? parseInt(presionDiast, 10) : null,
+            bp_diast_max: presionDiast.trim() ? parseInt(presionDiast, 10) : null,
+            spo2_min: oxigenacion.trim() ? parseFloat(oxigenacion) : null,
+            temp_min: temperatura.trim() ? parseFloat(temperatura) : null,
+            temp_max: temperatura.trim() ? parseFloat(temperatura) : null,
+          })
+        : null;
+
+      // ── Ejecutar perfil + baseline en paralelo ──
+      await Promise.all([
+        updateProfile(profileData),
+        baselinePromise,
+      ]);
 
       requestDoneRef.current = true;
-      navigation.goBack();
+      // Reset del stack para ir a MainTabs (no hay pantalla anterior en el stack)
+      navigation.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{name: 'MainTabs'}],
+        }),
+      );
     } catch (e: unknown) {
       requestDoneRef.current = true;
       const err = e as Error & {status?: number; code?: string};
@@ -320,6 +412,91 @@ const CompleteProfileScreen: React.FC = () => {
             ))}
           </View>
 
+          {/* Sección de signos vitales (colapsable) */}
+          <TouchableOpacity
+            style={styles.vitalsToggle}
+            activeOpacity={0.7}
+            onPress={() => setShowVitals(!showVitals)}>
+            <Text style={styles.vitalsToggleText}>
+              {showVitals ? '▾' : '▸'} Signos vitales iniciales (opcional)
+            </Text>
+            <Text style={styles.vitalsToggleHint}>
+              {showVitals ? 'Ocultar' : 'Presión, frecuencia cardíaca, temperatura, oxigenación'}
+            </Text>
+          </TouchableOpacity>
+
+          {showVitals && (
+            <View style={styles.vitalsSection}>
+              {/* Presión arterial */}
+              <View style={styles.measureRow}>
+                <View style={styles.measureField}>
+                  <Text style={styles.label}>Presión sistólica (mmHg)</Text>
+                  <TextInput
+                    style={getVitalInputStyle(presionSist, VITAL_RANGES.presionSist.min, VITAL_RANGES.presionSist.max)}
+                    placeholder="Ej: 120"
+                    placeholderTextColor={colors.textSecondary}
+                    keyboardType="numeric"
+                    value={presionSist}
+                    onChangeText={setPresionSist}
+                  />
+                  <Text style={styles.rangeHint}>Normal: 90–119 mmHg</Text>
+                </View>
+                <View style={styles.measureField}>
+                  <Text style={styles.label}>Presión diastólica (mmHg)</Text>
+                  <TextInput
+                    style={getVitalInputStyle(presionDiast, VITAL_RANGES.presionDiast.min, VITAL_RANGES.presionDiast.max)}
+                    placeholder="Ej: 80"
+                    placeholderTextColor={colors.textSecondary}
+                    keyboardType="numeric"
+                    value={presionDiast}
+                    onChangeText={setPresionDiast}
+                  />
+                  <Text style={styles.rangeHint}>Normal: 60–79 mmHg</Text>
+                </View>
+              </View>
+
+              {/* Frecuencia cardíaca y temperatura */}
+              <View style={styles.measureRow}>
+                <View style={styles.measureField}>
+                  <Text style={styles.label}>Frec. cardíaca (lpm)</Text>
+                  <TextInput
+                    style={getVitalInputStyle(frecCardiaca, VITAL_RANGES.frecCardiaca.min, VITAL_RANGES.frecCardiaca.max)}
+                    placeholder="Ej: 72"
+                    placeholderTextColor={colors.textSecondary}
+                    keyboardType="numeric"
+                    value={frecCardiaca}
+                    onChangeText={setFrecCardiaca}
+                  />
+                  <Text style={styles.rangeHint}>Normal: 60–100 lpm</Text>
+                </View>
+                <View style={styles.measureField}>
+                  <Text style={styles.label}>Temperatura (°C)</Text>
+                  <TextInput
+                    style={getVitalInputStyle(temperatura, VITAL_RANGES.temperatura.min, VITAL_RANGES.temperatura.max)}
+                    placeholder="Ej: 36.8"
+                    placeholderTextColor={colors.textSecondary}
+                    keyboardType="numeric"
+                    value={temperatura}
+                    onChangeText={setTemperatura}
+                  />
+                  <Text style={styles.rangeHint}>Normal: 36.5–37.3 °C</Text>
+                </View>
+              </View>
+
+              {/* Oxigenación */}
+              <Text style={styles.label}>Oxigenación (SpO2 %)</Text>
+              <TextInput
+                style={getVitalInputStyle(oxigenacion, VITAL_RANGES.oxigenacion.min, VITAL_RANGES.oxigenacion.max)}
+                placeholder="Ej: 98"
+                placeholderTextColor={colors.textSecondary}
+                keyboardType="numeric"
+                value={oxigenacion}
+                onChangeText={setOxigenacion}
+              />
+              <Text style={styles.rangeHint}>Normal: 95–100 %</Text>
+            </View>
+          )}
+
           {/* Altura y Peso */}
           <View style={styles.measureRow}>
             <View style={styles.measureField}>
@@ -420,6 +597,16 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     backgroundColor: colors.backgroundLight,
   },
+  inputOutOfRange: {
+    borderWidth: 1.5,
+    borderColor: colors.danger,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: fontSize.body,
+    color: colors.danger,
+    backgroundColor: colors.dangerLight,
+  },
   button: {
     marginTop: 20,
   },
@@ -491,6 +678,38 @@ const styles = StyleSheet.create({
   },
   measureField: {
     flex: 1,
+  },
+
+  // ── Vitals toggle ──
+  vitalsToggle: {
+    marginTop: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    backgroundColor: colors.backgroundLight,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  vitalsToggleText: {
+    fontSize: fontSize.body,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  vitalsToggleHint: {
+    fontSize: fontSize.caption,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  vitalsSection: {
+    marginTop: 12,
+    gap: 4,
+  },
+  rangeHint: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    marginTop: 2,
+    marginBottom: 4,
+    fontStyle: 'italic',
   },
 });
 
