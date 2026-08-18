@@ -20,13 +20,18 @@ import {
   getProfile,
   insertDatosReloj,
   markDatosRelojReemplazado,
+  insertAlerta,
+  getAlertasActivas,
+  updateAlertaStatus,
 } from '../services/supabase/api';
+import type {Alerta} from '../services/supabase/models';
 import {
   syncWearableToBackend,
   DEFAULT_SYNC_INTERVAL_MIN,
   MIN_SYNC_INTERVAL_MS,
 } from '../services/healthSync';
 import {saveHealthSnapshot, pruneOldEntries} from '../services/HealthDataCache';
+import {AlertEngine} from '../services/alerts/engine';
 
 type ErrorSeverity = 'error' | 'warning';
 
@@ -53,6 +58,15 @@ interface HealthContextValue {
   requestPermissionsAndLoad: () => Promise<void>;
   /** Refresh health data (requires permissions already granted). */
   refreshData: () => Promise<void>;
+  // ── HU-41: Alertas ──
+  /** Active alerts for the current user. */
+  activeAlerts: Alerta[];
+  /** Count of active alerts (for badge display). */
+  activeAlertsCount: number;
+  /** Confirm that the user acknowledged an alert. */
+  confirmAlert: (alertId: string) => Promise<void>;
+  /** Refresh the list of active alerts from Supabase. */
+  refreshAlerts: () => Promise<void>;
 }
 
 const HealthContext = createContext<HealthContextValue | undefined>(undefined);
@@ -70,10 +84,14 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
   const [permissionsGranted, setPermissionsGranted] = useState(false);
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [syncIntervalMin, setSyncIntervalMin] = useState(DEFAULT_SYNC_INTERVAL_MIN);
+  const [activeAlerts, setActiveAlerts] = useState<Alerta[]>([]);
   const {getUserId} = useSupabase();
 
   // Referencia para el intervalo de auto-refresh
   const autoRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ── HU-41: Alert Engine (initialized lazily after userId is available) ──
+  const alertEngineRef = useRef<AlertEngine | null>(null);
 
   // Cargar intervalo configurable desde perfil_usuario.intervalo_sync_min (HU-25 CA-01)
   useEffect(() => {
@@ -90,6 +108,78 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
       .catch(() => {
         // Configuración no disponible → se mantiene el default
       });
+  }, [getUserId]);
+
+  // ── HU-41: Initialize AlertEngine and load active alerts ──
+  useEffect(() => {
+    const userId = getUserId();
+    if (!userId) return;
+
+    // Initialize engine if not yet created
+    if (!alertEngineRef.current) {
+      alertEngineRef.current = new AlertEngine({
+        insertAlert: async (alertInsert) => {
+          const row = await insertAlerta({
+            id_usuario: alertInsert.id_usuario,
+            tipo: alertInsert.tipo,
+            severidad: alertInsert.severidad,
+            estado: alertInsert.status,
+            valor_registrado: alertInsert.valor_registrado,
+            umbral_configurado: alertInsert.umbral_configurado,
+            generated_at: alertInsert.generated_at,
+            dispositivo_origen: alertInsert.dispositivo_origen,
+            confirmed_at: null,
+            escalated_at: null,
+            escalated_to: null,
+            resolved_at: null,
+          });
+          return {
+            ...row,
+            status: row.estado,
+          } as any;
+        },
+        getActiveAlerts: async (uid) => {
+          const rows = await getAlertasActivas(uid);
+          return rows.map(r => ({
+            ...r,
+            status: r.estado,
+          })) as any;
+        },
+        updateAlertStatus: async (alertId, status, extra) => {
+          const estadoMap: Record<string, any> = {
+            activa: 'activa',
+            confirmada: 'confirmada',
+            escalada: 'escalada',
+            resuelta: 'resuelta',
+          };
+          await updateAlertaStatus(alertId, estadoMap[status] ?? status, {
+            confirmed_at: extra?.confirmed_at,
+            escalated_at: extra?.escalated_at,
+            escalated_to: extra?.escalated_to,
+            resolved_at: extra?.resolved_at,
+          });
+        },
+      });
+
+      // Register listeners for UI updates
+      alertEngineRef.current.onGenerated(() => {
+        refreshAlerts();
+      });
+      alertEngineRef.current.onEscalated(() => {
+        refreshAlerts();
+      });
+      alertEngineRef.current.onResolved(() => {
+        refreshAlerts();
+      });
+    }
+
+    // Load initial active alerts
+    refreshAlerts();
+
+    return () => {
+      alertEngineRef.current?.dispose();
+      alertEngineRef.current = null;
+    };
   }, [getUserId]);
 
   // Check Health Connect availability on mount
@@ -143,6 +233,20 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
         // Fuente de escritura (Supabase) caída: no bloquear la UI; reintenta en el próximo tick
         console.warn('HealthProvider: error al sincronizar con datos_reloj', syncErr);
       }
+
+      // ── HU-41: Evaluate SpO₂ for hypoxia alerts (CA-02: ≤30s) ──
+      if (data.spo2Percent != null && alertEngineRef.current && userId) {
+        try {
+          await alertEngineRef.current.evaluateSpo2Reading(
+            userId,
+            data.spo2Percent,
+            'health-connect',
+          );
+        } catch (alertErr) {
+          // Alert engine failure should not block health data sync
+          console.warn('HealthProvider: error en motor de alertas', alertErr);
+        }
+      }
     } catch (e) {
       // Fuente de lectura (Health Connect) desconectada: conservar estado previo y avisar
       const message = e instanceof Error ? e.message : String(e ?? 'unknown error');
@@ -187,6 +291,24 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
     }
   }, [permissionsGranted, requestPermissionsAndLoad, loadHealthData]);
 
+  // ── HU-41: Alert helpers ──
+  const refreshAlerts = useCallback(async () => {
+    const userId = getUserId();
+    if (!userId) return;
+    try {
+      const alerts = await getAlertasActivas(userId);
+      setActiveAlerts(alerts);
+    } catch {
+      // Best-effort: don't crash the app if alerts can't be loaded
+    }
+  }, [getUserId]);
+
+  const confirmAlert = useCallback(async (alertId: string) => {
+    if (!alertEngineRef.current) return;
+    await alertEngineRef.current.confirmAlert(alertId);
+    await refreshAlerts();
+  }, [refreshAlerts]);
+
   // Auto-refresh periódico cuando HC está disponible y permisos concedidos.
   // El intervalo es configurable (perfil_usuario.intervalo_sync_min, default 10 min)
   // con un mínimo de 60s para modo casi-tiempo-real (HU-25 CA-01).
@@ -218,6 +340,11 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
     setSyncInterval: setSyncIntervalMin,
     requestPermissionsAndLoad,
     refreshData,
+    // HU-41: Alertas
+    activeAlerts,
+    activeAlertsCount: activeAlerts.length,
+    confirmAlert,
+    refreshAlerts,
   };
 
   return <HealthContext.Provider value={value}>{children}</HealthContext.Provider>;

@@ -15,6 +15,9 @@ import type {
   CatSintoma,
   RolUsuario,
   OrigenDato,
+  Alerta,
+  AlertaInsert,
+  EstadoAlerta,
 } from './models';
 
 // ═══════════════════════════════════════════
@@ -610,4 +613,113 @@ export async function syncHealthSummaryToSupabase(
   };
 
   return insertDatosReloj(dato);
+}
+
+// ═══════════════════════════════════════════
+// ALERTAS (HU-41 — Sistema de Alertas Inteligentes)
+// ═══════════════════════════════════════════
+
+/**
+ * Insert a new alert record into the `alertas` table.
+ */
+export async function insertAlerta(
+  alerta: AlertaInsert,
+  accessToken?: string | null,
+): Promise<Alerta> {
+  const rows = await rawRestFetch<Alerta[]>('alertas', {
+    method: 'POST',
+    body: alerta,
+    prefer: 'return=representation',
+    accessToken,
+  });
+  const row = rows[0];
+  if (!row) throw new Error('No se pudo insertar la alerta');
+  return row;
+}
+
+/**
+ * Get all alerts for a user, optionally filtered by status.
+ * Ordered by generated_at descending (most recent first).
+ */
+export async function getAlertas(
+  userId: string,
+  options?: { status?: EstadoAlerta; limit?: number },
+  accessToken?: string | null,
+): Promise<Alerta[]> {
+  let query = supabase
+    .from('alertas')
+    .select('*')
+    .eq('id_usuario', userId)
+    .order('generated_at', { ascending: false });
+
+  if (options?.status) query = query.eq('estado', options.status);
+  if (options?.limit) query = query.limit(options.limit);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data as Alerta[]) ?? [];
+}
+
+/**
+ * Get active alerts for a user (status = 'activa').
+ * Used by the AlertEngine for dedup checks.
+ */
+export async function getAlertasActivas(
+  userId: string,
+  accessToken?: string | null,
+): Promise<Alerta[]> {
+  return getAlertas(userId, { status: 'activa' }, accessToken);
+}
+
+/**
+ * Update an alert's status and optional timestamp fields.
+ */
+export async function updateAlertaStatus(
+  alertId: string,
+  estado: EstadoAlerta,
+  extra?: Partial<Pick<Alerta, 'confirmed_at' | 'escalated_at' | 'escalated_to' | 'resolved_at'>>,
+  accessToken?: string | null,
+): Promise<void> {
+  const body: Record<string, unknown> = { estado };
+  if (extra?.confirmed_at) body.confirmed_at = extra.confirmed_at;
+  if (extra?.escalated_at) body.escalated_at = extra.escalated_at;
+  if (extra?.escalated_to) body.escalated_to = extra.escalated_to;
+  if (extra?.resolved_at) body.resolved_at = extra.resolved_at;
+
+  await rawRestFetch<null>('alertas', {
+    method: 'PATCH',
+    body,
+    prefer: 'return=minimal',
+    query: `id=eq.${alertId}`,
+    accessToken,
+  });
+}
+
+/**
+ * Count active alerts for a user (for badge display).
+ */
+export async function countAlertasActivas(
+  userId: string,
+  accessToken?: string | null,
+): Promise<number> {
+  const token = await resolveAccessToken(accessToken);
+  const url = `${REST_BASE}/alertas?select=id&id_usuario=eq.${userId}&estado=eq.activa`;
+  const res = await fetch(url, {
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token}`,
+      Prefer: 'count=exact',
+    },
+  });
+
+  if (!res.ok) {
+    return 0;
+  }
+
+  const range = res.headers.get('content-range');
+  if (range) {
+    const match = /^\d+-\d+\/(\d+)$/.exec(range);
+    if (match) return parseInt(match[1], 10);
+  }
+  return 0;
 }

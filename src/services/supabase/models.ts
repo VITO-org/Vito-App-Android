@@ -174,6 +174,29 @@ export type PrediccionRiesgoInsert = Omit<PrediccionRiesgo, 'id' | 'created_at'>
   created_at?: string;
 };
 
+// ─── TABLA: alertas (HU-41 — Sistema de Alertas Inteligentes) ───
+export type TipoAlerta = 'hipoxia';
+export type SeveridadAlerta = 'advertencia' | 'critica';
+export type EstadoAlerta = 'activa' | 'confirmada' | 'escalada' | 'resuelta';
+
+export interface Alerta {
+  id: string;
+  id_usuario: string;
+  tipo: TipoAlerta;
+  severidad: SeveridadAlerta;
+  estado: EstadoAlerta;
+  valor_registrado: number;
+  umbral_configurado: number;
+  generated_at: string | null;
+  dispositivo_origen: string | null;
+  confirmed_at: string | null;
+  escalated_at: string | null;
+  escalated_to: string | null;
+  resolved_at: string | null;
+  created_at: string | null;
+}
+export type AlertaInsert = Omit<Alerta, 'id' | 'created_at'> & { id?: string; created_at?: string };
+
 // ─── Application-level types ───
 
 export interface HealthSummaryForSync {

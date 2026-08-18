@@ -3,6 +3,7 @@ import {View, TouchableOpacity, Image, StyleSheet, Platform} from 'react-native'
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {colors, spacing, shadows} from '../theme';
 import AppIcon from '../components/AppIcon';
+import {useHealth} from '../context/HealthProvider';
 
 import InicioScreen from '../screens/InicioScreen';
 import HistorialScreen from '../screens/HistorialScreen';
@@ -63,8 +64,7 @@ const CenterTabButton: React.FC<{
 // Navigator
 // ---------------------------------------------------------------------------
 const BottomTabNavigator: React.FC = () => {
-  // Mock badge — conectar con contexto real cuando existan las alertas
-  const mockAlertasCount = 3;
+  const {activeAlertsCount} = useHealth();
 
   return (
     <Tab.Navigator
@@ -133,7 +133,7 @@ const BottomTabNavigator: React.FC = () => {
               style={{tintColor: color}}
             />
           ),
-          tabBarBadge: mockAlertasCount > 0 ? mockAlertasCount : undefined,
+          tabBarBadge: activeAlertsCount > 0 ? activeAlertsCount : undefined,
           tabBarBadgeStyle: styles.badge,
         }}
       />
