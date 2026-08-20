@@ -21,7 +21,11 @@ import type {
   OrigenDato,
   Alerta,
   AlertaInsert,
-  EstadoAlerta,
+  AlertaDatos,
+  DispositivoUsuario,
+  DispositivoUsuarioInsert,
+  PreferenciaNotificacion,
+  PreferenciaNotificacionInsert,
 } from './models';
 
 // ═══════════════════════════════════════════
@@ -690,17 +694,18 @@ export async function syncHealthSummaryToSupabase(
 }
 
 // ═══════════════════════════════════════════
-// ALERTAS (HU-41 — Sistema de Alertas Inteligentes)
+// ALERTA (HU-41 — Sistema de Alertas Inteligentes)
+// Nuevo schema: tabla `alerta` con titulo/mensaje/datos jsonb/leida_en
 // ═══════════════════════════════════════════
 
 /**
- * Insert a new alert record into the `alertas` table.
+ * Insert a new alert record into the `alerta` table.
  */
 export async function insertAlerta(
   alerta: AlertaInsert,
   accessToken?: string | null,
 ): Promise<Alerta> {
-  const rows = await rawRestFetch<Alerta[]>('alertas', {
+  const rows = await rawRestFetch<Alerta[]>('alerta', {
     method: 'POST',
     body: alerta,
     prefer: 'return=representation',
@@ -712,21 +717,21 @@ export async function insertAlerta(
 }
 
 /**
- * Get all alerts for a user, optionally filtered by status.
- * Ordered by generated_at descending (most recent first).
+ * Get all alerts for a user, optionally filtered by read status.
+ * Ordered by created_at descending (most recent first).
  */
 export async function getAlertas(
   userId: string,
-  options?: { status?: EstadoAlerta; limit?: number },
+  options?: { soloNoLeidas?: boolean; limit?: number },
   accessToken?: string | null,
 ): Promise<Alerta[]> {
   let query = supabase
-    .from('alertas')
+    .from('alerta')
     .select('*')
     .eq('id_usuario', userId)
-    .order('generated_at', { ascending: false });
+    .order('created_at', { ascending: false });
 
-  if (options?.status) query = query.eq('estado', options.status);
+  if (options?.soloNoLeidas) query = query.is('leida_en', null);
   if (options?.limit) query = query.limit(options.limit);
 
   const { data, error } = await query;
@@ -735,34 +740,26 @@ export async function getAlertas(
 }
 
 /**
- * Get active alerts for a user (status = 'activa').
+ * Get active (unread) alerts for a user (leida_en IS NULL).
  * Used by the AlertEngine for dedup checks.
  */
 export async function getAlertasActivas(
   userId: string,
   accessToken?: string | null,
 ): Promise<Alerta[]> {
-  return getAlertas(userId, { status: 'activa' }, accessToken);
+  return getAlertas(userId, { soloNoLeidas: true }, accessToken);
 }
 
 /**
- * Update an alert's status and optional timestamp fields.
+ * Mark an alert as read (set leida_en to now).
  */
-export async function updateAlertaStatus(
+export async function marcarAlertaLeida(
   alertId: string,
-  estado: EstadoAlerta,
-  extra?: Partial<Pick<Alerta, 'confirmed_at' | 'escalated_at' | 'escalated_to' | 'resolved_at'>>,
   accessToken?: string | null,
 ): Promise<void> {
-  const body: Record<string, unknown> = { estado };
-  if (extra?.confirmed_at) body.confirmed_at = extra.confirmed_at;
-  if (extra?.escalated_at) body.escalated_at = extra.escalated_at;
-  if (extra?.escalated_to) body.escalated_to = extra.escalated_to;
-  if (extra?.resolved_at) body.resolved_at = extra.resolved_at;
-
-  await rawRestFetch<null>('alertas', {
+  await rawRestFetch<null>('alerta', {
     method: 'PATCH',
-    body,
+    body: { leida_en: new Date().toISOString() },
     prefer: 'return=minimal',
     query: `id=eq.${alertId}`,
     accessToken,
@@ -770,14 +767,31 @@ export async function updateAlertaStatus(
 }
 
 /**
- * Count active alerts for a user (for badge display).
+ * Update an alert's datos jsonb (for escalation tracking).
+ */
+export async function updateAlertaDatos(
+  alertId: string,
+  datos: AlertaDatos,
+  accessToken?: string | null,
+): Promise<void> {
+  await rawRestFetch<null>('alerta', {
+    method: 'PATCH',
+    body: { datos },
+    prefer: 'return=minimal',
+    query: `id=eq.${alertId}`,
+    accessToken,
+  });
+}
+
+/**
+ * Count unread alerts for a user (for badge display).
  */
 export async function countAlertasActivas(
   userId: string,
   accessToken?: string | null,
 ): Promise<number> {
   const token = await resolveAccessToken(accessToken);
-  const url = `${REST_BASE}/alertas?select=id&id_usuario=eq.${userId}&estado=eq.activa`;
+  const url = `${REST_BASE}/alerta?select=id&id_usuario=eq.${userId}&leida_en=is.null`;
   const res = await fetch(url, {
     headers: {
       apikey: SUPABASE_ANON_KEY,
@@ -796,4 +810,95 @@ export async function countAlertasActivas(
     if (match) return parseInt(match[1], 10);
   }
   return 0;
+}
+
+// ═══════════════════════════════════════════
+// DISPOSITIVO_USUARIO (tokens FCM para push)
+// ═══════════════════════════════════════════
+
+/**
+ * Register or update a device FCM token for a user.
+ * Uses upsert on unique constraint (id_usuario, fcm_token).
+ */
+export async function registerDispositivo(
+  dispositivo: DispositivoUsuarioInsert,
+  accessToken?: string | null,
+): Promise<DispositivoUsuario> {
+  const rows = await rawRestFetch<DispositivoUsuario[]>('dispositivo_usuario', {
+    method: 'POST',
+    body: dispositivo,
+    prefer: 'resolution=merge-duplicates,return=representation',
+    query: 'on_conflict=id_usuario,fcm_token',
+    accessToken,
+  });
+  const row = rows[0];
+  if (!row) throw new Error('No se pudo registrar el dispositivo');
+  return row;
+}
+
+/**
+ * Get all active devices for a user.
+ */
+export async function getDispositivos(
+  userId: string,
+  accessToken?: string | null,
+): Promise<DispositivoUsuario[]> {
+  const rows = await rawRestFetch<DispositivoUsuario[]>('dispositivo_usuario', {
+    query: `id_usuario=eq.${userId}&activo=eq.true&order=created_at.desc`,
+    accessToken,
+  });
+  return rows ?? [];
+}
+
+/**
+ * Deactivate a device (set activo = false).
+ */
+export async function deactivateDispositivo(
+  dispositivoId: string,
+  accessToken?: string | null,
+): Promise<void> {
+  await rawRestFetch<null>('dispositivo_usuario', {
+    method: 'PATCH',
+    body: { activo: false },
+    prefer: 'return=minimal',
+    query: `id=eq.${dispositivoId}`,
+    accessToken,
+  });
+}
+
+// ═══════════════════════════════════════════
+// PREFERENCIA_NOTIFICACION
+// ═══════════════════════════════════════════
+
+/**
+ * Get notification preferences for a user.
+ */
+export async function getPreferenciaNotificacion(
+  userId: string,
+  accessToken?: string | null,
+): Promise<PreferenciaNotificacion | null> {
+  const rows = await rawRestFetch<PreferenciaNotificacion[]>('preferencia_notificacion', {
+    query: `id_usuario=eq.${userId}&limit=1`,
+    accessToken,
+  });
+  return rows?.[0] ?? null;
+}
+
+/**
+ * Upsert notification preferences for a user.
+ */
+export async function upsertPreferenciaNotificacion(
+  preferencia: PreferenciaNotificacionInsert,
+  accessToken?: string | null,
+): Promise<PreferenciaNotificacion> {
+  const rows = await rawRestFetch<PreferenciaNotificacion[]>('preferencia_notificacion', {
+    method: 'POST',
+    body: { ...preferencia, updated_at: new Date().toISOString() },
+    prefer: 'resolution=merge-duplicates,return=representation',
+    query: 'on_conflict=id_usuario',
+    accessToken,
+  });
+  const row = rows[0];
+  if (!row) throw new Error('No se pudieron guardar las preferencias');
+  return row;
 }

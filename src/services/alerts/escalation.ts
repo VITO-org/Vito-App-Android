@@ -5,6 +5,11 @@
  * starts. If the user doesn't confirm within the configured timeout
  * (default: 5 minutes), the alert escalates to the guard contact.
  *
+ * Adapted to new Supabase schema (2026-08-20):
+ * - Escalation state is stored in `datos` jsonb (escalada, escalated_at)
+ * - No separate DB columns for escalation tracking
+ * - The updateAlertStatus callback now writes datos jsonb
+ *
  * Design decisions:
  * - Escalation is time-based, using `setTimeout` (in-memory timer).
  * - Timers are tracked by alert ID → easy to cancel on confirmation.
@@ -26,8 +31,9 @@ import {DEFAULT_ESCALATION_CONFIG} from './types';
  * Manages escalation timers for active alerts.
  *
  * Each active alert gets a timer. When the timer fires:
- * 1. The alert status changes to 'escalada'.
- * 2. The `onEscalate` callback is invoked with the updated alert.
+ * 1. The alert's datos.escalada is set to true.
+ * 2. The datos.escalated_at is set to the current timestamp.
+ * 3. The `onEscalate` callback is invoked with the updated alert.
  *
  * If the user confirms before the timer fires, the timer is cancelled.
  */
@@ -35,16 +41,16 @@ export class EscalationManager {
   private timers: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private config: EscalationConfig;
   private onEscalate: OnAlertEscalated;
-  private updateAlertStatus: (alertId: string, status: 'escalada', escalatedAt: string) => Promise<void>;
+  private updateAlertDatos: (alertId: string, datos: Record<string, unknown>) => Promise<void>;
 
   constructor(
     config: EscalationConfig = DEFAULT_ESCALATION_CONFIG,
     onEscalate: OnAlertEscalated = () => {},
-    updateAlertStatus: (alertId: string, status: 'escalada', escalatedAt: string) => Promise<void> = async () => {},
+    updateAlertDatos: (alertId: string, datos: Record<string, unknown>) => Promise<void> = async () => {},
   ) {
     this.config = config;
     this.onEscalate = onEscalate;
-    this.updateAlertStatus = updateAlertStatus;
+    this.updateAlertDatos = updateAlertDatos;
   }
 
   /**
@@ -61,15 +67,22 @@ export class EscalationManager {
       this.timers.delete(alert.id);
 
       const now = new Date().toISOString();
-      const escalatedAlert: AlertRecord = {
-        ...alert,
-        status: 'escalada',
+
+      // Update datos jsonb with escalation state
+      const updatedDatos = {
+        ...(alert.datos as Record<string, unknown> ?? {}),
+        escalada: true,
         escalated_at: now,
       };
 
-      // Persist the escalation status
+      const escalatedAlert: AlertRecord = {
+        ...alert,
+        datos: updatedDatos,
+      };
+
+      // Persist the escalation state in datos jsonb
       try {
-        await this.updateAlertStatus(alert.id, 'escalada', now);
+        await this.updateAlertDatos(alert.id, updatedDatos);
       } catch {
         // Best-effort: if persistence fails, the in-memory state still escalates
       }

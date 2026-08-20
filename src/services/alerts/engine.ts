@@ -4,10 +4,15 @@
  * Ties together detection, persistence, and escalation into a single
  * entry point that HealthProvider calls after each sync cycle.
  *
+ * Adapted to new Supabase schema (2026-08-20):
+ * - Table `alerta` with titulo, mensaje, datos jsonb, leida_en
+ * - Lifecycle: read/unread (leida_en) instead of state machine
+ * - Escalation tracked in datos jsonb
+ *
  * Flow (per SpO₂ reading):
  * 1. Evaluate reading against thresholds (detector).
  * 2. If alert needed → persist to Supabase + start escalation timer.
- * 3. If episode resolved → mark alert as resolved, cancel timer.
+ * 3. If episode resolved → mark alert as read, cancel timer.
  * 4. Notify listeners (UI updates, push notifications).
  *
  * Dependencies are injected for testability (no direct Supabase imports).
@@ -32,14 +37,12 @@ import {EscalationManager} from './escalation';
 export interface AlertSupabaseDeps {
   /** Insert a new alert record. */
   insertAlert: (alert: AlertRecordInsert) => Promise<AlertRecord>;
-  /** Get active alerts for a user (status = 'activa'). */
+  /** Get active (unread) alerts for a user (leida_en IS NULL). */
   getActiveAlerts: (userId: string) => Promise<AlertRecord[]>;
-  /** Update an alert's status. */
-  updateAlertStatus: (
-    alertId: string,
-    status: AlertRecord['status'],
-    extra?: Partial<Pick<AlertRecord, 'confirmed_at' | 'escalated_at' | 'escalated_to' | 'resolved_at'>>,
-  ) => Promise<void>;
+  /** Mark an alert as read (set leida_en). */
+  markAlertRead: (alertId: string) => Promise<void>;
+  /** Update an alert's datos jsonb (for escalation tracking). */
+  updateAlertDatos: (alertId: string, datos: Record<string, unknown>) => Promise<void>;
 }
 
 /** Configuration for the alert engine. */
@@ -80,8 +83,8 @@ export class AlertEngine {
       (escalatedAlert) => {
         this.onAlertEscalated(escalatedAlert);
       },
-      async (alertId, status, escalatedAt) => {
-        await this.deps.updateAlertStatus(alertId, status, {escalated_at: escalatedAt});
+      async (alertId, datos) => {
+        await this.deps.updateAlertDatos(alertId, datos);
       },
     );
   }
@@ -104,7 +107,7 @@ export class AlertEngine {
     dispositivoOrigen: string = 'wearable',
     now: Date = new Date(),
   ): Promise<AlertRecord | null> {
-    // 1. Get active alerts for this user (from cache or Supabase)
+    // 1. Get active (unread) alerts for this user (from cache or Supabase)
     const activeAlerts = await this.getActiveAlerts(userId);
     const activeSpo2Alert = activeAlerts.find(a => a.tipo === 'hipoxia');
     const hasActiveAlert = !!activeSpo2Alert;
@@ -136,16 +139,13 @@ export class AlertEngine {
   }
 
   /**
-   * Confirm that a user acknowledged an alert.
+   * Mark an alert as read (user acknowledged it).
    * Cancels the escalation timer.
    *
-   * @param alertId The alert to confirm
+   * @param alertId The alert to mark as read
    */
   async confirmAlert(alertId: string): Promise<void> {
-    const now = new Date().toISOString();
-    await this.deps.updateAlertStatus(alertId, 'confirmada', {
-      confirmed_at: now,
-    });
+    await this.deps.markAlertRead(alertId);
     this.escalationManager.cancelEscalation(alertId);
 
     // Update cache
@@ -153,22 +153,19 @@ export class AlertEngine {
   }
 
   /**
-   * Resolve an alert (SpO₂ returned to normal).
+   * Resolve an alert (SpO₂ returned to normal) — mark as read.
    *
    * @param alert The alert to resolve
    * @param now Current timestamp
    */
   async resolveAlert(alert: AlertRecord, now: Date = new Date()): Promise<void> {
-    const resolvedAt = now.toISOString();
-    await this.deps.updateAlertStatus(alert.id, 'resuelta', {
-      resolved_at: resolvedAt,
-    });
+    await this.deps.markAlertRead(alert.id);
     this.escalationManager.cancelEscalation(alert.id);
 
     const resolvedAlert: AlertRecord = {
       ...alert,
-      status: 'resuelta',
-      resolved_at: resolvedAt,
+      leida_en: now.toISOString(),
+      status: 'leida',
     };
     this.onAlertResolved(resolvedAlert);
 

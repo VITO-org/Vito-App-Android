@@ -4,6 +4,10 @@
  * Pure functions that evaluate SpO₂ readings against configurable thresholds
  * and determine whether an alert should be generated and at what severity.
  *
+ * Adapted to new Supabase schema (2026-08-20):
+ * - AlertRecord now has titulo, mensaje, datos jsonb, leida_en
+ * - buildAlertRecord produces titulo/mensaje/datos instead of flat fields
+ *
  * Design rationale:
  * - All functions are pure (no side effects, no I/O) → fully testable.
  * - Thresholds are injected, not read from global state → supports per-user
@@ -129,6 +133,9 @@ export function classifySeverity(
  * Build an AlertRecordInsert from a detection result and evaluation input.
  * The caller is responsible for persisting this record.
  *
+ * Adapted to new schema: produces titulo, mensaje, and datos jsonb
+ * instead of flat columns (valor_registrado, umbral_configurado, etc.).
+ *
  * @param input The evaluation input that triggered the alert
  * @param detection The detection result
  * @param userId The user ID
@@ -145,15 +152,35 @@ export function buildAlertRecord(
     throw new Error('buildAlertRecord called without an alert-worthy detection');
   }
 
+  const valorReg = input.spo2Percent;
+  const umbral = detection.thresholdExceeded ?? input.thresholds.warningPercent;
+
+  // Build titulo and mensaje based on severity
+  const titulo =
+    detection.severity === 'critica'
+      ? 'Alerta crítica: SpO₂ muy baja'
+      : 'Alerta: SpO₂ baja';
+
+  const mensaje =
+    detection.severity === 'critica'
+      ? `Saturación de oxígeno en ${valorReg}% (umbral crítico: ${umbral}%). Seek immediate medical attention.`
+      : `Saturación de oxígeno en ${valorReg}% (umbral de alerta: ${umbral}%). Monitor closely.`;
+
   return {
     id_usuario: userId,
+    id_dato_reloj: null,
+    id_prediccion_riesgo: null,
     tipo: 'hipoxia',
     severidad: detection.severity,
-    status: 'activa',
-    valor_registrado: input.spo2Percent,
-    umbral_configurado: detection.thresholdExceeded ?? input.thresholds.warningPercent,
-    generated_at: now.toISOString(),
-    dispositivo_origen: input.dispositivoOrigen,
+    titulo,
+    mensaje,
+    datos: {
+      valor_registrado: valorReg,
+      umbral_configurado: umbral,
+      dispositivo_origen: input.dispositivoOrigen,
+      escalada: false,
+    },
+    expira_en: null,
   };
 }
 

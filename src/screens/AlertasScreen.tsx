@@ -5,40 +5,28 @@ import {colors, spacing, fontSize} from '../theme';
 import {useHealth} from '../context/HealthProvider';
 import type {Alerta} from '../services/supabase/models';
 
-type TabId = 'todas' | 'no-leidas' | 'resueltas';
+type TabId = 'todas' | 'no-leidas' | 'leidas';
 
 const TABS: {id: TabId; label: string}[] = [
   {id: 'todas', label: 'Todas'},
   {id: 'no-leidas', label: 'No leídas'},
-  {id: 'resueltas', label: 'Resueltas'},
+  {id: 'leidas', label: 'Leídas'},
 ];
 
 /**
- * Map Supabase Alerta estado to the UI read/unread concept.
- * - 'activa' / 'escalada' → not read (unread dot visible)
- * - 'confirmada' / 'resuelta' → read
+ * Check if an alert has been read (leida_en IS NOT NULL).
  */
-function isAlertRead(estado: Alerta['estado']): boolean {
-  return estado === 'confirmada' || estado === 'resuelta';
+function isAlertRead(alert: Alerta): boolean {
+  return alert.leida_en !== null;
 }
 
 /**
  * Map Supabase severidad to UI severity color key.
  */
-function severityToColorKey(severidad: Alerta['severidad']): 'danger' | 'warning' {
-  return severidad === 'critica' ? 'danger' : 'warning';
-}
-
-/**
- * Map alert tipo to icon and title.
- */
-function alertMeta(tipo: Alerta['tipo']): {icon: string; title: string} {
-  switch (tipo) {
-    case 'hipoxia':
-      return {icon: '🫁', title: 'Saturación de oxígeno baja'};
-    default:
-      return {icon: '⚠️', title: 'Alerta'};
-  }
+function severityToColorKey(severidad: Alerta['severidad']): 'danger' | 'warning' | 'info' {
+  if (severidad === 'critica') return 'danger';
+  if (severidad === 'advertencia') return 'warning';
+  return 'info';
 }
 
 /**
@@ -59,23 +47,31 @@ function formatAlertTime(isoString: string | null): string {
 }
 
 /**
- * Build a description line for the alert based on its data (CA-03).
+ * Build a description line for the alert using titulo + mensaje + datos (CA-03).
  */
 function alertDescription(alert: Alerta): string {
   const parts: string[] = [];
-  parts.push(`SpO₂: ${alert.valor_registrado}% (umbral: ${alert.umbral_configurado}%)`);
-  if (alert.dispositivo_origen) {
-    parts.push(`Origen: ${alert.dispositivo_origen}`);
+
+  // Use the alert's titulo and mensaje
+  if (alert.mensaje) {
+    parts.push(alert.mensaje);
   }
-  if (alert.estado === 'escalada') {
-    parts.push('Escalada al responsable de guardia');
+
+  // Add escalation info from datos jsonb
+  if (alert.datos && typeof alert.datos === 'object') {
+    const datos = alert.datos as Record<string, unknown>;
+    if (datos.escalada === true) {
+      parts.push('Escalada al responsable de guardia');
+    }
   }
+
   return parts.join(' · ');
 }
 
-const SEVERITY_COLORS: Record<'danger' | 'warning', {bg: string; dot: string}> = {
+const SEVERITY_COLORS: Record<'danger' | 'warning' | 'info', {bg: string; dot: string}> = {
   danger: {bg: colors.dangerLight, dot: colors.danger},
   warning: {bg: colors.warningLight, dot: colors.warning},
+  info: {bg: colors.surface, dot: colors.textSecondary},
 };
 
 const AlertasScreen: React.FC = () => {
@@ -94,9 +90,9 @@ const AlertasScreen: React.FC = () => {
   }, [refreshAlerts]);
 
   const filtered = activeAlerts.filter(a => {
-    const read = isAlertRead(a.estado);
+    const read = isAlertRead(a);
     if (activeTab === 'no-leidas') return !read;
-    if (activeTab === 'resueltas') return read;
+    if (activeTab === 'leidas') return read;
     return true;
   });
 
@@ -133,7 +129,7 @@ const AlertasScreen: React.FC = () => {
                 ? 'No hay alertas activas'
                 : activeTab === 'no-leidas'
                 ? 'No hay alertas sin leer'
-                : 'No hay alertas resueltas'}
+                : 'No hay alertas leídas'}
             </Text>
           </View>
         )}
@@ -141,20 +137,19 @@ const AlertasScreen: React.FC = () => {
         {filtered.map(alert => {
           const colorKey = severityToColorKey(alert.severidad);
           const sev = SEVERITY_COLORS[colorKey];
-          const meta = alertMeta(alert.tipo);
-          const read = isAlertRead(alert.estado);
+          const read = isAlertRead(alert);
 
           return (
             <Card key={alert.id} style={styles.alertCard as any}>
               <View style={[styles.alertRow, {borderLeftColor: sev.dot, borderLeftWidth: 3, paddingLeft: 12}]}>
                 <View style={[styles.alertIcon, {backgroundColor: sev.bg}]}>
-                  <Text style={styles.alertEmoji}>{meta.icon}</Text>
+                  <Text style={styles.alertEmoji}>🫁</Text>
                 </View>
                 <View style={styles.alertBody}>
-                  <Text style={styles.alertTitle}>{meta.title}</Text>
-                  <Text style={styles.alertTime}>{formatAlertTime(alert.generated_at)}</Text>
+                  <Text style={styles.alertTitle}>{alert.titulo}</Text>
+                  <Text style={styles.alertTime}>{formatAlertTime(alert.created_at)}</Text>
                   <Text style={styles.alertDesc}>{alertDescription(alert)}</Text>
-                  {alert.estado === 'escalada' && (
+                  {alert.datos && typeof alert.datos === 'object' && (alert.datos as Record<string, unknown>).escalada === true && (
                     <Text style={styles.escalatedBadge}>⬆ Escalada</Text>
                   )}
                 </View>
