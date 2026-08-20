@@ -190,33 +190,76 @@ CREATE INDEX idx_prediccion_riesgo_usuario
   ON prediccion_riesgo(id_usuario, created_at DESC);
 
 -- ============================================
--- 10. ALERTAS (HU-41 — Sistema de Alertas Inteligentes)
---     Almacena alertas generadas por el motor de detección de signos vitales.
---     Cada alerta tiene un ciclo de vida: activa → confirmada/escalada → resuelta.
+-- 10. ALERTA (HU-41 — Sistema de Alertas Inteligentes)
+--     Nuevo schema: titulo, mensaje, datos jsonb, leida_en, FKs.
+--     Ciclo de vida: leída/no leída (leida_en null = no leída).
 -- ============================================
-CREATE TYPE tipo_alerta AS ENUM ('hipoxia');
-CREATE TYPE severidad_alerta AS ENUM ('advertencia', 'critica');
-CREATE TYPE estado_alerta AS ENUM ('activa', 'confirmada', 'escalada', 'resuelta');
-
-CREATE TABLE alertas (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  id_usuario UUID NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
-  tipo tipo_alerta NOT NULL,
-  severidad severidad_alerta NOT NULL,
-  estado estado_alerta NOT NULL DEFAULT 'activa',
-  valor_registrado DECIMAL(4,1) NOT NULL,
-  umbral_configurado DECIMAL(4,1) NOT NULL,
-  generated_at TIMESTAMPTZ DEFAULT NOW(),
-  dispositivo_origen VARCHAR(100),
-  confirmed_at TIMESTAMPTZ,
-  escalated_at TIMESTAMPTZ,
-  escalated_to VARCHAR(255),
-  resolved_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+CREATE TABLE alerta (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    id_usuario uuid NOT NULL REFERENCES public.usuario(id),
+    id_dato_reloj uuid REFERENCES public.datos_reloj(id),
+    id_prediccion_riesgo uuid REFERENCES public.prediccion_riesgo(id),
+    tipo varchar(50) NOT NULL,
+    severidad varchar(20) NOT NULL DEFAULT 'INFO',
+    titulo varchar(150) NOT NULL,
+    mensaje text NOT NULL,
+    datos jsonb,
+    leida_en timestamptz,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    expira_en timestamptz
 );
 
-CREATE INDEX idx_alertas_usuario_estado
-  ON alertas(id_usuario, estado);
+CREATE INDEX idx_alerta_usuario_created
+  ON alerta(id_usuario, created_at DESC);
 
-CREATE INDEX idx_alertas_usuario_fecha
-  ON alertas(id_usuario, generated_at DESC);
+CREATE INDEX idx_alerta_usuario_leida
+  ON alerta(id_usuario, leida_en)
+  WHERE leida_en IS NULL;
+
+CREATE INDEX idx_alerta_tipo
+  ON alerta(tipo);
+
+-- ============================================
+-- 11. DISPOSITIVO_USUARIO (tokens FCM para push)
+-- ============================================
+CREATE TABLE dispositivo_usuario (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    id_usuario uuid NOT NULL REFERENCES public.usuario(id),
+    fcm_token text NOT NULL,
+    plataforma varchar(20) NOT NULL,
+    activo boolean NOT NULL DEFAULT true,
+    last_seen_at timestamptz DEFAULT now(),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE(id_usuario, fcm_token)
+);
+
+CREATE INDEX idx_dispositivo_usuario_activo
+  ON dispositivo_usuario(id_usuario)
+  WHERE activo = true;
+
+-- ============================================
+-- 12. PREFERENCIA_NOTIFICACION
+-- ============================================
+CREATE TABLE preferencia_notificacion (
+    id_usuario uuid PRIMARY KEY REFERENCES public.usuario(id),
+    push_habilitado boolean DEFAULT true,
+    alertas_criticas boolean DEFAULT true,
+    alertas_info boolean DEFAULT true,
+    updated_at timestamptz DEFAULT now()
+);
+
+-- ============================================
+-- 13. NOTIFICACION_ENTREGA (Fase 2 — registro de entregas push)
+-- ============================================
+CREATE TABLE notificacion_entrega (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    id_alerta uuid REFERENCES alerta(id),
+    id_dispositivo uuid REFERENCES dispositivo_usuario(id),
+    estado varchar(20) NOT NULL,
+    enviado_en timestamptz,
+    error_mensaje text,
+    created_at timestamptz DEFAULT now()
+);
+
+CREATE INDEX idx_notificacion_entrega_alerta
+  ON notificacion_entrega(id_alerta);

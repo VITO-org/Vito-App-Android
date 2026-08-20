@@ -174,28 +174,79 @@ export type PrediccionRiesgoInsert = Omit<PrediccionRiesgo, 'id' | 'created_at'>
   created_at?: string;
 };
 
-// ─── TABLA: alertas (HU-41 — Sistema de Alertas Inteligentes) ───
+// ─── TABLA: alerta (HU-41 — Sistema de Alertas Inteligentes) ───
 export type TipoAlerta = 'hipoxia';
-export type SeveridadAlerta = 'advertencia' | 'critica';
-export type EstadoAlerta = 'activa' | 'confirmada' | 'escalada' | 'resuelta';
+export type SeveridadAlerta = 'INFO' | 'advertencia' | 'critica';
+
+/**
+ * Datos flexibles almacenados en el jsonb `datos` de cada alerta.
+ * Permite guardar contexto extra sin cambiar el schema de la tabla.
+ * Extiende Record<string, unknown> para ser compatible con AlertRecord.datos.
+ */
+export interface AlertaDatos extends Record<string, unknown> {
+  /** SpO₂ value that triggered the alert (percentage). */
+  valor_registrado?: number;
+  /** Threshold that was exceeded (percentage). */
+  umbral_configurado?: number;
+  /** Device or source that produced the reading. */
+  dispositivo_origen?: string;
+  /** Whether the alert was escalated (time-based). */
+  escalada?: boolean;
+  /** ISO timestamp when the alert was escalated. */
+  escalated_at?: string;
+  /** Contact to whom the alert was escalated. */
+  escalated_to?: string;
+}
 
 export interface Alerta {
   id: string;
   id_usuario: string;
+  id_dato_reloj: string | null;
+  id_prediccion_riesgo: string | null;
   tipo: TipoAlerta;
   severidad: SeveridadAlerta;
-  estado: EstadoAlerta;
-  valor_registrado: number;
-  umbral_configurado: number;
-  generated_at: string | null;
-  dispositivo_origen: string | null;
-  confirmed_at: string | null;
-  escalated_at: string | null;
-  escalated_to: string | null;
-  resolved_at: string | null;
-  created_at: string | null;
+  titulo: string;
+  mensaje: string;
+  datos: AlertaDatos | null;
+  leida_en: string | null;
+  created_at: string;
+  expira_en: string | null;
 }
 export type AlertaInsert = Omit<Alerta, 'id' | 'created_at'> & { id?: string; created_at?: string };
+
+// ─── TABLA: dispositivo_usuario (tokens FCM para push) ───
+export interface DispositivoUsuario {
+  id: string;
+  id_usuario: string;
+  fcm_token: string;
+  plataforma: string;
+  activo: boolean;
+  last_seen_at: string | null;
+  created_at: string;
+}
+export type DispositivoUsuarioInsert = Omit<DispositivoUsuario, 'id' | 'created_at'> & { id?: string; created_at?: string };
+
+// ─── TABLA: preferencia_notificacion ───
+export interface PreferenciaNotificacion {
+  id_usuario: string;
+  push_habilitado: boolean | null;
+  alertas_criticas: boolean | null;
+  alertas_info: boolean | null;
+  updated_at: string | null;
+}
+export type PreferenciaNotificacionInsert = Omit<PreferenciaNotificacion, 'updated_at'> & { updated_at?: string };
+
+// ─── TABLA: notificacion_entrega (Fase 2 — registro de entregas push) ───
+export interface NotificacionEntrega {
+  id: string;
+  id_alerta: string | null;
+  id_dispositivo: string | null;
+  estado: string;
+  enviado_en: string | null;
+  error_mensaje: string | null;
+  created_at: string | null;
+}
+export type NotificacionEntregaInsert = Omit<NotificacionEntrega, 'id' | 'created_at'> & { id?: string; created_at?: string };
 
 // ─── Application-level types ───
 

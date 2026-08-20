@@ -1,6 +1,11 @@
 /**
  * Tests del módulo de alertas HU-41 — Alerta por hipoxia (SpO₂ baja).
  *
+ * Adapted to new Supabase schema (2026-08-20):
+ * - Table `alerta` with titulo, mensaje, datos jsonb, leida_en
+ * - Lifecycle: read/unread (leida_en) instead of state machine
+ * - Escalation tracked in datos jsonb
+ *
  * Cubre:
  *  (a) Detector: classifySeverity, evaluateSpo2, isEpisodeResolved
  *  (b) Escalation: shouldEscalate, EscalationManager
@@ -164,7 +169,7 @@ describe('isEpisodeResolved', () => {
 // ═══════════════════════════════════════════
 
 describe('buildAlertRecord', () => {
-  test('builds correct insert payload', () => {
+  test('builds correct insert payload with titulo/mensaje/datos', () => {
     const input = {
       spo2Percent: 88,
       thresholds: DEFAULT_SPO2_THRESHOLDS,
@@ -185,10 +190,39 @@ describe('buildAlertRecord', () => {
     expect(record.id_usuario).toBe('user-1');
     expect(record.tipo).toBe('hipoxia');
     expect(record.severidad).toBe('advertencia');
-    expect(record.status).toBe('activa');
-    expect(record.valor_registrado).toBe(88);
-    expect(record.umbral_configurado).toBe(90);
-    expect(record.dispositivo_origen).toBe('wearable');
+    expect(record.titulo).toContain('SpO₂ baja');
+    expect(record.mensaje).toContain('88%');
+    expect(record.mensaje).toContain('90%');
+    expect(record.datos).toEqual(expect.objectContaining({
+      valor_registrado: 88,
+      umbral_configurado: 90,
+      dispositivo_origen: 'wearable',
+      escalada: false,
+    }));
+    expect(record.leida_en).toBeUndefined(); // not set on insert
+  });
+
+  test('builds critical alert with correct titulo', () => {
+    const input = {
+      spo2Percent: 82,
+      thresholds: DEFAULT_SPO2_THRESHOLDS,
+      hasActiveAlert: false,
+      activeAlertSeverity: null,
+      readingTimestamp: '2026-08-18T12:00:00Z',
+      dispositivoOrigen: 'wearable',
+    };
+    const detection = {
+      shouldAlert: true,
+      severity: 'critica' as const,
+      thresholdExceeded: 85,
+      isNewEpisode: true,
+    };
+
+    const record = buildAlertRecord(input, detection, 'user-1', new Date('2026-08-18T12:00:00Z'));
+
+    expect(record.titulo).toContain('crítica');
+    expect(record.mensaje).toContain('82%');
+    expect(record.mensaje).toContain('85%');
   });
 
   test('throws when called without alert-worthy detection', () => {
@@ -250,31 +284,35 @@ describe('EscalationManager', () => {
     jest.useRealTimers();
   });
 
+  function makeAlert(overrides: Partial<AlertRecord> = {}): AlertRecord {
+    return {
+      id: 'a1',
+      id_usuario: 'u1',
+      id_dato_reloj: null,
+      id_prediccion_riesgo: null,
+      tipo: 'hipoxia',
+      severidad: 'advertencia',
+      titulo: 'Alerta: SpO₂ baja',
+      mensaje: 'Saturación de oxígeno en 88%',
+      datos: {valor_registrado: 88, umbral_configurado: 90, dispositivo_origen: 'wearable', escalada: false},
+      leida_en: null,
+      created_at: '2026-08-18T12:00:00Z',
+      expira_en: null,
+      status: 'activa',
+      ...overrides,
+    };
+  }
+
   test('starts and fires escalation after timeout', async () => {
     const onEscalate = jest.fn();
-    const updateStatus = jest.fn().mockResolvedValue(undefined);
+    const updateDatos = jest.fn().mockResolvedValue(undefined);
     const mgr = new EscalationManager(
       {escalationTimeoutMs: 5000},
       onEscalate,
-      updateStatus,
+      updateDatos,
     );
 
-    const alert: AlertRecord = {
-      id: 'a1',
-      id_usuario: 'u1',
-      tipo: 'hipoxia',
-      severidad: 'advertencia',
-      status: 'activa',
-      valor_registrado: 88,
-      umbral_configurado: 90,
-      generated_at: '2026-08-18T12:00:00Z',
-      dispositivo_origen: 'wearable',
-      confirmed_at: null,
-      escalated_at: null,
-      escalated_to: null,
-      resolved_at: null,
-    };
-
+    const alert = makeAlert();
     mgr.startEscalation(alert);
     expect(mgr.hasTimer('a1')).toBe(true);
 
@@ -282,9 +320,11 @@ describe('EscalationManager', () => {
 
     expect(onEscalate).toHaveBeenCalledTimes(1);
     expect(onEscalate).toHaveBeenCalledWith(
-      expect.objectContaining({status: 'escalada'}),
+      expect.objectContaining({
+        datos: expect.objectContaining({escalada: true}),
+      }),
     );
-    expect(updateStatus).toHaveBeenCalledWith('a1', 'escalada', expect.any(String));
+    expect(updateDatos).toHaveBeenCalledWith('a1', expect.objectContaining({escalada: true}));
     expect(mgr.hasTimer('a1')).toBe(false);
   });
 
@@ -292,22 +332,7 @@ describe('EscalationManager', () => {
     const onEscalate = jest.fn();
     const mgr = new EscalationManager({escalationTimeoutMs: 5000}, onEscalate);
 
-    const alert: AlertRecord = {
-      id: 'a1',
-      id_usuario: 'u1',
-      tipo: 'hipoxia',
-      severidad: 'advertencia',
-      status: 'activa',
-      valor_registrado: 88,
-      umbral_configurado: 90,
-      generated_at: '2026-08-18T12:00:00Z',
-      dispositivo_origen: 'wearable',
-      confirmed_at: null,
-      escalated_at: null,
-      escalated_to: null,
-      resolved_at: null,
-    };
-
+    const alert = makeAlert();
     mgr.startEscalation(alert);
     mgr.cancelEscalation('a1');
 
@@ -321,22 +346,7 @@ describe('EscalationManager', () => {
     const onEscalate = jest.fn();
     const mgr = new EscalationManager({escalationTimeoutMs: 5000}, onEscalate);
 
-    const alert: AlertRecord = {
-      id: 'a1',
-      id_usuario: 'u1',
-      tipo: 'hipoxia',
-      severidad: 'advertencia',
-      status: 'activa',
-      valor_registrado: 88,
-      umbral_configurado: 90,
-      generated_at: '2026-08-18T12:00:00Z',
-      dispositivo_origen: 'wearable',
-      confirmed_at: null,
-      escalated_at: null,
-      escalated_to: null,
-      resolved_at: null,
-    };
-
+    const alert = makeAlert();
     mgr.startEscalation(alert);
     expect(mgr.activeTimers).toBe(1);
 
@@ -351,30 +361,53 @@ describe('EscalationManager', () => {
 
 function makeEngineDeps(overrides: Partial<AlertSupabaseDeps> = {}): AlertSupabaseDeps & {
   inserted: AlertRecordInsert[];
-  updated: Array<{id: string; status: string}>;
+  markedRead: string[];
+  updatedDatos: Array<{id: string; datos: Record<string, unknown>}>;
 } {
   const inserted: AlertRecordInsert[] = [];
-  const updated: Array<{id: string; status: string}> = [];
+  const markedRead: string[] = [];
+  const updatedDatos: Array<{id: string; datos: Record<string, unknown>}> = [];
 
   return {
     inserted,
-    updated,
+    markedRead,
+    updatedDatos,
     insertAlert: async (alert) => {
       inserted.push(alert);
       return {
         id: `alert-${inserted.length}`,
         ...alert,
-        confirmed_at: null,
-        escalated_at: null,
-        escalated_to: null,
-        resolved_at: null,
+        leida_en: null,
         created_at: new Date().toISOString(),
+        status: 'activa',
       } as AlertRecord;
     },
     getActiveAlerts: async () => [],
-    updateAlertStatus: async (alertId, status) => {
-      updated.push({id: alertId, status: status as string});
+    markAlertRead: async (alertId) => {
+      markedRead.push(alertId);
     },
+    updateAlertDatos: async (alertId, datos) => {
+      updatedDatos.push({id: alertId, datos});
+    },
+    ...overrides,
+  };
+}
+
+function makeAlertRecord(overrides: Partial<AlertRecord> = {}): AlertRecord {
+  return {
+    id: 'existing-1',
+    id_usuario: 'u1',
+    id_dato_reloj: null,
+    id_prediccion_riesgo: null,
+    tipo: 'hipoxia',
+    severidad: 'advertencia',
+    titulo: 'Alerta: SpO₂ baja',
+    mensaje: 'Saturación de oxígeno en 88%',
+    datos: {valor_registrado: 88, umbral_configurado: 90, dispositivo_origen: 'wearable', escalada: false},
+    leida_en: null,
+    created_at: '2026-08-18T12:00:00Z',
+    expira_en: null,
+    status: 'activa',
     ...overrides,
   };
 }
@@ -410,7 +443,8 @@ describe('AlertEngine', () => {
 
     expect(alert).not.toBeNull();
     expect(alert!.severidad).toBe('advertencia');
-    expect(alert!.valor_registrado).toBe(88);
+    expect(alert!.titulo).toContain('SpO₂ baja');
+    expect(alert!.datos).toEqual(expect.objectContaining({valor_registrado: 88}));
     expect(deps.inserted).toHaveLength(1);
     expect(onGenerated).toHaveBeenCalledTimes(1);
 
@@ -430,21 +464,7 @@ describe('AlertEngine', () => {
   });
 
   test('evaluateSpo2Reading: dedup same severity', async () => {
-    const existingAlert: AlertRecord = {
-      id: 'existing-1',
-      id_usuario: 'u1',
-      tipo: 'hipoxia',
-      severidad: 'advertencia',
-      status: 'activa',
-      valor_registrado: 88,
-      umbral_configurado: 90,
-      generated_at: '2026-08-18T12:00:00Z',
-      dispositivo_origen: 'wearable',
-      confirmed_at: null,
-      escalated_at: null,
-      escalated_to: null,
-      resolved_at: null,
-    };
+    const existingAlert = makeAlertRecord();
 
     const deps = makeEngineDeps({
       getActiveAlerts: async () => [existingAlert],
@@ -461,21 +481,7 @@ describe('AlertEngine', () => {
   });
 
   test('evaluateSpo2Reading: severity escalation within episode', async () => {
-    const existingAlert: AlertRecord = {
-      id: 'existing-1',
-      id_usuario: 'u1',
-      tipo: 'hipoxia',
-      severidad: 'advertencia',
-      status: 'activa',
-      valor_registrado: 88,
-      umbral_configurado: 90,
-      generated_at: '2026-08-18T12:00:00Z',
-      dispositivo_origen: 'wearable',
-      confirmed_at: null,
-      escalated_at: null,
-      escalated_to: null,
-      resolved_at: null,
-    };
+    const existingAlert = makeAlertRecord();
 
     const deps = makeEngineDeps({
       getActiveAlerts: async () => [existingAlert],
@@ -492,21 +498,7 @@ describe('AlertEngine', () => {
   });
 
   test('evaluateSpo2Reading: episode resolved', async () => {
-    const existingAlert: AlertRecord = {
-      id: 'existing-1',
-      id_usuario: 'u1',
-      tipo: 'hipoxia',
-      severidad: 'advertencia',
-      status: 'activa',
-      valor_registrado: 88,
-      umbral_configurado: 90,
-      generated_at: '2026-08-18T12:00:00Z',
-      dispositivo_origen: 'wearable',
-      confirmed_at: null,
-      escalated_at: null,
-      escalated_to: null,
-      resolved_at: null,
-    };
+    const existingAlert = makeAlertRecord();
 
     const deps = makeEngineDeps({
       getActiveAlerts: async () => [existingAlert],
@@ -519,14 +511,14 @@ describe('AlertEngine', () => {
     const alert = await engine.evaluateSpo2Reading('u1', 95, 'wearable');
 
     expect(alert).toBeNull();
-    expect(deps.updated).toHaveLength(1);
-    expect(deps.updated[0].status).toBe('resuelta');
+    expect(deps.markedRead).toHaveLength(1);
+    expect(deps.markedRead[0]).toBe('existing-1');
     expect(onResolved).toHaveBeenCalledTimes(1);
 
     engine.dispose();
   });
 
-  test('confirmAlert: updates status and cancels timer', async () => {
+  test('confirmAlert: marks as read and cancels timer', async () => {
     const deps = makeEngineDeps();
     const engine = new AlertEngine(deps);
 
@@ -535,9 +527,8 @@ describe('AlertEngine', () => {
 
     await engine.confirmAlert(alert!.id);
 
-    expect(deps.updated).toHaveLength(1);
-    expect(deps.updated[0].id).toBe(alert!.id);
-    expect(deps.updated[0].status).toBe('confirmada');
+    expect(deps.markedRead).toHaveLength(1);
+    expect(deps.markedRead[0]).toBe(alert!.id);
 
     engine.dispose();
   });

@@ -22,7 +22,8 @@ import {
   markDatosRelojReemplazado,
   insertAlerta,
   getAlertasActivas,
-  updateAlertaStatus,
+  marcarAlertaLeida,
+  updateAlertaDatos,
 } from '../services/supabase/api';
 import type {Alerta} from '../services/supabase/models';
 import {
@@ -121,43 +122,33 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
         insertAlert: async (alertInsert) => {
           const row = await insertAlerta({
             id_usuario: alertInsert.id_usuario,
+            id_dato_reloj: alertInsert.id_dato_reloj ?? null,
+            id_prediccion_riesgo: alertInsert.id_prediccion_riesgo ?? null,
             tipo: alertInsert.tipo,
             severidad: alertInsert.severidad,
-            estado: alertInsert.status,
-            valor_registrado: alertInsert.valor_registrado,
-            umbral_configurado: alertInsert.umbral_configurado,
-            generated_at: alertInsert.generated_at,
-            dispositivo_origen: alertInsert.dispositivo_origen,
-            confirmed_at: null,
-            escalated_at: null,
-            escalated_to: null,
-            resolved_at: null,
+            titulo: alertInsert.titulo,
+            mensaje: alertInsert.mensaje,
+            datos: alertInsert.datos ?? null,
+            leida_en: null,
+            expira_en: alertInsert.expira_en ?? null,
           });
           return {
             ...row,
-            status: row.estado,
-          } as any;
+            status: row.leida_en ? 'leida' as const : 'activa' as const,
+          };
         },
         getActiveAlerts: async (uid) => {
           const rows = await getAlertasActivas(uid);
           return rows.map(r => ({
             ...r,
-            status: r.estado,
-          })) as any;
+            status: r.leida_en ? 'leida' as const : 'activa' as const,
+          }));
         },
-        updateAlertStatus: async (alertId, status, extra) => {
-          const estadoMap: Record<string, any> = {
-            activa: 'activa',
-            confirmada: 'confirmada',
-            escalada: 'escalada',
-            resuelta: 'resuelta',
-          };
-          await updateAlertaStatus(alertId, estadoMap[status] ?? status, {
-            confirmed_at: extra?.confirmed_at,
-            escalated_at: extra?.escalated_at,
-            escalated_to: extra?.escalated_to,
-            resolved_at: extra?.resolved_at,
-          });
+        markAlertRead: async (alertId) => {
+          await marcarAlertaLeida(alertId);
+        },
+        updateAlertDatos: async (alertId, datos) => {
+          await updateAlertaDatos(alertId, datos as any);
         },
       });
 
