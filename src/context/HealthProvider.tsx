@@ -24,6 +24,8 @@ import {
   getAlertasActivas,
   marcarAlertaLeida,
   updateAlertaDatos,
+  insertDatosRelojYML,
+  SyncMLPartialError,
 } from '../services/supabase/api';
 import type {Alerta} from '../services/supabase/models';
 import {
@@ -31,6 +33,8 @@ import {
   DEFAULT_SYNC_INTERVAL_MIN,
   MIN_SYNC_INTERVAL_MS,
 } from '../services/healthSync';
+import { normalizeVital } from '../services/vitals';
+import type {DatosRelojInsert} from '../services/supabase/models';
 import {saveHealthSnapshot, pruneOldEntries} from '../services/HealthDataCache';
 import {AlertEngine} from '../services/alerts/engine';
 
@@ -207,35 +211,67 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
       // Podar entradas viejas 1 vez al día (lo ejecutamos pero ignoramos error)
       pruneOldEntries(60).catch(() => {});
 
-      // Sincronizar automáticamente con Supabase (datos_reloj) — motor central HU-25
-      try {
-        const result = await syncWearableToBackend(userId, data, {
-          insertDatosReloj,
-          getDatosRelojInWindow: (uid, from, to) => getDatosReloj(uid, {from, to}),
-          markDatosRelojReemplazado,
-        });
-        if (result.conflictResolved) {
-          console.warn(
-            'HealthProvider: conflicto resuelto a favor del wearable',
-            result.manualReplaced,
-          );
-        }
-      } catch (syncErr) {
-        // Fuente de escritura (Supabase) caída: no bloquear la UI; reintenta en el próximo tick
-        console.warn('HealthProvider: error al sincronizar con datos_reloj', syncErr);
-      }
-
-      // ── HU-41: Evaluate SpO₂ for hypoxia alerts (CA-02: ≤30s) ──
-      if (data.spo2Percent != null && alertEngineRef.current && userId) {
+      // ── HU-25: Sincronizar con Supabase (datos_reloj) — motor central ──
+      const userId = getUserId();
+      if (userId) {
         try {
-          await alertEngineRef.current.evaluateSpo2Reading(
-            userId,
-            data.spo2Percent,
-            'health-connect',
-          );
-        } catch (alertErr) {
-          // Alert engine failure should not block health data sync
-          console.warn('HealthProvider: error en motor de alertas', alertErr);
+          const result = await syncWearableToBackend(userId, data, {
+            insertDatosReloj,
+            getDatosRelojInWindow: (uid, from, to) => getDatosReloj(uid, {from, to}),
+            markDatosRelojReemplazado,
+          });
+          if (result.conflictResolved) {
+            console.warn(
+              'HealthProvider: conflicto resuelto a favor del wearable',
+              result.manualReplaced,
+            );
+          }
+        } catch (syncErr) {
+          console.warn('HealthProvider: error al sincronizar con datos_reloj', syncErr);
+        }
+
+        // ── HU-95: Carga paralela en dato_salud_ml ──
+        try {
+          const hr = normalizeVital('frecuencia_cardiaca', data.averageBpm ?? null);
+          const spo2 = normalizeVital('saturacion_oxigeno', data.spo2Percent ?? null);
+          const temp = normalizeVital('temperatura', data.bodyTemperatureCelsius ?? null);
+
+          const lectura: DatosRelojInsert = {
+            id_usuario: userId,
+            bp_sistolica: data.bloodPressureSystolic != null ? Math.round(data.bloodPressureSystolic) : null,
+            bp_diastolica: data.bloodPressureDiastolic != null ? Math.round(data.bloodPressureDiastolic) : null,
+            frec_cardiaca_bpm: hr.value,
+            spo2_pct: spo2.value,
+            temperatura: temp.value,
+            nivel_estres: null,
+            actividad_pasos: data.steps != null ? Math.round(data.steps) : null,
+            horas_sueno: data.sleepMinutes != null ? data.sleepMinutes / 60 : null,
+            recorded_at: new Date().toISOString(),
+            sospechoso: hr.sospechoso || spo2.sospechoso || temp.sospechoso,
+          };
+          await insertDatosRelojYML(lectura, 'dispositivo');
+        } catch (syncErr) {
+          if (syncErr instanceof SyncMLPartialError) {
+            console.warn(
+              'HealthProvider: dato_salud_ml pendiente de re-intento',
+              syncErr.datosMLPendientes,
+            );
+          } else {
+            console.warn('HealthProvider: error al sincronizar con Supabase', syncErr);
+          }
+        }
+
+        // ── HU-41: Evaluar SpO₂ para alertas de hipoxia (CA-02: ≤30s) ──
+        if (data.spo2Percent != null && alertEngineRef.current) {
+          try {
+            await alertEngineRef.current.evaluateSpo2Reading(
+              userId,
+              data.spo2Percent,
+              'health-connect',
+            );
+          } catch (alertErr) {
+            console.warn('HealthProvider: error en motor de alertas', alertErr);
+          }
         }
       }
     } catch (e) {
