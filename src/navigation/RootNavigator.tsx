@@ -1,5 +1,5 @@
 import React from 'react';
-import {View, Text, ActivityIndicator} from 'react-native';
+import {View, Text, ActivityIndicator, StyleSheet} from 'react-native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import BottomTabNavigator from './BottomTabNavigator';
 import DetalleSignoScreen from '../screens/DetalleSignoScreen';
@@ -7,6 +7,7 @@ import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
 import CompleteProfileScreen from '../screens/CompleteProfileScreen';
 import EditarPerfilScreen from '../screens/EditarPerfilScreen';
+import ConfiguracionScreen from '../screens/ConfiguracionScreen';
 import TodosLosSignosScreen from '../screens/TodosLosSignosScreen';
 import RegistrarSintomaScreen from '../screens/RegistrarSintomaScreen';
 import HistorialSintomasScreen from '../screens/HistorialSintomasScreen';
@@ -25,6 +26,7 @@ export type RootStackParamList = {
   Register: undefined;
   CompleteProfile: undefined;
   EditarPerfil: undefined;
+  Configuracion: undefined;
   RegistrarSintoma: undefined;
   HistorialSintomas: undefined;
 };
@@ -38,9 +40,9 @@ function RootNavigatorContent() {
 
   if (isLoading) {
     return (
-      <View style={{flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff'}}>
+      <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#2FAF7A" />
-        <Text style={{marginTop: 12, fontSize: 14, color: '#6B7280'}}>Cargando...</Text>
+        <Text style={styles.loadingText}>Cargando...</Text>
       </View>
     );
   }
@@ -78,6 +80,13 @@ function RootNavigatorContent() {
       )}
       {session && (
         <Stack.Screen
+          name="Configuracion"
+          component={ConfiguracionScreen}
+          options={{animation: 'slide_from_right'}}
+        />
+      )}
+      {session && (
+        <Stack.Screen
           name="TodosLosSignos"
           component={TodosLosSignosScreen}
           options={{animation: 'slide_from_right'}}
@@ -104,3 +113,17 @@ function RootNavigatorContent() {
 export default function RootNavigator() {
   return <RootNavigatorContent />;
 }
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#6B7280',
+  },
+});

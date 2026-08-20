@@ -9,6 +9,8 @@ export type SexoBiologico = 'M' | 'F' | 'otro';
 export type TipoPatologia = 'ninguna' | 'diabetes' | 'hipertension' | 'alzheimer' | 'otra';
 export type CatSintoma = 'fisico' | 'emocional';
 export type OrigenSintoma = 'chat_ia' | 'manual';
+/** Origen de un registro de datos_reloj (HU-25 CA-02/CA-03). */
+export type OrigenDato = 'wearable' | 'manual';
 export type FuenteDato = 'manual' | 'dispositivo' | 'integracion';
 
 // ─── TABLA: usuario ───
@@ -46,6 +48,8 @@ export interface PerfilUsuario {
   altura_cm: number | null;
   patologia: TipoPatologia | null;
   patologia_descripcion: string | null;
+  /** Intervalo de sincronización automática en minutos (HU-25 CA-01). NULL => default 10 min en la app. */
+  intervalo_sync_min?: number | null;
 }
 export type PerfilUsuarioInsert = Omit<PerfilUsuario, 'id'> & { id?: string };
 
@@ -63,6 +67,10 @@ export interface DatosReloj {
   horas_sueno: number | null;
   recorded_at: string | null;
   sospechoso: boolean | null;
+  /** Origen de dato: 'wearable' | 'manual' (HU-25, versionado/auditoría). Nullable para no romper lecturas previas a la migración. */
+  origen?: OrigenDato | null;
+  /** id del registro wearable que ganó el conflicto y reemplazó a este (CA-03). */
+  reemplazado_por?: string | null;
 }
 export type DatosRelojInsert = {
   id?: string;
@@ -195,6 +203,29 @@ export type PrediccionRiesgoInsert = Omit<PrediccionRiesgo, 'id' | 'created_at'>
   id?: string;
   created_at?: string;
 };
+
+// ─── TABLA: alertas (HU-41 — Sistema de Alertas Inteligentes) ───
+export type TipoAlerta = 'hipoxia';
+export type SeveridadAlerta = 'advertencia' | 'critica';
+export type EstadoAlerta = 'activa' | 'confirmada' | 'escalada' | 'resuelta';
+
+export interface Alerta {
+  id: string;
+  id_usuario: string;
+  tipo: TipoAlerta;
+  severidad: SeveridadAlerta;
+  estado: EstadoAlerta;
+  valor_registrado: number;
+  umbral_configurado: number;
+  generated_at: string | null;
+  dispositivo_origen: string | null;
+  confirmed_at: string | null;
+  escalated_at: string | null;
+  escalated_to: string | null;
+  resolved_at: string | null;
+  created_at: string | null;
+}
+export type AlertaInsert = Omit<Alerta, 'id' | 'created_at'> & { id?: string; created_at?: string };
 
 // ─── Application-level types ───
 
