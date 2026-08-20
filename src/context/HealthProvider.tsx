@@ -15,7 +15,7 @@ import {
   HealthModuleNotAvailableError,
 } from '../services/VitoHealthNative';
 import {useSupabase} from './SupabaseProvider';
-import {insertDatosReloj, upsertDatosClinicosConfig} from '../services/supabase/api';
+import {insertDatosRelojYML, SyncMLPartialError} from '../services/supabase/api';
 import { normalizeVital } from '../services/vitals';
 import type {DatosRelojInsert} from '../services/supabase/models';
 import {saveHealthSnapshot, pruneOldEntries} from '../services/HealthDataCache';
@@ -97,21 +97,14 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
       // Podar entradas viejas 1 vez al día (lo ejecutamos pero ignoramos error)
       pruneOldEntries(60).catch(() => {});
 
-      // Sincronizar automáticamente con Supabase (datos_reloj)
+      // Sincronizar automáticamente con Supabase (datos_reloj + dato_salud_ml)
       const userId = getUserId();
       if (userId) {
         // Normalizar y preparar los datos para insertar en Supabase [documentación manual]
         try {
+          const hr = normalizeVital('frecuencia_cardiaca', data.averageBpm ?? null);
           const spo2 = normalizeVital('saturacion_oxigeno', data.spo2Percent ?? null);
           const temp = normalizeVital('temperatura', data.bodyTemperatureCelsius ?? null);
-
-          // Asegurar que datos_clinicos_config tiene fila por si existe
-          // un trigger en datos_reloj que la referencia (workaround error 23505)
-          try {
-            await upsertDatosClinicosConfig({id_usuario: userId});
-          } catch {
-            // ignorar error del upsert preparatorio
-          }
 
           const lectura: DatosRelojInsert = {
             id_usuario: userId,
@@ -126,10 +119,17 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
             recorded_at: new Date().toISOString(),
             sospechoso: hr.sospechoso || spo2.sospechoso || temp.sospechoso,
           };
-          await insertDatosReloj(lectura);
+          await insertDatosRelojYML(lectura, 'dispositivo');
         } catch (syncErr) {
           // No bloquear la UI si falla la sincronización
-          console.warn('HealthProvider: error al sincronizar con datos_reloj', syncErr);
+          if (syncErr instanceof SyncMLPartialError) {
+            console.warn(
+              'HealthProvider: dato_salud_ml pendiente de re-intento',
+              syncErr.datosMLPendientes,
+            );
+          } else {
+            console.warn('HealthProvider: error al sincronizar con Supabase', syncErr);
+          }
         }
       }
     } catch (e) {

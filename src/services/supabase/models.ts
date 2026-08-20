@@ -9,6 +9,7 @@ export type SexoBiologico = 'M' | 'F' | 'otro';
 export type TipoPatologia = 'ninguna' | 'diabetes' | 'hipertension' | 'alzheimer' | 'otra';
 export type CatSintoma = 'fisico' | 'emocional';
 export type OrigenSintoma = 'chat_ia' | 'manual';
+export type FuenteDato = 'manual' | 'dispositivo' | 'integracion';
 
 // ─── TABLA: usuario ───
 export interface Usuario {
@@ -63,7 +64,36 @@ export interface DatosReloj {
   recorded_at: string | null;
   sospechoso: boolean | null;
 }
-export type DatosRelojInsert = Omit<DatosReloj, 'id'> & { id?: string };
+export type DatosRelojInsert = {
+  id?: string;
+  id_usuario: string;
+  bp_sistolica?: number | null;
+  bp_diastolica?: number | null;
+  frec_cardiaca_bpm?: number | null;
+  spo2_pct?: number | null;
+  temperatura?: number | null;
+  nivel_estres?: number | null;
+  actividad_pasos?: number | null;
+  horas_sueno?: number | null;
+  recorded_at?: string | null;
+  sospechoso?: boolean | null;
+};
+
+// ─── TABLA: dato_salud_ml (series de tiempo normalizado para ML) ───
+export interface DatoSaludML {
+  id: string;
+  id_usuario: string;
+  tipo_metrica: string;
+  valor: number;
+  unidad: string;
+  fuente: FuenteDato;
+  recorded_at: string;
+  created_at: string;
+}
+export type DatoSaludMLInsert = Omit<DatoSaludML, 'id' | 'created_at'> & {
+  id?: string;
+  created_at?: string;
+};
 
 // ─── TABLA: baseline_clinico ───
 export interface BaselineClinico {
