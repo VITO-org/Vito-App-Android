@@ -235,7 +235,26 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
           );
         } catch (alertErr) {
           // Alert engine failure should not block health data sync
-          console.warn('HealthProvider: error en motor de alertas', alertErr);
+          console.warn('HealthProvider: error en motor de alertas SpO2', alertErr);
+        }
+      }
+
+      // ── HU-43: Evaluate BP for hypertension/hypotension alerts ──
+      if (
+        data.bloodPressureSystolic != null &&
+        data.bloodPressureDiastolic != null &&
+        alertEngineRef.current &&
+        userId
+      ) {
+        try {
+          await alertEngineRef.current.evaluateBpReading(
+            userId,
+            data.bloodPressureSystolic,
+            data.bloodPressureDiastolic,
+            'health-connect',
+          );
+        } catch (bpAlertErr) {
+          console.warn('HealthProvider: error en motor de alertas BP', bpAlertErr);
         }
       }
     } catch (e) {

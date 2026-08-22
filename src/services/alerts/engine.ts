@@ -26,9 +26,12 @@ import type {
   OnAlertEscalated,
   OnAlertResolved,
   Spo2Thresholds,
+  BpThresholds,
+  BpContextoEspecial,
+  BpContextoOverrides,
 } from './types';
-import {DEFAULT_SPO2_THRESHOLDS, DEFAULT_ESCALATION_CONFIG} from './types';
-import {evaluateSpo2, buildAlertRecord, isEpisodeResolved} from './detector';
+import {DEFAULT_SPO2_THRESHOLDS, DEFAULT_ESCALATION_CONFIG, DEFAULT_BP_THRESHOLDS, DEFAULT_BP_CONTEXTO_OVERRIDES} from './types';
+import {evaluateSpo2, buildAlertRecord, isEpisodeResolved, evaluateBp, buildBpAlertRecord} from './detector';
 import {EscalationManager} from './escalation';
 
 // ─── Dependency Interfaces ───────────────────────────────────────
@@ -48,11 +51,15 @@ export interface AlertSupabaseDeps {
 /** Configuration for the alert engine. */
 export interface AlertEngineConfig {
   thresholds: Spo2Thresholds;
+  bpThresholds: BpThresholds;
+  bpContextoOverrides: BpContextoOverrides;
   escalation: EscalationConfig;
 }
 
 const DEFAULT_CONFIG: AlertEngineConfig = {
   thresholds: DEFAULT_SPO2_THRESHOLDS,
+  bpThresholds: DEFAULT_BP_THRESHOLDS,
+  bpContextoOverrides: DEFAULT_BP_CONTEXTO_OVERRIDES,
   escalation: DEFAULT_ESCALATION_CONFIG,
 };
 
@@ -136,6 +143,69 @@ export class AlertEngine {
     }
 
     return null;
+  }
+
+  /**
+   * Evaluate a BP reading and potentially generate an alert (HU-43).
+   * Called by HealthProvider after each sync cycle when BP data is available.
+   *
+   * @param userId The user ID
+   * @param sistolica Current systolic reading (mmHg)
+   * @param diastolica Current diastolic reading (mmHg)
+   * @param dispositivoOrigen Device/source identifier
+   * @param contexto Special measurement context (default: 'normal')
+   * @param now Current timestamp (injectable for testing)
+   * @returns The generated alert record (if any), or null
+   */
+  async evaluateBpReading(
+    userId: string,
+    sistolica: number,
+    diastolica: number,
+    dispositivoOrigen: string = 'wearable',
+    contexto: BpContextoEspecial = 'normal',
+    now: Date = new Date(),
+  ): Promise<AlertRecord | null> {
+    // 1. Get active (unread) alerts for this user
+    const activeAlerts = await this.getActiveAlerts(userId);
+    const activeBpAlert = activeAlerts.find(
+      a => a.tipo === 'hipertension' || a.tipo === 'hipotension',
+    );
+    const hasActiveAlert = !!activeBpAlert;
+    const activeAlertSeverity: AlertSeverity | null =
+      activeBpAlert?.severidad ?? null;
+
+    // 2. Evaluate against thresholds
+    const detection = evaluateBp({
+      sistolica,
+      diastolica,
+      thresholds: this.config.bpThresholds,
+      hasActiveAlert,
+      activeAlertSeverity,
+      readingTimestamp: now.toISOString(),
+      dispositivoOrigen,
+      contexto,
+      contextoOverrides: this.config.bpContextoOverrides,
+    });
+
+    // 3. If no alert needed, check if existing episode resolved
+    if (!detection.shouldAlert) {
+      if (hasActiveAlert && activeBpAlert) {
+        // Check if both values are back in normal range
+        const sistNormal =
+          sistolica >= this.config.bpThresholds.sistolicaLowWarning &&
+          sistolica < this.config.bpThresholds.sistolicaWarning;
+        const diastNormal =
+          diastolica >= this.config.bpThresholds.diastolicaLowWarning &&
+          diastolica < this.config.bpThresholds.diastolicaWarning;
+        if (sistNormal && diastNormal) {
+          await this.resolveAlert(activeBpAlert, now);
+        }
+      }
+      return null;
+    }
+
+    // 4. Generate new alert if needed
+    return this.generateBpAlert(userId, sistolica, diastolica, dispositivoOrigen, contexto, detection, now);
   }
 
   /**
@@ -265,6 +335,46 @@ export class AlertEngine {
     const alert = await this.deps.insertAlert(alertInsert);
 
     // Start escalation timer (CA-05)
+    this.escalationManager.startEscalation(alert);
+
+    // Update cache
+    const userAlerts = this.activeAlertsCache.get(userId) ?? [];
+    userAlerts.push(alert);
+    this.activeAlertsCache.set(userId, userAlerts);
+
+    // Notify listeners
+    this.onAlertGenerated(alert);
+
+    return alert;
+  }
+
+  private async generateBpAlert(
+    userId: string,
+    sistolica: number,
+    diastolica: number,
+    dispositivoOrigen: string,
+    contexto: BpContextoEspecial,
+    detection: import('./types').BpDetectionResult,
+    now: Date,
+  ): Promise<AlertRecord> {
+    const input = {
+      sistolica,
+      diastolica,
+      thresholds: this.config.bpThresholds,
+      hasActiveAlert: false,
+      activeAlertSeverity: null,
+      readingTimestamp: now.toISOString(),
+      dispositivoOrigen,
+      contexto,
+      contextoOverrides: this.config.bpContextoOverrides,
+    };
+
+    const alertInsert = buildBpAlertRecord(input, detection, userId, now);
+
+    // Persist to Supabase
+    const alert = await this.deps.insertAlert(alertInsert);
+
+    // Start escalation timer
     this.escalationManager.startEscalation(alert);
 
     // Update cache

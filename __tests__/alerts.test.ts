@@ -1,5 +1,6 @@
 /**
  * Tests del módulo de alertas HU-41 — Alerta por hipoxia (SpO₂ baja).
+ * Extended HU-43: Alerta por presión arterial fuera de rango.
  *
  * Adapted to new Supabase schema (2026-08-20):
  * - Table `alerta` with titulo, mensaje, datos jsonb, leida_en
@@ -7,17 +8,23 @@
  * - Escalation tracked in datos jsonb
  *
  * Cubre:
- *  (a) Detector: classifySeverity, evaluateSpo2, isEpisodeResolved
+ *  (a) Detector SpO2: classifySeverity, evaluateSpo2, isEpisodeResolved
  *  (b) Escalation: shouldEscalate, EscalationManager
- *  (c) Engine: evaluateSpo2Reading, confirmAlert, resolveAlert
- *  (d) Dedup: no duplicate alerts for same severity
- *  (e) Severity escalation within same episode
+ *  (c) Engine SpO2: evaluateSpo2Reading, confirmAlert, resolveAlert
+ *  (d) Dedup SpO2: no duplicate alerts for same severity
+ *  (e) Detector BP: evaluateBp, resolveBpThresholds, buildBpAlertRecord
+ *  (f) Engine BP: evaluateBpReading
+ *  (g) BP Combined alerts (CA-05)
+ *  (h) BP Special contexts (CA-04)
  */
 import {
   evaluateSpo2,
   classifySeverity,
   buildAlertRecord,
   isEpisodeResolved,
+  evaluateBp,
+  resolveBpThresholds,
+  buildBpAlertRecord,
 } from '../src/services/alerts/detector';
 import {
   shouldEscalate,
@@ -25,8 +32,14 @@ import {
 } from '../src/services/alerts/escalation';
 import {AlertEngine} from '../src/services/alerts/engine';
 import type {AlertSupabaseDeps} from '../src/services/alerts/engine';
-import type {AlertRecord, AlertRecordInsert, Spo2Thresholds} from '../src/services/alerts/types';
-import {DEFAULT_SPO2_THRESHOLDS} from '../src/services/alerts/types';
+import type {
+  AlertRecord,
+  AlertRecordInsert,
+  Spo2Thresholds,
+  BpThresholds,
+  BpEvaluationInput,
+} from '../src/services/alerts/types';
+import {DEFAULT_SPO2_THRESHOLDS, DEFAULT_BP_THRESHOLDS} from '../src/services/alerts/types';
 
 // ═══════════════════════════════════════════
 // (a) Detector: classifySeverity
@@ -541,6 +554,391 @@ describe('AlertEngine', () => {
     const config = engine.getConfig();
     expect(config.thresholds.warningPercent).toBe(92);
     expect(config.thresholds.criticalPercent).toBe(85); // unchanged
+
+    engine.dispose();
+  });
+});
+
+// ═══════════════════════════════════════════
+// (e) Detector BP: evaluateBp
+// ═══════════════════════════════════════════
+
+describe('evaluateBp', () => {
+  const bpThresholds: BpThresholds = {
+    sistolicaWarning: 140,
+    sistolicaCritical: 160,
+    diastolicaWarning: 90,
+    diastolicaCritical: 100,
+    sistolicaLowWarning: 90,
+    sistolicaLowCritical: 80,
+    diastolicaLowWarning: 60,
+    diastolicaLowCritical: 50,
+  };
+
+  function makeBpInput(overrides: Partial<BpEvaluationInput> = {}): BpEvaluationInput {
+    return {
+      sistolica: 120,
+      diastolica: 80,
+      thresholds: bpThresholds,
+      hasActiveAlert: false,
+      activeAlertSeverity: null,
+      readingTimestamp: '2026-08-21T12:00:00Z',
+      dispositivoOrigen: 'wearable',
+      ...overrides,
+    };
+  }
+
+  test('normal BP → no alert', () => {
+    const result = evaluateBp(makeBpInput({sistolica: 120, diastolica: 80}));
+    expect(result.shouldAlert).toBe(false);
+    expect(result.severity).toBeNull();
+    expect(result.sistolica.shouldAlert).toBe(false);
+    expect(result.diastolica.shouldAlert).toBe(false);
+  });
+
+  test('only systolic high → advertencia', () => {
+    const result = evaluateBp(makeBpInput({sistolica: 145, diastolica: 80}));
+    expect(result.shouldAlert).toBe(true);
+    expect(result.severity).toBe('advertencia');
+    expect(result.sistolica.shouldAlert).toBe(true);
+    expect(result.diastolica.shouldAlert).toBe(false);
+    expect(result.isCombined).toBe(false);
+  });
+
+  test('only diastolic high → advertencia', () => {
+    const result = evaluateBp(makeBpInput({sistolica: 120, diastolica: 95}));
+    expect(result.shouldAlert).toBe(true);
+    expect(result.severity).toBe('advertencia');
+    expect(result.sistolica.shouldAlert).toBe(false);
+    expect(result.diastolica.shouldAlert).toBe(true);
+  });
+
+  test('both high → combined alert with max severity (CA-05)', () => {
+    const result = evaluateBp(makeBpInput({sistolica: 145, diastolica: 95}));
+    expect(result.shouldAlert).toBe(true);
+    expect(result.isCombined).toBe(true);
+    expect(result.sistolica.shouldAlert).toBe(true);
+    expect(result.diastolica.shouldAlert).toBe(true);
+  });
+
+  test('systolic critical + diastolic warning → severity is critica', () => {
+    const result = evaluateBp(makeBpInput({sistolica: 165, diastolica: 95}));
+    expect(result.shouldAlert).toBe(true);
+    expect(result.severity).toBe('critica');
+    expect(result.isCombined).toBe(true);
+  });
+
+  test('only systolic low → advertencia (hypotension)', () => {
+    const result = evaluateBp(makeBpInput({sistolica: 85, diastolica: 70}));
+    expect(result.shouldAlert).toBe(true);
+    expect(result.severity).toBe('advertencia');
+    expect(result.sistolica.shouldAlert).toBe(true);
+    expect(result.diastolica.shouldAlert).toBe(false);
+  });
+
+  test('only diastolic low → advertencia (hypotension)', () => {
+    const result = evaluateBp(makeBpInput({sistolica: 110, diastolica: 55}));
+    expect(result.shouldAlert).toBe(true);
+    expect(result.severity).toBe('advertencia');
+    expect(result.sistolica.shouldAlert).toBe(false);
+    expect(result.diastolica.shouldAlert).toBe(true);
+  });
+
+  test('both low → combined alert (CA-05)', () => {
+    const result = evaluateBp(makeBpInput({sistolica: 85, diastolica: 55}));
+    expect(result.shouldAlert).toBe(true);
+    expect(result.isCombined).toBe(true);
+  });
+
+  test('systolic critical → critica', () => {
+    const result = evaluateBp(makeBpInput({sistolica: 165, diastolica: 80}));
+    expect(result.shouldAlert).toBe(true);
+    expect(result.severity).toBe('critica');
+    expect(result.sistolica.thresholdExceeded).toBe(160);
+  });
+
+  test('diastolic critical → critica', () => {
+    const result = evaluateBp(makeBpInput({sistolica: 120, diastolica: 105}));
+    expect(result.shouldAlert).toBe(true);
+    expect(result.severity).toBe('critica');
+    expect(result.diastolica.thresholdExceeded).toBe(100);
+  });
+
+  test('dedup: same severity + active alert → no new alert', () => {
+    const result = evaluateBp(makeBpInput({
+      sistolica: 145,
+      diastolica: 80,
+      hasActiveAlert: true,
+      activeAlertSeverity: 'advertencia',
+    }));
+    expect(result.shouldAlert).toBe(false);
+    expect(result.isNewEpisode).toBe(false);
+  });
+
+  test('escalation: worse severity + active alert → new alert', () => {
+    const result = evaluateBp(makeBpInput({
+      sistolica: 165,
+      diastolica: 80,
+      hasActiveAlert: true,
+      activeAlertSeverity: 'advertencia',
+    }));
+    expect(result.shouldAlert).toBe(true);
+    expect(result.severity).toBe('critica');
+    expect(result.isNewEpisode).toBe(false);
+  });
+
+  test('no active alert → new episode', () => {
+    const result = evaluateBp(makeBpInput({
+      sistolica: 145,
+      diastolica: 80,
+      hasActiveAlert: false,
+    }));
+    expect(result.shouldAlert).toBe(true);
+    expect(result.isNewEpisode).toBe(true);
+  });
+});
+
+// ═══════════════════════════════════════════
+// (e) Detector BP: resolveBpThresholds
+// ═══════════════════════════════════════════
+
+describe('resolveBpThresholds', () => {
+  test('normal context → base thresholds', () => {
+    const result = resolveBpThresholds(DEFAULT_BP_THRESHOLDS, 'normal');
+    expect(result).toEqual(DEFAULT_BP_THRESHOLDS);
+  });
+
+  test('post_medicacion context → lower low thresholds', () => {
+    const result = resolveBpThresholds(DEFAULT_BP_THRESHOLDS, 'post_medicacion');
+    expect(result.sistolicaLowWarning).toBe(85);
+    expect(result.sistolicaLowCritical).toBe(75);
+    expect(result.sistolicaWarning).toBe(140); // unchanged
+  });
+
+  test('reposo_nocturno context → lower thresholds', () => {
+    const result = resolveBpThresholds(DEFAULT_BP_THRESHOLDS, 'reposo_nocturno');
+    expect(result.sistolicaLowWarning).toBe(80);
+    expect(result.sistolicaLowCritical).toBe(70);
+    expect(result.diastolicaLowWarning).toBe(50);
+    expect(result.diastolicaLowCritical).toBe(45);
+  });
+});
+
+// ═══════════════════════════════════════════
+// (e) Detector BP: buildBpAlertRecord
+// ═══════════════════════════════════════════
+
+describe('buildBpAlertRecord', () => {
+  const bpThresholds: BpThresholds = {
+    sistolicaWarning: 140,
+    sistolicaCritical: 160,
+    diastolicaWarning: 90,
+    diastolicaCritical: 100,
+    sistolicaLowWarning: 90,
+    sistolicaLowCritical: 80,
+    diastolicaLowWarning: 60,
+    diastolicaLowCritical: 50,
+  };
+
+  test('builds hypertension alert', () => {
+    const input: BpEvaluationInput = {
+      sistolica: 145,
+      diastolica: 80,
+      thresholds: bpThresholds,
+      hasActiveAlert: false,
+      activeAlertSeverity: null,
+      readingTimestamp: '2026-08-21T12:00:00Z',
+      dispositivoOrigen: 'wearable',
+    };
+    const detection = evaluateBp(input);
+
+    const record = buildBpAlertRecord(input, detection, 'user-1', new Date('2026-08-21T12:00:00Z'));
+
+    expect(record.id_usuario).toBe('user-1');
+    expect(record.tipo).toBe('hipertension');
+    expect(record.severidad).toBe('advertencia');
+    expect(record.titulo).toContain('Presion arterial alta');
+    expect(record.mensaje).toContain('145');
+    expect(record.datos).toEqual(expect.objectContaining({
+      bp_sistolica: 145,
+      bp_diastolica: 80,
+      dispositivo_origen: 'wearable',
+    }));
+  });
+
+  test('builds hypotension alert', () => {
+    const input: BpEvaluationInput = {
+      sistolica: 85,
+      diastolica: 70,
+      thresholds: bpThresholds,
+      hasActiveAlert: false,
+      activeAlertSeverity: null,
+      readingTimestamp: '2026-08-21T12:00:00Z',
+      dispositivoOrigen: 'wearable',
+    };
+    const detection = evaluateBp(input);
+
+    const record = buildBpAlertRecord(input, detection, 'user-1', new Date('2026-08-21T12:00:00Z'));
+
+    expect(record.tipo).toBe('hipotension');
+    expect(record.titulo).toContain('Presion arterial baja');
+  });
+
+  test('builds combined alert with both values', () => {
+    const input: BpEvaluationInput = {
+      sistolica: 145,
+      diastolica: 95,
+      thresholds: bpThresholds,
+      hasActiveAlert: false,
+      activeAlertSeverity: null,
+      readingTimestamp: '2026-08-21T12:00:00Z',
+      dispositivoOrigen: 'wearable',
+    };
+    const detection = evaluateBp(input);
+
+    const record = buildBpAlertRecord(input, detection, 'user-1', new Date('2026-08-21T12:00:00Z'));
+
+    expect(record.titulo).toContain('combinada');
+    expect(record.mensaje).toContain('Ambos valores fuera de rango');
+    expect(record.datos).toEqual(expect.objectContaining({is_combined: true}));
+  });
+
+  test('includes context info for special contexts', () => {
+    const input: BpEvaluationInput = {
+      sistolica: 145,
+      diastolica: 80,
+      thresholds: bpThresholds,
+      hasActiveAlert: false,
+      activeAlertSeverity: null,
+      readingTimestamp: '2026-08-21T12:00:00Z',
+      dispositivoOrigen: 'wearable',
+      contexto: 'post_medicacion',
+    };
+    const detection = evaluateBp(input);
+
+    const record = buildBpAlertRecord(input, detection, 'user-1', new Date('2026-08-21T12:00:00Z'));
+
+    expect(record.mensaje).toContain('post-medicacion');
+    expect(record.datos).toEqual(expect.objectContaining({contexto: 'post_medicacion'}));
+  });
+
+  test('throws when called without alert-worthy detection', () => {
+    const input: BpEvaluationInput = {
+      sistolica: 120,
+      diastolica: 80,
+      thresholds: bpThresholds,
+      hasActiveAlert: false,
+      activeAlertSeverity: null,
+      readingTimestamp: '2026-08-21T12:00:00Z',
+      dispositivoOrigen: 'wearable',
+    };
+    const detection = evaluateBp(input);
+
+    expect(() => buildBpAlertRecord(input, detection, 'user-1')).toThrow();
+  });
+});
+
+// ═══════════════════════════════════════════
+// (f) Engine BP: AlertEngine.evaluateBpReading
+// ═══════════════════════════════════════════
+
+describe('AlertEngine BP', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  test('evaluateBpReading: normal BP → no alert', async () => {
+    const deps = makeEngineDeps();
+    const engine = new AlertEngine(deps);
+
+    const result = await engine.evaluateBpReading('u1', 120, 80, 'wearable');
+    expect(result).toBeNull();
+    expect(deps.inserted).toHaveLength(0);
+
+    engine.dispose();
+  });
+
+  test('evaluateBpReading: high systolic → generates hypertension alert', async () => {
+    const deps = makeEngineDeps();
+    const engine = new AlertEngine(deps);
+
+    const onGenerated = jest.fn();
+    engine.onGenerated(onGenerated);
+
+    const alert = await engine.evaluateBpReading('u1', 145, 80, 'wearable');
+
+    expect(alert).not.toBeNull();
+    expect(alert!.tipo).toBe('hipertension');
+    expect(alert!.severidad).toBe('advertencia');
+    expect(alert!.titulo).toContain('Presion arterial alta');
+    expect(deps.inserted).toHaveLength(1);
+    expect(onGenerated).toHaveBeenCalledTimes(1);
+
+    engine.dispose();
+  });
+
+  test('evaluateBpReading: combined high → generates combined alert', async () => {
+    const deps = makeEngineDeps();
+    const engine = new AlertEngine(deps);
+
+    const alert = await engine.evaluateBpReading('u1', 145, 95, 'wearable');
+
+    expect(alert).not.toBeNull();
+    expect(alert!.titulo).toContain('combinada');
+    expect(alert!.datos).toEqual(expect.objectContaining({is_combined: true}));
+
+    engine.dispose();
+  });
+
+  test('evaluateBpReading: dedup same severity', async () => {
+    const existingAlert = makeAlertRecord({tipo: 'hipertension'});
+    const deps = makeEngineDeps({
+      getActiveAlerts: async () => [existingAlert],
+    });
+    const engine = new AlertEngine(deps);
+
+    const alert = await engine.evaluateBpReading('u1', 145, 80, 'wearable');
+
+    // Should NOT generate a new alert (dedup)
+    expect(alert).toBeNull();
+    expect(deps.inserted).toHaveLength(0);
+
+    engine.dispose();
+  });
+
+  test('evaluateBpReading: episode resolved', async () => {
+    const existingAlert = makeAlertRecord({tipo: 'hipertension'});
+    const deps = makeEngineDeps({
+      getActiveAlerts: async () => [existingAlert],
+    });
+    const engine = new AlertEngine(deps);
+
+    const onResolved = jest.fn();
+    engine.onResolved(onResolved);
+
+    const alert = await engine.evaluateBpReading('u1', 120, 80, 'wearable');
+
+    expect(alert).toBeNull();
+    expect(deps.markedRead).toHaveLength(1);
+    expect(deps.markedRead[0]).toBe('existing-1');
+    expect(onResolved).toHaveBeenCalledTimes(1);
+
+    engine.dispose();
+  });
+
+  test('evaluateBpReading: special context post_medicacion', async () => {
+    const deps = makeEngineDeps();
+    const engine = new AlertEngine(deps);
+
+    // With post_medicacion, systolic 86 is NOT hypotension (low threshold becomes 85)
+    const alert = await engine.evaluateBpReading('u1', 86, 70, 'wearable', 'post_medicacion');
+
+    // Should NOT generate alert (86 > 85 post_medicacion threshold)
+    expect(alert).toBeNull();
 
     engine.dispose();
   });
