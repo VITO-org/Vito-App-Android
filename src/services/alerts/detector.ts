@@ -24,8 +24,19 @@ import type {
   BpSingleResult,
   BpContextoEspecial,
   BpContextoOverrides,
+  HrThresholds,
+  HrEvaluationInput,
+  HrDetectionResult,
+  HrTrend,
+  HrReadingPoint,
 } from './types';
-import {DEFAULT_SPO2_THRESHOLDS, DEFAULT_BP_CONTEXTO_OVERRIDES} from './types';
+import {
+  DEFAULT_SPO2_THRESHOLDS,
+  DEFAULT_BP_CONTEXTO_OVERRIDES,
+  DEFAULT_HR_THRESHOLDS,
+  HR_TREND_WINDOW_MS,
+  HR_TREND_DELTA_LPM,
+} from './types';
 
 // --- Severity Rank Helper ---
 
@@ -429,4 +440,169 @@ export function buildBpAlertRecord(
     },
     expira_en: null,
   };
+}
+
+// ======================================================================
+// HEART RATE DETECTION (HU-42)
+// ======================================================================
+
+/**
+ * Classify a heart rate value into (tipo, severity).
+ * Pure function — returns null severity when FC is within normal range.
+ */
+export function classifyHr(
+  bpm: number,
+  thresholds: HrThresholds = DEFAULT_HR_THRESHOLDS,
+): {tipo: 'taquicardia' | 'bradicardia' | null; severity: AlertSeverity | null; thresholdExceeded: number | null} {
+  // Taquicardia (high direction, CA-01/CA-02)
+  if (bpm >= thresholds.tachyCritical) {
+    return {tipo: 'taquicardia', severity: 'critica', thresholdExceeded: thresholds.tachyCritical};
+  }
+  if (bpm > thresholds.tachyWarning) {
+    return {tipo: 'taquicardia', severity: 'advertencia', thresholdExceeded: thresholds.tachyWarning};
+  }
+  // Bradicardia (low direction, CA-01/CA-02)
+  if (bpm <= thresholds.bradyCritical) {
+    return {tipo: 'bradicardia', severity: 'critica', thresholdExceeded: thresholds.bradyCritical};
+  }
+  if (bpm < thresholds.bradyWarning) {
+    return {tipo: 'bradicardia', severity: 'advertencia', thresholdExceeded: thresholds.bradyWarning};
+  }
+  return {tipo: null, severity: null, thresholdExceeded: null};
+}
+
+/**
+ * Evaluate a heart rate reading against thresholds and determine alert action
+ * (HU-42 CA-01..CA-05).
+ *
+ * Dedup logic (CA-05): an active taquicardia/bradicardia alert suppresses new
+ * alerts of the same-or-lower severity until the episode resolves. A strictly
+ * worse severity still generates a new alert (escalation within the episode).
+ */
+export function evaluateHr(input: HrEvaluationInput): HrDetectionResult {
+  const {bpm, thresholds, hasActiveAlert, activeAlertSeverity} = input;
+
+  const classification = classifyHr(bpm, thresholds);
+
+  if (classification.severity === null || classification.tipo === null) {
+    return {shouldAlert: false, tipo: null, severity: null, thresholdExceeded: null, isNewEpisode: false};
+  }
+
+  const thresholdExceeded = classification.thresholdExceeded!;
+
+  if (!hasActiveAlert) {
+    return {
+      shouldAlert: true,
+      tipo: classification.tipo,
+      severity: classification.severity,
+      thresholdExceeded,
+      isNewEpisode: true,
+    };
+  }
+
+  const activeRank = severityRank(activeAlertSeverity ?? 'advertencia');
+  const newRank = severityRank(classification.severity);
+
+  if (newRank > activeRank) {
+    return {
+      shouldAlert: true,
+      tipo: classification.tipo,
+      severity: classification.severity,
+      thresholdExceeded,
+      isNewEpisode: false,
+    };
+  }
+
+  return {shouldAlert: false, tipo: classification.tipo, severity: classification.severity, thresholdExceeded: null, isNewEpisode: false};
+}
+
+/**
+ * Check if a heart rate reading indicates the episode has resolved
+ * (FC back inside the normal band — neither tachy nor brady warning zone).
+ */
+export function isHrEpisodeResolved(
+  bpm: number,
+  thresholds: HrThresholds = DEFAULT_HR_THRESHOLDS,
+): boolean {
+  return bpm <= thresholds.tachyWarning && bpm >= thresholds.bradyWarning;
+}
+
+/**
+ * Compute the HR trend over a time window from historical readings (HU-42 CA-04).
+ *
+ * Pure function. Compares the oldest vs newest reading inside the window:
+ * - delta >  +deltaLpm  -> 'subiendo'
+ * - delta <  -deltaLpm  -> 'bajando'
+ * - otherwise / fewer than 2 readings in window -> 'estable'
+ */
+export function computeHrTrend(
+  readings: HrReadingPoint[],
+  now: Date = new Date(),
+  windowMs: number = HR_TREND_WINDOW_MS,
+  deltaLpm: number = HR_TREND_DELTA_LPM,
+): HrTrend {
+  const windowStart = now.getTime() - windowMs;
+  const inWindow = readings
+    .filter(r => {
+      const t = new Date(r.recordedAt).getTime();
+      return !Number.isNaN(t) && t >= windowStart && t <= now.getTime();
+    })
+    .sort((a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime());
+
+  if (inWindow.length < 2) {
+    return 'estable';
+  }
+
+  const delta = inWindow[inWindow.length - 1].bpm - inWindow[0].bpm;
+  if (delta > deltaLpm) return 'subiendo';
+  if (delta < -deltaLpm) return 'bajando';
+  return 'estable';
+}
+
+/**
+ * Build an AlertRecordInsert from an HR detection result (HU-42 CA-03 + CA-04).
+ * titulo/mensaje explicitly name taquicardia vs bradicardia and include the trend.
+ */
+export function buildHrAlertRecord(
+  input: HrEvaluationInput,
+  detection: HrDetectionResult,
+  userId: string,
+  trend: HrTrend = 'estable',
+  now: Date = new Date(),
+): AlertRecordInsert {
+  if (!detection.shouldAlert || !detection.severity || !detection.tipo) {
+    throw new Error('buildHrAlertRecord called without an alert-worthy detection');
+  }
+
+  const {bpm, thresholds} = input;
+  const isTachy = detection.tipo === 'taquicardia';
+  const severityPrefix = detection.severity === 'critica' ? 'Alerta critica' : 'Alerta';
+  const typeLabel = isTachy ? 'Frecuencia cardiaca alta (taquicardia)' : 'Frecuencia cardiaca baja (bradicardia)';
+
+  const titulo = `${severityPrefix}: ${typeLabel}`;
+
+  const umbral = detection.thresholdExceeded ?? (isTachy ? thresholds.tachyWarning : thresholds.bradyWarning);
+  const diff = Math.abs(bpm - umbral);
+  const mensaje =
+    `FC ${bpm} lpm (limites: ${thresholds.bradyWarning}-${thresholds.tachyWarning} lpm, ` +
+    `umbral ${isTachy ? 'superado' : 'no alcanzado'}: ${umbral} lpm, dif: ${diff} lpm). ` +
+    `Tendencia ultimos 5 min: ${trend}.`;
+
+  return {
+    id_usuario: userId,
+    id_dato_reloj: null,
+    id_prediccion_riesgo: null,
+    tipo: detection.tipo,
+    severidad: detection.severity,
+    titulo,
+    mensaje,
+    datos: {
+      valor_registrado: bpm,
+      umbral_configurado: umbral,
+      tendencia: trend,
+      dispositivo_origen: input.dispositivoOrigen,
+      escalada: false,
+    },
+    expira_en: null,
+  } as AlertRecordInsert;
 }

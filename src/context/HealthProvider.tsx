@@ -150,6 +150,16 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
         updateAlertDatos: async (alertId, datos) => {
           await updateAlertaDatos(alertId, datos as any);
         },
+        // HU-42 CA-04: historial de FC de los últimos 5 min para calcular tendencia
+        getRecentHeartRates: async (uid, fromIso) => {
+          const rows = await getDatosReloj(uid, {from: fromIso, limit: 20});
+          return rows
+            .filter(r => r.frec_cardiaca_bpm != null && r.recorded_at != null)
+            .map(r => ({
+              bpm: r.frec_cardiaca_bpm as number,
+              recordedAt: r.recorded_at as string,
+            }));
+        },
       });
 
       // Register listeners for UI updates
@@ -255,6 +265,19 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
           );
         } catch (bpAlertErr) {
           console.warn('HealthProvider: error en motor de alertas BP', bpAlertErr);
+        }
+      }
+
+      // ── HU-42: Evaluate HR for tachycardia/bradycardia alerts ──
+      if (data.averageBpm != null && alertEngineRef.current && userId) {
+        try {
+          await alertEngineRef.current.evaluateHrReading(
+            userId,
+            data.averageBpm,
+            'health-connect',
+          );
+        } catch (hrAlertErr) {
+          console.warn('HealthProvider: error en motor de alertas FC', hrAlertErr);
         }
       }
     } catch (e) {

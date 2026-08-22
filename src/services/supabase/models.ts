@@ -175,7 +175,12 @@ export type PrediccionRiesgoInsert = Omit<PrediccionRiesgo, 'id' | 'created_at'>
 };
 
 // ─── TABLA: alerta (HU-41 — Sistema de Alertas Inteligentes) ───
-export type TipoAlerta = 'hipoxia' | 'hipertension' | 'hipotension';
+export type TipoAlerta =
+  | 'hipoxia'
+  | 'hipertension'
+  | 'hipotension'
+  | 'taquicardia'
+  | 'bradicardia';
 export type SeveridadAlerta = 'INFO' | 'advertencia' | 'critica';
 
 /**

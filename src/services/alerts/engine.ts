@@ -1,5 +1,6 @@
 /**
  * Alert Engine — HU-41 orchestration layer.
+ * Extended HU-43 (BP) and HU-42 (heart rate).
  *
  * Ties together detection, persistence, and escalation into a single
  * entry point that HealthProvider calls after each sync cycle.
@@ -29,9 +30,28 @@ import type {
   BpThresholds,
   BpContextoEspecial,
   BpContextoOverrides,
+  HrThresholds,
+  HrTrend,
 } from './types';
-import {DEFAULT_SPO2_THRESHOLDS, DEFAULT_ESCALATION_CONFIG, DEFAULT_BP_THRESHOLDS, DEFAULT_BP_CONTEXTO_OVERRIDES} from './types';
-import {evaluateSpo2, buildAlertRecord, isEpisodeResolved, evaluateBp, buildBpAlertRecord} from './detector';
+import {
+  DEFAULT_SPO2_THRESHOLDS,
+  DEFAULT_ESCALATION_CONFIG,
+  DEFAULT_BP_THRESHOLDS,
+  DEFAULT_BP_CONTEXTO_OVERRIDES,
+  DEFAULT_HR_THRESHOLDS,
+  HR_TREND_WINDOW_MS,
+} from './types';
+import {
+  evaluateSpo2,
+  buildAlertRecord,
+  isEpisodeResolved,
+  evaluateBp,
+  buildBpAlertRecord,
+  evaluateHr,
+  buildHrAlertRecord,
+  isHrEpisodeResolved,
+  computeHrTrend,
+} from './detector';
 import {EscalationManager} from './escalation';
 
 // ─── Dependency Interfaces ───────────────────────────────────────
@@ -46,6 +66,14 @@ export interface AlertSupabaseDeps {
   markAlertRead: (alertId: string) => Promise<void>;
   /** Update an alert's datos jsonb (for escalation tracking). */
   updateAlertDatos: (alertId: string, datos: Record<string, unknown>) => Promise<void>;
+  /**
+   * Optional: recent HR readings since `fromIso` for trend calculation (HU-42 CA-04).
+   * When absent, the trend defaults to 'estable'.
+   */
+  getRecentHeartRates?: (
+    userId: string,
+    fromIso: string,
+  ) => Promise<{bpm: number; recordedAt: string}[]>;
 }
 
 /** Configuration for the alert engine. */
@@ -53,6 +81,7 @@ export interface AlertEngineConfig {
   thresholds: Spo2Thresholds;
   bpThresholds: BpThresholds;
   bpContextoOverrides: BpContextoOverrides;
+  hrThresholds: HrThresholds;
   escalation: EscalationConfig;
 }
 
@@ -60,6 +89,7 @@ const DEFAULT_CONFIG: AlertEngineConfig = {
   thresholds: DEFAULT_SPO2_THRESHOLDS,
   bpThresholds: DEFAULT_BP_THRESHOLDS,
   bpContextoOverrides: DEFAULT_BP_CONTEXTO_OVERRIDES,
+  hrThresholds: DEFAULT_HR_THRESHOLDS,
   escalation: DEFAULT_ESCALATION_CONFIG,
 };
 
@@ -206,6 +236,64 @@ export class AlertEngine {
 
     // 4. Generate new alert if needed
     return this.generateBpAlert(userId, sistolica, diastolica, dispositivoOrigen, contexto, detection, now);
+  }
+
+  /**
+   * Evaluate a heart rate reading and potentially generate an alert (HU-42).
+   * Called by HealthProvider after each sync cycle when HR data is available.
+   *
+   * @param userId The user ID
+   * @param bpm Current heart rate in lpm
+   * @param dispositivoOrigen Device/source identifier
+   * @param now Current timestamp (injectable for testing)
+   * @returns The generated alert record (if any), or null
+   */
+  async evaluateHrReading(
+    userId: string,
+    bpm: number,
+    dispositivoOrigen: string = 'wearable',
+    now: Date = new Date(),
+  ): Promise<AlertRecord | null> {
+    // 1. Get active (unread) alerts for this user
+    const activeAlerts = await this.getActiveAlerts(userId);
+    const activeHrAlert = activeAlerts.find(
+      a => a.tipo === 'taquicardia' || a.tipo === 'bradicardia',
+    );
+    const hasActiveAlert = !!activeHrAlert;
+    const activeAlertSeverity: AlertSeverity | null =
+      activeHrAlert?.severidad ?? null;
+
+    // 2. Compute trend from recent history when the dep is wired (CA-04).
+    //    Failure to fetch history must never block alerting -> fallback 'estable'.
+    let trend: HrTrend = 'estable';
+    if (this.deps.getRecentHeartRates) {
+      try {
+        const fromIso = new Date(now.getTime() - HR_TREND_WINDOW_MS).toISOString();
+        const readings = await this.deps.getRecentHeartRates(userId, fromIso);
+        trend = computeHrTrend(readings ?? [], now);
+      } catch {
+        trend = 'estable';
+      }
+    }
+
+    // 3. Evaluate against thresholds
+    const detection = evaluateHr({
+      bpm,
+      thresholds: this.config.hrThresholds,
+      hasActiveAlert,
+      activeAlertSeverity,
+    });
+
+    // 4. If no alert needed, check if existing episode resolved (FC back in range)
+    if (!detection.shouldAlert) {
+      if (hasActiveAlert && activeHrAlert && isHrEpisodeResolved(bpm, this.config.hrThresholds)) {
+        await this.resolveAlert(activeHrAlert, now);
+      }
+      return null;
+    }
+
+    // 5. Generate new alert if needed
+    return this.generateHrAlert(userId, bpm, dispositivoOrigen, detection, trend, now);
   }
 
   /**
@@ -375,6 +463,41 @@ export class AlertEngine {
     const alert = await this.deps.insertAlert(alertInsert);
 
     // Start escalation timer
+    this.escalationManager.startEscalation(alert);
+
+    // Update cache
+    const userAlerts = this.activeAlertsCache.get(userId) ?? [];
+    userAlerts.push(alert);
+    this.activeAlertsCache.set(userId, userAlerts);
+
+    // Notify listeners
+    this.onAlertGenerated(alert);
+
+    return alert;
+  }
+
+  private async generateHrAlert(
+    userId: string,
+    bpm: number,
+    dispositivoOrigen: string,
+    detection: import('./types').HrDetectionResult,
+    trend: HrTrend,
+    now: Date,
+  ): Promise<AlertRecord> {
+    const input = {
+      bpm,
+      thresholds: this.config.hrThresholds,
+      hasActiveAlert: false,
+      activeAlertSeverity: null,
+      dispositivoOrigen,
+    };
+
+    const alertInsert = buildHrAlertRecord(input, detection, userId, trend, now);
+
+    // Persist to Supabase
+    const alert = await this.deps.insertAlert(alertInsert);
+
+    // Start escalation timer (same policy as SpO2/BP)
     this.escalationManager.startEscalation(alert);
 
     // Update cache
