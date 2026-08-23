@@ -82,6 +82,29 @@ CREATE INDEX idx_datos_reloj_usuario_fecha
   ON datos_reloj(id_usuario, recorded_at DESC);
 
 -- ============================================
+-- 4b. DATO_SALUD_ML (series de tiempo normalizado para ML)
+--     Carga paralela a datos_reloj: una fila por métrica no nula.
+-- ============================================
+CREATE TYPE fuente_dato AS ENUM ('manual', 'dispositivo', 'integracion');
+
+CREATE TABLE dato_salud_ml (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id_usuario UUID NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
+  tipo_metrica VARCHAR(50) NOT NULL,
+  valor NUMERIC(12,4) NOT NULL,
+  unidad VARCHAR(30) NOT NULL,
+  fuente fuente_dato NOT NULL,
+  recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_dato_salud_ml_usuario_metrica_fecha
+  ON dato_salud_ml (id_usuario, tipo_metrica, recorded_at DESC);
+
+CREATE INDEX idx_dato_salud_ml_fecha
+  ON dato_salud_ml (recorded_at DESC);
+
+-- ============================================
 -- 5. BASELINE_CLINICO
 -- ============================================
 CREATE TABLE baseline_clinico (
