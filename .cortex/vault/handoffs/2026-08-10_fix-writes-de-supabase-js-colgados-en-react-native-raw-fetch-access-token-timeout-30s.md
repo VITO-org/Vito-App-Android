@@ -47,7 +47,7 @@ Sesión Fast Track que corrige el bug donde los writes de `@supabase/supabase-js
 
 - [ ] Commit de `src/services/supabase/client.ts` + `src/services/supabase/api.ts` (sin prettier; CRLF).
 - [ ] Usuario: recargar Metro y validar en el teléfono (guardar perfil → dashboard).
-- [ ] Si OK: abrir PR `scrum-79-hu-25-sincronizacion-datos-salud` → `dev` (CI `ci-pr-dev.yml`).
+- [x] Integración de `scrum-79-hu-25-sincronizacion-datos-salud` → `dev` vía PR: tarea del equipo, no del agente.
 - [ ] Evaluar convertir `signUp()` a raw fetch.
 
 ## Parent Session
@@ -58,4 +58,4 @@ Sesión Fast Track que corrige el bug donde los writes de `@supabase/supabase-js
 
 - Spec: `2026-08-10_fix-writes-de-supabase-js-colgados-en-react-native-timeout-30s-raw-fetch-con-access-token` (vault/specs)
 - Sesión HU-25 previa: vault/sessions/2026-08-08_hu-25-...
-- PR pendiente HU-25: rama `scrum-79-hu-25-sincronizacion-datos-salud` @ `84c1762` → `dev` @ `551cd2b`
+- Integración HU-25 a `dev` vía PR (rama `scrum-79-hu-25-sincronizacion-datos-salud` @ `84c1762`): gestionada por el equipo.
