@@ -13,6 +13,8 @@ interface VitalSignCardProps {
   iconSize?: number;   // tamaño del icono PNG (default: 24)
   iconBgColor: string; // color de fondo del icono
   trend?: 'up' | 'down' | 'stable';
+  /** CA-05: Mensaje alternativo cuando no hay datos (ej: "Sin datos recientes"). */
+  noDataMessage?: string;
   onPress?: () => void;
 }
 
@@ -29,9 +31,11 @@ const VitalSignCard: React.FC<VitalSignCardProps> = ({
   iconSize = 24,
   iconBgColor,
   trend,
+  noDataMessage,
   onPress,
 }) => {
   const trendColor = trend === 'up' ? colors.success : trend === 'down' ? colors.danger : colors.textSecondary;
+  const hasNoData = value === '--' && noDataMessage;
 
   const content = (
     <>
@@ -55,8 +59,14 @@ const VitalSignCard: React.FC<VitalSignCardProps> = ({
       </View>
 
       {/* Valor */}
-      <Text style={styles.value}>{value}</Text>
-      {unit && <Text style={styles.unit}>{unit}</Text>}
+      {hasNoData ? (
+        <Text style={styles.noData}>{noDataMessage}</Text>
+      ) : (
+        <>
+          <Text style={styles.value}>{value}</Text>
+          {unit && <Text style={styles.unit}>{unit}</Text>}
+        </>
+      )}
 
       {/* Label */}
       <Text style={styles.label}>{label}</Text>
@@ -109,6 +119,12 @@ const styles = StyleSheet.create({
     fontSize: fontSize.metricLabel,
     color: colors.textSecondary,
     marginTop: 6,
+  },
+  noData: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    fontStyle: 'italic',
+    lineHeight: 18,
   },
 });
 
