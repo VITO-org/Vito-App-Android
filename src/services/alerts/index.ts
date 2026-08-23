@@ -1,5 +1,5 @@
 /**
- * Alert module public API — HU-41.
+ * Alert module public API — HU-41 + HU-43.
  *
  * Re-exports everything the rest of the app needs from the alerts module.
  * Import from '@/services/alerts' (or '../services/alerts') — not from
@@ -20,11 +20,19 @@ export type {
   OnAlertGenerated,
   OnAlertEscalated,
   OnAlertResolved,
+  BpThresholds,
+  BpEvaluationInput,
+  BpDetectionResult,
+  BpSingleResult,
+  BpContextoEspecial,
+  BpContextoOverrides,
 } from './types';
 
 export {
   DEFAULT_SPO2_THRESHOLDS,
   DEFAULT_ESCALATION_CONFIG,
+  DEFAULT_BP_THRESHOLDS,
+  DEFAULT_BP_CONTEXTO_OVERRIDES,
 } from './types';
 
 // ── Detector (pure functions) ──
@@ -33,6 +41,9 @@ export {
   classifySeverity,
   buildAlertRecord,
   isEpisodeResolved,
+  resolveBpThresholds,
+  evaluateBp,
+  buildBpAlertRecord,
 } from './detector';
 
 // ── Escalation ──

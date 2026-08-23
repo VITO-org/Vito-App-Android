@@ -30,6 +30,18 @@ function severityToColorKey(severidad: Alerta['severidad']): 'danger' | 'warning
 }
 
 /**
+ * Get the appropriate icon for the alert type.
+ */
+function alertIcon(tipo: Alerta['tipo']): string {
+  switch (tipo) {
+    case 'hipoxia': return '\uD83E\uDEC1'; // 🫁
+    case 'hipertension': return '\u26A0\uFE0F'; // ⚠️
+    case 'hipotension': return '\u2B07\uFE0F'; // ⬇️
+    default: return '\uD83D\uDD14'; // 🔔
+  }
+}
+
+/**
  * Format ISO timestamp to a human-readable string.
  */
 function formatAlertTime(isoString: string | null): string {
@@ -143,7 +155,7 @@ const AlertasScreen: React.FC = () => {
             <Card key={alert.id} style={styles.alertCard as any}>
               <View style={[styles.alertRow, {borderLeftColor: sev.dot, borderLeftWidth: 3, paddingLeft: 12}]}>
                 <View style={[styles.alertIcon, {backgroundColor: sev.bg}]}>
-                  <Text style={styles.alertEmoji}>🫁</Text>
+                  <Text style={styles.alertEmoji}>{alertIcon(alert.tipo)}</Text>
                 </View>
                 <View style={styles.alertBody}>
                   <Text style={styles.alertTitle}>{alert.titulo}</Text>

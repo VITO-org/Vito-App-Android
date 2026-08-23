@@ -205,7 +205,7 @@ export type PrediccionRiesgoInsert = Omit<PrediccionRiesgo, 'id' | 'created_at'>
 };
 
 // ─── TABLA: alerta (HU-41 — Sistema de Alertas Inteligentes) ───
-export type TipoAlerta = 'hipoxia';
+export type TipoAlerta = 'hipoxia' | 'hipertension' | 'hipotension';
 export type SeveridadAlerta = 'INFO' | 'advertencia' | 'critica';
 
 /**
@@ -214,7 +214,7 @@ export type SeveridadAlerta = 'INFO' | 'advertencia' | 'critica';
  * Extiende Record<string, unknown> para ser compatible con AlertRecord.datos.
  */
 export interface AlertaDatos extends Record<string, unknown> {
-  /** SpO₂ value that triggered the alert (percentage). */
+  /** SpO2 value that triggered the alert (percentage). */
   valor_registrado?: number;
   /** Threshold that was exceeded (percentage). */
   umbral_configurado?: number;
@@ -226,6 +226,19 @@ export interface AlertaDatos extends Record<string, unknown> {
   escalated_at?: string;
   /** Contact to whom the alert was escalated. */
   escalated_to?: string;
+  // ── HU-43: BP-specific datos ──
+  /** Systolic BP that triggered the alert (mmHg). */
+  bp_sistolica?: number;
+  /** Diastolic BP that triggered the alert (mmHg). */
+  bp_diastolica?: number;
+  /** Systolic threshold exceeded (mmHg). */
+  umbral_sist?: number | null;
+  /** Diastolic threshold exceeded (mmHg). */
+  umbral_diast?: number | null;
+  /** Whether this is a combined alert (both values out of range). */
+  is_combined?: boolean;
+  /** Special measurement context ('normal', 'post_medicacion', 'reposo_nocturno'). */
+  contexto?: string;
 }
 
 export interface Alerta {

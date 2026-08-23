@@ -214,6 +214,7 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
       // ── HU-25: Sincronizar con Supabase (datos_reloj) — motor central ──
       const userId = getUserId();
       if (userId) {
+        // ── HU-25: Sincronizar con Supabase (datos_reloj) ──
         try {
           const result = await syncWearableToBackend(userId, data, {
             insertDatosReloj,
@@ -270,7 +271,25 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
               'health-connect',
             );
           } catch (alertErr) {
-            console.warn('HealthProvider: error en motor de alertas', alertErr);
+            console.warn('HealthProvider: error en motor de alertas SpO2', alertErr);
+          }
+        }
+
+        // ── HU-43: Evaluar BP para alertas de hipertension/hipotension ──
+        if (
+          data.bloodPressureSystolic != null &&
+          data.bloodPressureDiastolic != null &&
+          alertEngineRef.current
+        ) {
+          try {
+            await alertEngineRef.current.evaluateBpReading(
+              userId,
+              data.bloodPressureSystolic,
+              data.bloodPressureDiastolic,
+              'health-connect',
+            );
+          } catch (bpAlertErr) {
+            console.warn('HealthProvider: error en motor de alertas BP', bpAlertErr);
           }
         }
       }
