@@ -25,9 +25,15 @@ export type AlertSeverity = 'INFO' | 'advertencia' | 'critica';
 
 /**
  * Types of vital sign alerts.
- * HU-41: 'hipoxia'; HU-43: 'hipertension', 'hipotension'.
+ * HU-41: 'hipoxia'; HU-43: 'hipertension', 'hipotension';
+ * HU-42: 'taquicardia', 'bradicardia'.
  */
-export type AlertType = 'hipoxia' | 'hipertension' | 'hipotension';
+export type AlertType =
+  | 'hipoxia'
+  | 'hipertension'
+  | 'hipotension'
+  | 'taquicardia'
+  | 'bradicardia';
 
 // ─── Alert Status (derived, not in DB) ───────────────────────────
 
@@ -215,6 +221,97 @@ export interface BpDetectionResult {
   /** Whether this is a combined alert (both values out of range) (CA-05). */
   isCombined: boolean;
   /** Whether this is a new episode or a continuation (for dedup). */
+  isNewEpisode: boolean;
+}
+
+// ─── HR Threshold Configuration (HU-42) ──────────────────────────
+
+/**
+ * Configurable thresholds for heart rate alert detection (HU-42 CA-01, CA-02).
+ * All values in lpm (latidos por minuto).
+ *
+ * Defaults per ticket SCRUM-91:
+ * - Taquicardia: FC > 100 lpm (warning), >= 120 lpm (critica)
+ * - Bradicardia: FC < 50 lpm (warning), <= 40 lpm (critica)
+ *
+ * NOTE: critical bands are proposed defaults pending clinical approval
+ * (ticket DoD: "Aprobación clínica de valores de referencia").
+ */
+export interface HrThresholds {
+  /** FC above this triggers 'taquicardia' advertencia (default: 100 lpm). */
+  tachyWarning: number;
+  /** FC above this triggers 'taquicardia' critica (default: 120 lpm). */
+  tachyCritical: number;
+  /** FC below this triggers 'bradicardia' advertencia (default: 50 lpm). */
+  bradyWarning: number;
+  /** FC below this triggers 'bradicardia' critica (default: 40 lpm). */
+  bradyCritical: number;
+}
+
+/** Default HR thresholds for HU-42 alert detection. */
+export const DEFAULT_HR_THRESHOLDS: HrThresholds = {
+  tachyWarning: 100,
+  tachyCritical: 120,
+  bradyWarning: 50,
+  bradyCritical: 40,
+};
+
+/**
+ * Heart rate trend over the last 5 minutes (HU-42 CA-04).
+ * - 'subiendo': FC increased beyond the delta threshold
+ * - 'bajando': FC decreased beyond the delta threshold
+ * - 'estable': flat trend or insufficient history
+ */
+export type HrTrend = 'subiendo' | 'bajando' | 'estable';
+
+/** Trend window for CA-04 (default: 5 minutes). */
+export const HR_TREND_WINDOW_MS = 5 * 60 * 1000;
+
+/** Minimum delta (lpm) between oldest/newest reading to consider a trend. */
+export const HR_TREND_DELTA_LPM = 5;
+
+/** A single historical HR reading used for trend calculation. */
+export interface HrReadingPoint {
+  /** Heart rate in lpm. */
+  bpm: number;
+  /** ISO timestamp of the reading. */
+  recordedAt: string;
+}
+
+// ─── HR Evaluation Input ─────────────────────────────────────────
+
+/**
+ * Input for the HR alert evaluation pipeline (HU-42).
+ */
+export interface HrEvaluationInput {
+  /** Current heart rate in lpm. */
+  bpm: number;
+  /** User's configured thresholds (or defaults). */
+  thresholds: HrThresholds;
+  /** Whether there was an active (unread) taquicardia/bradicardia alert already. */
+  hasActiveAlert: boolean;
+  /** Severity of the existing active alert (if any). */
+  activeAlertSeverity: AlertSeverity | null;
+  /** Device/source identifier (optional, stored in datos jsonb). */
+  dispositivoOrigen?: string;
+}
+
+// ─── HR Detection Result ─────────────────────────────────────────
+
+/**
+ * Result of evaluating a heart rate reading against thresholds.
+ * Returned by the detector — pure function, no side effects.
+ */
+export interface HrDetectionResult {
+  /** Whether an alert should be generated. */
+  shouldAlert: boolean;
+  /** Alert type when shouldAlert is true: 'taquicardia' or 'bradicardia'. */
+  tipo: 'taquicardia' | 'bradicardia' | null;
+  /** Severity of the alert (null if no alert). */
+  severity: AlertSeverity | null;
+  /** The threshold that was exceeded (null if no alert). */
+  thresholdExceeded: number | null;
+  /** Whether this is a new episode or a continuation (for dedup, CA-05). */
   isNewEpisode: boolean;
 }
 

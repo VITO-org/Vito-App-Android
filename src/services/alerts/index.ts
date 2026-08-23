@@ -26,6 +26,11 @@ export type {
   BpSingleResult,
   BpContextoEspecial,
   BpContextoOverrides,
+  HrThresholds,
+  HrEvaluationInput,
+  HrDetectionResult,
+  HrTrend,
+  HrReadingPoint,
 } from './types';
 
 export {
@@ -33,6 +38,9 @@ export {
   DEFAULT_ESCALATION_CONFIG,
   DEFAULT_BP_THRESHOLDS,
   DEFAULT_BP_CONTEXTO_OVERRIDES,
+  DEFAULT_HR_THRESHOLDS,
+  HR_TREND_WINDOW_MS,
+  HR_TREND_DELTA_LPM,
 } from './types';
 
 // ── Detector (pure functions) ──
@@ -44,6 +52,11 @@ export {
   resolveBpThresholds,
   evaluateBp,
   buildBpAlertRecord,
+  classifyHr,
+  evaluateHr,
+  isHrEpisodeResolved,
+  computeHrTrend,
+  buildHrAlertRecord,
 } from './detector';
 
 // ── Escalation ──

@@ -1,6 +1,7 @@
 /**
  * Tests del módulo de alertas HU-41 — Alerta por hipoxia (SpO₂ baja).
  * Extended HU-43: Alerta por presión arterial fuera de rango.
+ * Extended HU-42: Alerta por frecuencia cardíaca fuera de rango.
  *
  * Adapted to new Supabase schema (2026-08-20):
  * - Table `alerta` with titulo, mensaje, datos jsonb, leida_en
@@ -16,6 +17,8 @@
  *  (f) Engine BP: evaluateBpReading
  *  (g) BP Combined alerts (CA-05)
  *  (h) BP Special contexts (CA-04)
+ *  (i) Detector HR: classifyHr, evaluateHr, isHrEpisodeResolved, computeHrTrend, buildHrAlertRecord
+ *  (j) Engine HR: evaluateHrReading (dedup CA-05, resolución, tendencia CA-04)
  */
 import {
   evaluateSpo2,
@@ -25,6 +28,11 @@ import {
   evaluateBp,
   resolveBpThresholds,
   buildBpAlertRecord,
+  classifyHr,
+  evaluateHr,
+  isHrEpisodeResolved,
+  computeHrTrend,
+  buildHrAlertRecord,
 } from '../src/services/alerts/detector';
 import {
   shouldEscalate,
@@ -38,8 +46,14 @@ import type {
   Spo2Thresholds,
   BpThresholds,
   BpEvaluationInput,
+  HrThresholds,
+  HrEvaluationInput,
 } from '../src/services/alerts/types';
-import {DEFAULT_SPO2_THRESHOLDS, DEFAULT_BP_THRESHOLDS} from '../src/services/alerts/types';
+import {
+  DEFAULT_SPO2_THRESHOLDS,
+  DEFAULT_BP_THRESHOLDS,
+  DEFAULT_HR_THRESHOLDS,
+} from '../src/services/alerts/types';
 
 // ═══════════════════════════════════════════
 // (a) Detector: classifySeverity
@@ -939,6 +953,285 @@ describe('AlertEngine BP', () => {
 
     // Should NOT generate alert (86 > 85 post_medicacion threshold)
     expect(alert).toBeNull();
+
+    engine.dispose();
+  });
+});
+
+// ═══════════════════════════════════════════
+// (i) Detector HR (HU-42)
+// ═══════════════════════════════════════════
+
+const HR: HrThresholds = DEFAULT_HR_THRESHOLDS;
+
+function makeHrInput(overrides: Partial<HrEvaluationInput> = {}): HrEvaluationInput {
+  return {
+    bpm: 70,
+    thresholds: HR,
+    hasActiveAlert: false,
+    activeAlertSeverity: null,
+    ...overrides,
+  };
+}
+
+describe('classifyHr', () => {
+  test('FC normal → null', () => {
+    expect(classifyHr(70, HR)).toEqual({tipo: null, severity: null, thresholdExceeded: null});
+    expect(classifyHr(100, HR).tipo).toBeNull();
+    expect(classifyHr(50, HR).tipo).toBeNull();
+  });
+
+  test('taquicardia advertencia (>100) y critica (>=120)', () => {
+    expect(classifyHr(101, HR)).toEqual({tipo: 'taquicardia', severity: 'advertencia', thresholdExceeded: 100});
+    expect(classifyHr(119, HR).severity).toBe('advertencia');
+    expect(classifyHr(120, HR)).toEqual({tipo: 'taquicardia', severity: 'critica', thresholdExceeded: 120});
+  });
+
+  test('bradicardia advertencia (<50) y critica (<=40)', () => {
+    expect(classifyHr(49, HR)).toEqual({tipo: 'bradicardia', severity: 'advertencia', thresholdExceeded: 50});
+    expect(classifyHr(41, HR).severity).toBe('advertencia');
+    expect(classifyHr(40, HR)).toEqual({tipo: 'bradicardia', severity: 'critica', thresholdExceeded: 40});
+  });
+});
+
+describe('evaluateHr', () => {
+  test('FC normal → no alert', () => {
+    const r = evaluateHr(makeHrInput({bpm: 75}));
+    expect(r.shouldAlert).toBe(false);
+    expect(r.tipo).toBeNull();
+  });
+
+  test('taquicardia sin alerta activa → nueva alerta (isNewEpisode)', () => {
+    const r = evaluateHr(makeHrInput({bpm: 110}));
+    expect(r.shouldAlert).toBe(true);
+    expect(r.tipo).toBe('taquicardia');
+    expect(r.severity).toBe('advertencia');
+    expect(r.thresholdExceeded).toBe(100);
+    expect(r.isNewEpisode).toBe(true);
+  });
+
+  test('bradicardia sin alerta activa → nueva alerta', () => {
+    const r = evaluateHr(makeHrInput({bpm: 45}));
+    expect(r.shouldAlert).toBe(true);
+    expect(r.tipo).toBe('bradicardia');
+    expect(r.severity).toBe('advertencia');
+    expect(r.thresholdExceeded).toBe(50);
+  });
+
+  test('dedup CA-05: misma severidad con alerta activa → no duplica', () => {
+    const r = evaluateHr(
+      makeHrInput({bpm: 105, hasActiveAlert: true, activeAlertSeverity: 'advertencia'}),
+    );
+    expect(r.shouldAlert).toBe(false);
+  });
+
+  test('escalacion de severidad dentro del episodio: advertencia→critica sí alerta', () => {
+    const r = evaluateHr(
+      makeHrInput({bpm: 125, hasActiveAlert: true, activeAlertSeverity: 'advertencia'}),
+    );
+    expect(r.shouldAlert).toBe(true);
+    expect(r.severity).toBe('critica');
+    expect(r.isNewEpisode).toBe(false);
+  });
+});
+
+describe('isHrEpisodeResolved', () => {
+  test('FC en rango normal → resuelto', () => {
+    expect(isHrEpisodeResolved(70, HR)).toBe(true);
+    expect(isHrEpisodeResolved(100, HR)).toBe(true);
+    expect(isHrEpisodeResolved(50, HR)).toBe(true);
+  });
+
+  test('FC fuera de rango → NO resuelto', () => {
+    expect(isHrEpisodeResolved(101, HR)).toBe(false);
+    expect(isHrEpisodeResolved(49, HR)).toBe(false);
+  });
+});
+
+describe('computeHrTrend', () => {
+  const now = new Date('2026-08-21T12:00:00Z');
+  const min = (n: number) => new Date(now.getTime() - n * 60_000).toISOString();
+
+  test('menos de 2 lecturas → estable', () => {
+    expect(computeHrTrend([], now)).toBe('estable');
+    expect(computeHrTrend([{bpm: 80, recordedAt: min(2)}], now)).toBe('estable');
+  });
+
+  test('sube más de +5 lpm → subiendo', () => {
+    const readings = [
+      {bpm: 80, recordedAt: min(4)},
+      {bpm: 88, recordedAt: min(2)},
+      {bpm: 95, recordedAt: min(1)},
+    ];
+    expect(computeHrTrend(readings, now)).toBe('subiendo');
+  });
+
+  test('baja más de -5 lpm → bajando', () => {
+    const readings = [
+      {bpm: 95, recordedAt: min(4)},
+      {bpm: 85, recordedAt: min(1)},
+    ];
+    expect(computeHrTrend(readings, now)).toBe('bajando');
+  });
+
+  test('delta pequeño → estable', () => {
+    const readings = [
+      {bpm: 82, recordedAt: min(4)},
+      {bpm: 84, recordedAt: min(1)},
+    ];
+    expect(computeHrTrend(readings, now)).toBe('estable');
+  });
+
+  test('lecturas fuera de la ventana de 5 min se ignoran', () => {
+    const readings = [
+      {bpm: 60, recordedAt: min(30)}, // fuera de ventana
+      {bpm: 130, recordedAt: min(10)}, // fuera de ventana
+      {bpm: 81, recordedAt: min(3)},
+      {bpm: 83, recordedAt: min(1)},
+    ];
+    // Solo quedan 2 en ventana: 81→83 delta 2 → estable
+    expect(computeHrTrend(readings, now)).toBe('estable');
+  });
+});
+
+describe('buildHrAlertRecord', () => {
+  test('taquicardia: titulo/mensaje nombran tipo, valor, umbral y tendencia (CA-03+CA-04)', () => {
+    const detection = evaluateHr(makeHrInput({bpm: 115}));
+    const record = buildHrAlertRecord(
+      makeHrInput({bpm: 115}),
+      detection,
+      'u1',
+      'subiendo',
+      new Date('2026-08-21T12:00:00Z'),
+    );
+
+    expect(record.tipo).toBe('taquicardia');
+    expect(record.severidad).toBe('advertencia');
+    expect(record.titulo).toContain('taquicardia');
+    expect(record.mensaje).toContain('115 lpm');
+    expect(record.mensaje).toContain('Tendencia ultimos 5 min: subiendo');
+    expect(record.datos).toMatchObject({
+      valor_registrado: 115,
+      umbral_configurado: 100,
+      tendencia: 'subiendo',
+      escalada: false,
+    });
+  });
+
+  test('bradicardia critica: titulo y umbral correctos', () => {
+    const detection = evaluateHr(makeHrInput({bpm: 38}));
+    const record = buildHrAlertRecord(makeHrInput({bpm: 38}), detection, 'u1');
+
+    expect(record.tipo).toBe('bradicardia');
+    expect(record.severidad).toBe('critica');
+    expect(record.titulo).toContain('bradicardia');
+    expect(record.datos).toMatchObject({umbral_configurado: 40});
+  });
+
+  test('lanza si se invoca sin detección con alerta', () => {
+    expect(() =>
+      buildHrAlertRecord(
+        makeHrInput({bpm: 70}),
+        {shouldAlert: false, tipo: null, severity: null, thresholdExceeded: null, isNewEpisode: false},
+        'u1',
+      ),
+    ).toThrow();
+  });
+});
+
+// ═══════════════════════════════════════════
+// (j) Engine HR: evaluateHrReading (HU-42)
+// ═══════════════════════════════════════════
+
+describe('AlertEngine HR', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  test('FC normal → no alert', async () => {
+    const deps = makeEngineDeps();
+    const engine = new AlertEngine(deps);
+
+    const result = await engine.evaluateHrReading('u1', 72, 'wearable');
+    expect(result).toBeNull();
+    expect(deps.inserted).toHaveLength(0);
+
+    engine.dispose();
+  });
+
+  test('taquicardia → genera alerta tipo taquicardia con tendencia en datos', async () => {
+    const deps = makeEngineDeps();
+    const engine = new AlertEngine(deps);
+
+    const alert = await engine.evaluateHrReading('u1', 115, 'wearable');
+    expect(alert).not.toBeNull();
+    expect(alert!.tipo).toBe('taquicardia');
+    expect(alert!.severidad).toBe('advertencia');
+    expect(deps.inserted).toHaveLength(1);
+    expect(deps.inserted[0].datos).toMatchObject({valor_registrado: 115, tendencia: 'estable'});
+
+    engine.dispose();
+  });
+
+  test('dedup CA-05: condición persistente con alerta activa → NO duplica', async () => {
+    const existingAlert = makeAlertRecord({tipo: 'taquicardia', severidad: 'advertencia'});
+    const deps = makeEngineDeps({
+      getActiveAlerts: async () => [existingAlert],
+    });
+    const engine = new AlertEngine(deps);
+
+    const alert = await engine.evaluateHrReading('u1', 108, 'wearable');
+    expect(alert).toBeNull();
+    expect(deps.inserted).toHaveLength(0);
+
+    engine.dispose();
+  });
+
+  test('resolución de episodio: FC vuelve a rango normal → marca leída', async () => {
+    const existingAlert = makeAlertRecord({tipo: 'taquicardia', severidad: 'advertencia'});
+    const deps = makeEngineDeps({
+      getActiveAlerts: async () => [existingAlert],
+    });
+    const engine = new AlertEngine(deps);
+
+    const alert = await engine.evaluateHrReading('u1', 75, 'wearable');
+    expect(alert).toBeNull();
+    expect(deps.markedRead).toContain(existingAlert.id);
+
+    engine.dispose();
+  });
+
+  test('usa getRecentHeartRates para calcular la tendencia (CA-04)', async () => {
+    const now = Date.now();
+    const deps = makeEngineDeps({
+      getRecentHeartRates: async () => [
+        {bpm: 80, recordedAt: new Date(now - 4 * 60_000).toISOString()},
+        {bpm: 96, recordedAt: new Date(now - 1 * 60_000).toISOString()},
+      ],
+    });
+    const engine = new AlertEngine(deps);
+
+    await engine.evaluateHrReading('u1', 115, 'wearable');
+    expect(deps.inserted[0].datos).toMatchObject({tendencia: 'subiendo'});
+
+    engine.dispose();
+  });
+
+  test('si getRecentHeartRates falla → tendencia estable y no bloquea la alerta', async () => {
+    const deps = makeEngineDeps({
+      getRecentHeartRates: async () => {
+        throw new Error('supabase down');
+      },
+    });
+    const engine = new AlertEngine(deps);
+
+    const alert = await engine.evaluateHrReading('u1', 115, 'wearable');
+    expect(alert).not.toBeNull();
+    expect(deps.inserted[0].datos).toMatchObject({tendencia: 'estable'});
 
     engine.dispose();
   });

@@ -35,6 +35,10 @@ android/.kotlin/
 # Build reports
 **/build/reports/
 
+# Test coverage reports
+coverage/
+coverage-hu41/
+
 # ML Trainer
 ml-trainer/models/
 
