@@ -26,6 +26,7 @@ import {
   updateAlertaDatos,
   insertDatosRelojYML,
   SyncMLPartialError,
+  getBaselinePersonalizado,
 } from '../services/supabase/api';
 import type {Alerta} from '../services/supabase/models';
 import {
@@ -163,6 +164,14 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
               bpm: r.frec_cardiaca_bpm as number,
               recordedAt: r.recorded_at as string,
             }));
+        },
+        // HU-98: baseline personalizado para umbrales adaptativos (fallback estándar si falla)
+        getPersonalizedBaseline: async (uid) => {
+          try {
+            return await getBaselinePersonalizado(uid);
+          } catch {
+            return null;
+          }
         },
       });
 

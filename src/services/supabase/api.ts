@@ -4,6 +4,7 @@ import { expandDatosRelojToDatoSaludML } from '../datoSaludML';
 import type {
   PerfilUsuario,
   BaselineClinico,
+  BaselinePersonalizado,
   DatosReloj,
   DatosRelojInsert,
   DatoSaludML,
@@ -487,6 +488,41 @@ export async function upsertBaseline(
   const row = rows[0];
   if (!row) throw new Error('No se pudo guardar el baseline clínico');
   return row;
+}
+
+// ═══════════════════════════════════════════
+// BASELINE PERSONALIZADO (HU-98)
+// ═══════════════════════════════════════════
+
+/**
+ * Get the user's personalized baseline (HU-98).
+ * Returns null when no baseline has been calculated yet.
+ */
+export async function getBaselinePersonalizado(
+  userId: string,
+  accessToken?: string | null,
+): Promise<BaselinePersonalizado | null> {
+  const rows = await rawRestFetch<BaselinePersonalizado[]>('baseline_personalizado', {
+    query: `select=*&id_usuario=eq.${userId}&limit=1`,
+    accessToken,
+  });
+  return rows?.[0] ?? null;
+}
+
+/**
+ * Trigger server-side recalculation of the personalized baseline (HU-98).
+ * Calls the SECURITY DEFINER RPC `recalcular_baseline_personalizado`,
+ * which computes media/stddev/P25/P75 per metric over the last 28 days.
+ */
+export async function recalcularBaseline(
+  userId: string,
+  accessToken?: string | null,
+): Promise<void> {
+  await rawRestFetch<null>('rpc/recalcular_baseline_personalizado', {
+    method: 'POST',
+    body: {p_id_usuario: userId},
+    accessToken,
+  });
 }
 
 // ═══════════════════════════════════════════

@@ -17,7 +17,7 @@ import {useSupabase} from '../context/SupabaseProvider';
 import {colors, spacing, fontSize} from '../theme';
 import type {SexoBiologico} from '../services/supabase/models';
 import {supabase} from '../services/supabase/client';
-import {upsertBaseline} from '../services/supabase/api';
+import {upsertBaseline, recalcularBaseline} from '../services/supabase/api';
 
 /** Test rápido: hace un HEAD a la API de Supabase para ver si responde */
 async function testSupabaseConnection(): Promise<boolean> {
@@ -258,6 +258,10 @@ const CompleteProfileScreen: React.FC = () => {
         updateProfile(profileData),
         baselinePromise,
       ]);
+
+      // ── HU-98: recalcular baseline personalizado en background (fire-and-forget) ──
+      // No bloquea el flujo: si falla, el fallback a rangos estándar sigue activo.
+      recalcularBaseline(userId).catch(() => {});
 
       requestDoneRef.current = true;
       // Reset del stack para ir a MainTabs (no hay pantalla anterior en el stack)

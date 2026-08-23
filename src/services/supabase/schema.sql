@@ -286,3 +286,65 @@ CREATE TABLE notificacion_entrega (
 
 CREATE INDEX idx_notificacion_entrega_alerta
   ON notificacion_entrega(id_alerta);
+
+-- ============================================
+-- 14. BASELINE_PERSONALIZADO (HU-98 — baseline personalizado por paciente)
+--     Una fila por usuario con stats por métrica (media, desv. estándar,
+--     P25, P75). Referida como "§9" en el documento de diseño HU-98.
+--     RLS + funciones de cálculo: ver scripts/migrations/2026-08-23_hu98_baseline_personalizado.sql
+-- ============================================
+CREATE TABLE baseline_personalizado (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id_usuario UUID NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
+
+  -- ── FC (lpm) ──
+  hr_media NUMERIC(6,2),
+  hr_desv_std NUMERIC(6,2),
+  hr_p25 NUMERIC(6,2),
+  hr_p75 NUMERIC(6,2),
+  hr_n_muestras INTEGER,
+
+  -- ── PA sistólica (mmHg) ──
+  bp_sist_media NUMERIC(6,2),
+  bp_sist_desv_std NUMERIC(6,2),
+  bp_sist_p25 NUMERIC(6,2),
+  bp_sist_p75 NUMERIC(6,2),
+  bp_sist_n_muestras INTEGER,
+
+  -- ── PA diastólica (mmHg) ──
+  bp_diast_media NUMERIC(6,2),
+  bp_diast_desv_std NUMERIC(6,2),
+  bp_diast_p25 NUMERIC(6,2),
+  bp_diast_p75 NUMERIC(6,2),
+  bp_diast_n_muestras INTEGER,
+
+  -- ── SpO2 (%) ──
+  spo2_media NUMERIC(5,2),
+  spo2_desv_std NUMERIC(5,2),
+  spo2_p25 NUMERIC(5,2),
+  spo2_p75 NUMERIC(5,2),
+  spo2_n_muestras INTEGER,
+
+  -- ── Temperatura (°C) ──
+  temp_media NUMERIC(5,2),
+  temp_desv_std NUMERIC(5,2),
+  temp_p25 NUMERIC(5,2),
+  temp_p75 NUMERIC(5,2),
+  temp_n_muestras INTEGER,
+
+  -- ── Metadata del cálculo ──
+  dias_historial INTEGER,
+  ventana_dias INTEGER NOT NULL DEFAULT 28,
+  es_valido BOOLEAN NOT NULL DEFAULT FALSE,
+
+  ultima_actualizacion TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Índice único sobre id_usuario: lookup + soporte de upsert (ON CONFLICT).
+CREATE UNIQUE INDEX idx_baseline_personalizado_usuario
+  ON baseline_personalizado(id_usuario);
+
+CREATE INDEX idx_baseline_personalizado_pendientes
+  ON baseline_personalizado(ultima_actualizacion);
