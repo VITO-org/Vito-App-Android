@@ -14,6 +14,7 @@ import Card from '../components/Card';
 import StatusIndicator from '../components/StatusIndicator';
 import {useHealth} from '../context/HealthProvider';
 import {useSupabase} from '../context/SupabaseProvider';
+import {useNotifications} from '../context/NotificationsProvider';
 import {colors, spacing, fontSize} from '../theme';
 import {
   resolveSyncIntervalMin,
@@ -177,6 +178,8 @@ const ConfiguracionScreen: React.FC = () => {
     }, [getUserId, session]),
   );
 
+  const {preferences: notifPrefs, updatePreferences: updateNotifPrefs, loading: notifLoading} = useNotifications();
+
   // ── Persistir intervalo (CA-01): PATCH de una columna, no pisa el perfil ──
   const handleSeleccionarIntervalo = useCallback(
     async (nuevo: number) => {
@@ -324,6 +327,63 @@ const ConfiguracionScreen: React.FC = () => {
         {!cargandoConflictos && conflictos === 0 && (
           <Text style={styles.emptyText}>Sin conflictos recientes.</Text>
         )}
+      </Card>
+
+      {/* ── Card Notificaciones Push ── */}
+      <Card>
+        <TituloConInfo
+          titulo="Notificaciones"
+          textoAyuda="Configurá cómo recibís las alertas de salud cuando la app está en segundo plano o cerrada."
+        />
+
+        <View style={styles.notifRow}>
+          <View style={styles.notifInfo}>
+            <Text style={styles.notifLabel}>Notificaciones push</Text>
+            <Text style={styles.notifDesc}>Recibir alertas en tu dispositivo</Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.toggleBtn, notifPrefs.push_habilitado && styles.toggleActive]}
+            onPress={() => updateNotifPrefs({push_habilitado: !notifPrefs.push_habilitado})}
+            disabled={notifLoading}>
+            <Text style={[styles.toggleText, notifPrefs.push_habilitado && styles.toggleTextActive]}>
+              {notifPrefs.push_habilitado ? 'ON' : 'OFF'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.sectionDivider} />
+
+        <View style={styles.notifRow}>
+          <View style={styles.notifInfo}>
+            <Text style={styles.notifLabel}>Alertas críticas</Text>
+            <Text style={styles.notifDesc}>SpO₂ baja, presión fuera de rango, FC anormal</Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.toggleBtn, notifPrefs.alertas_criticas && styles.toggleActive]}
+            onPress={() => updateNotifPrefs({alertas_criticas: !notifPrefs.alertas_criticas})}
+            disabled={notifLoading || !notifPrefs.push_habilitado}>
+            <Text style={[styles.toggleText, notifPrefs.alertas_criticas && styles.toggleTextActive]}>
+              {notifPrefs.alertas_criticas ? 'ON' : 'OFF'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.sectionDivider} />
+
+        <View style={styles.notifRow}>
+          <View style={styles.notifInfo}>
+            <Text style={styles.notifLabel}>Información de salud</Text>
+            <Text style={styles.notifDesc}>Resúmenes y recordatorios</Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.toggleBtn, notifPrefs.alertas_info && styles.toggleActive]}
+            onPress={() => updateNotifPrefs({alertas_info: !notifPrefs.alertas_info})}
+            disabled={notifLoading || !notifPrefs.push_habilitado}>
+            <Text style={[styles.toggleText, notifPrefs.alertas_info && styles.toggleTextActive]}>
+              {notifPrefs.alertas_info ? 'ON' : 'OFF'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </Card>
 
       {/* ── Selector desplegable de intervalo (Modal nativo, patrón RegistrarSintoma) ── */}
@@ -665,6 +725,48 @@ const styles = StyleSheet.create({
     fontSize: fontSize.body,
     fontWeight: '700',
     color: colors.primary,
+  },
+
+  // ── Notificaciones ──
+  notifRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  notifInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  notifLabel: {
+    fontSize: fontSize.body,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  notifDesc: {
+    fontSize: fontSize.caption,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  toggleBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  toggleActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  toggleText: {
+    fontSize: fontSize.caption,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  toggleTextActive: {
+    color: '#FFFFFF',
   },
 });
 

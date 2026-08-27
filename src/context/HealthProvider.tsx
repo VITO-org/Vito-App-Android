@@ -29,6 +29,7 @@ import {
   getBaselinePersonalizado,
 } from '../services/supabase/api';
 import type {Alerta} from '../services/supabase/models';
+import {sendAlertNotification} from '../services/notifications';
 import {
   syncWearableToBackend,
   DEFAULT_SYNC_INTERVAL_MIN,
@@ -176,8 +177,14 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
       });
 
       // Register listeners for UI updates
-      alertEngineRef.current.onGenerated(() => {
+      alertEngineRef.current.onGenerated(async (alert) => {
         refreshAlerts();
+        // Send push notification
+        try {
+          await sendAlertNotification(alert as any);
+        } catch (e) {
+          console.error('Error sending push notification:', e);
+        }
       });
       alertEngineRef.current.onEscalated(() => {
         refreshAlerts();
