@@ -13,10 +13,19 @@
         "android.permission.health.READ_HEART_RATE",
         "android.permission.health.READ_STEPS",
         "android.permission.health.READ_SLEEP",
-        "android.permission.health.READ_ACTIVE_CALORIES_BURNED"
+        "android.permission.health.READ_ACTIVE_CALORIES_BURNED",
+        "android.permission.POST_NOTIFICATIONS"
       ]
     },
-    "plugins": [],
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./src/assets/notification-icon.png",
+          "color": "#2FAF7A"
+        }
+      ]
+    ],
     "extra": {
       "eas": {
         "projectId": "fa67daf3-789f-4cc2-a373-ceb1507c4a50"
