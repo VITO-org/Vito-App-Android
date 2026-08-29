@@ -100,6 +100,12 @@ export interface PersonalizationConfig {
   sigmasWarning: number;
   /** Desviaciones estándar desde la media para el umbral crítico. */
   sigmasCritical: number;
+  /** HU-99 CA-02: banda leve pre-warning para SpO2 (% relativo al warning efectivo). */
+  spo2LeveBand: number;
+  /** HU-99 CA-02: banda leve pre-warning para FC (lpm relativo al warning efectivo). */
+  hrLeveBandBpm: number;
+  /** HU-99 CA-02: banda leve pre-warning para PA (mmHg relativo al warning efectivo). */
+  bpLeveBandMmhg: number;
   /** SpO2 (%): advertencia/crítica hacia abajo. */
   spo2: ThresholdGuardrail;
   /** FC taquicardia (lpm): par alto. */
@@ -127,6 +133,9 @@ export const PERSONALIZATION_DEFAULTS: PersonalizationConfig = {
   minMuestras: 30,
   sigmasWarning: 2,
   sigmasCritical: 3,
+  spo2LeveBand: 2,
+  hrLeveBandBpm: 5,
+  bpLeveBandMmhg: 5,
 
   // SpO2 (%): warn ∈ [88, 93], crit ∈ [83, 90]
   spo2: {warningMin: 88, warningMax: 93, criticalMin: 83, criticalMax: 90, gap: 3},
@@ -215,7 +224,7 @@ export function deriveSpo2Thresholds(
   config: PersonalizationConfig = PERSONALIZATION_DEFAULTS,
 ): Spo2Thresholds {
   const {warning, critical} = deriveLowPair(stats, config.spo2, config);
-  return {warningPercent: warning, criticalPercent: critical};
+  return {warningPercent: warning, criticalPercent: critical, leveBandPercent: config.spo2LeveBand};
 }
 
 /**
@@ -234,6 +243,7 @@ export function deriveHrThresholds(
     tachyCritical: tachy.critical,
     bradyWarning: brady.warning,
     bradyCritical: brady.critical,
+    leveBandBpm: config.hrLeveBandBpm,
   };
 }
 
@@ -259,6 +269,7 @@ export function deriveBpThresholds(
     sistolicaLowCritical: sistLow.critical,
     diastolicaLowWarning: diastLow.warning,
     diastolicaLowCritical: diastLow.critical,
+    leveBandMmhg: config.bpLeveBandMmhg,
   };
 }
 

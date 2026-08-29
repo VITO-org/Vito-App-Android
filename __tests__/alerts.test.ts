@@ -68,8 +68,11 @@ describe('classifySeverity', () => {
     expect(classifySeverity(100, thresholds)).toBeNull();
   });
 
-  test('SpO₂ 85-89 → advertencia', () => {
-    expect(classifySeverity(89, thresholds)).toBe('advertencia');
+  test('SpO₂ 85-89 → advertencia (moderada) y 88-89 → leve (HU-99)', () => {
+    // Franja leve (banda 2): [88, 90)
+    expect(classifySeverity(89, thresholds)).toBe('leve');
+    expect(classifySeverity(88, thresholds)).toBe('leve');
+    // Franja moderada: [85, 88)
     expect(classifySeverity(87, thresholds)).toBe('advertencia');
     expect(classifySeverity(85, thresholds)).toBe('advertencia');
   });
@@ -81,7 +84,8 @@ describe('classifySeverity', () => {
   });
 
   test('uses default thresholds when none provided', () => {
-    expect(classifySeverity(89)).toBe('advertencia');
+    expect(classifySeverity(89)).toBe('leve'); // banda default 2
+    expect(classifySeverity(86)).toBe('advertencia');
     expect(classifySeverity(84)).toBe('critica');
   });
 });
@@ -106,9 +110,23 @@ describe('evaluateSpo2', () => {
     expect(result.severity).toBeNull();
   });
 
-  test('low reading + no active alert → new episode', () => {
+  test('low reading + no active alert → new episode (leve, HU-99)', () => {
     const result = evaluateSpo2({
-      spo2Percent: 88,
+      spo2Percent: 89,
+      thresholds,
+      hasActiveAlert: false,
+      activeAlertSeverity: null,
+      readingTimestamp: '2026-08-18T12:00:00Z',
+      dispositivoOrigen: 'wearable',
+    });
+    expect(result.shouldAlert).toBe(true);
+    expect(result.severity).toBe('leve');
+    expect(result.isNewEpisode).toBe(true);
+  });
+
+  test('moderate reading + no active alert → new advertencia episode', () => {
+    const result = evaluateSpo2({
+      spo2Percent: 86,
       thresholds,
       hasActiveAlert: false,
       activeAlertSeverity: null,
@@ -136,14 +154,28 @@ describe('evaluateSpo2', () => {
 
   test('same severity + active alert → dedup (no new alert)', () => {
     const result = evaluateSpo2({
-      spo2Percent: 88,
+      spo2Percent: 89,
       thresholds,
       hasActiveAlert: true,
-      activeAlertSeverity: 'advertencia',
+      activeAlertSeverity: 'leve',
       readingTimestamp: '2026-08-18T12:00:00Z',
       dispositivoOrigen: 'wearable',
     });
     expect(result.shouldAlert).toBe(false);
+    expect(result.severity).toBe('leve');
+    expect(result.isNewEpisode).toBe(false);
+  });
+
+  test('leve active + worse reading (advertencia) → escalación', () => {
+    const result = evaluateSpo2({
+      spo2Percent: 86,
+      thresholds,
+      hasActiveAlert: true,
+      activeAlertSeverity: 'leve',
+      readingTimestamp: '2026-08-18T12:00:00Z',
+      dispositivoOrigen: 'wearable',
+    });
+    expect(result.shouldAlert).toBe(true);
     expect(result.severity).toBe('advertencia');
     expect(result.isNewEpisode).toBe(false);
   });
@@ -459,7 +491,7 @@ describe('AlertEngine', () => {
     engine.dispose();
   });
 
-  test('evaluateSpo2Reading: low SpO₂ → generates alert', async () => {
+  test('evaluateSpo2Reading: low SpO₂ → generates alert (leve, HU-99)', async () => {
     const deps = makeEngineDeps();
     const engine = new AlertEngine(deps);
 
@@ -469,11 +501,23 @@ describe('AlertEngine', () => {
     const alert = await engine.evaluateSpo2Reading('u1', 88, 'wearable');
 
     expect(alert).not.toBeNull();
-    expect(alert!.severidad).toBe('advertencia');
+    expect(alert!.severidad).toBe('leve');
     expect(alert!.titulo).toContain('SpO₂ baja');
     expect(alert!.datos).toEqual(expect.objectContaining({valor_registrado: 88}));
     expect(deps.inserted).toHaveLength(1);
     expect(onGenerated).toHaveBeenCalledTimes(1);
+
+    engine.dispose();
+  });
+
+  test('evaluateSpo2Reading: moderate SpO₂ 86 → advertencia', async () => {
+    const deps = makeEngineDeps();
+    const engine = new AlertEngine(deps);
+
+    const alert = await engine.evaluateSpo2Reading('u1', 86, 'wearable');
+
+    expect(alert).not.toBeNull();
+    expect(alert!.severidad).toBe('advertencia');
 
     engine.dispose();
   });
@@ -948,11 +992,13 @@ describe('AlertEngine BP', () => {
     const deps = makeEngineDeps();
     const engine = new AlertEngine(deps);
 
-    // With post_medicacion, systolic 86 is NOT hypotension (low threshold becomes 85)
+    // With post_medicacion, systolic 86 is NOT hypotension (low threshold becomes 85),
+    // but it falls inside the leve banda (85 + 5 = 90) → generates a leve alert HU-99
     const alert = await engine.evaluateBpReading('u1', 86, 70, 'wearable', 'post_medicacion');
 
-    // Should NOT generate alert (86 > 85 post_medicacion threshold)
-    expect(alert).toBeNull();
+    expect(alert).not.toBeNull();
+    expect(alert!.severidad).toBe('leve');
+    expect(alert!.tipo).toBe('hipotension');
 
     engine.dispose();
   });
@@ -981,14 +1027,18 @@ describe('classifyHr', () => {
     expect(classifyHr(50, HR).tipo).toBeNull();
   });
 
-  test('taquicardia advertencia (>100) y critica (>=120)', () => {
-    expect(classifyHr(101, HR)).toEqual({tipo: 'taquicardia', severity: 'advertencia', thresholdExceeded: 100});
+  test('taquicardia leve (>100..105), advertencia (106..119) y critica (>=120) — HU-99', () => {
+    expect(classifyHr(105, HR)).toEqual({tipo: 'taquicardia', severity: 'leve', thresholdExceeded: 100});
+    expect(classifyHr(101, HR).severity).toBe('leve');
+    expect(classifyHr(106, HR).severity).toBe('advertencia');
     expect(classifyHr(119, HR).severity).toBe('advertencia');
     expect(classifyHr(120, HR)).toEqual({tipo: 'taquicardia', severity: 'critica', thresholdExceeded: 120});
   });
 
-  test('bradicardia advertencia (<50) y critica (<=40)', () => {
-    expect(classifyHr(49, HR)).toEqual({tipo: 'bradicardia', severity: 'advertencia', thresholdExceeded: 50});
+  test('bradicardia leve (45..49), advertencia (41..44) y critica (<=40) — HU-99', () => {
+    expect(classifyHr(49, HR)).toEqual({tipo: 'bradicardia', severity: 'leve', thresholdExceeded: 50});
+    expect(classifyHr(45, HR).severity).toBe('leve');
+    expect(classifyHr(44, HR).severity).toBe('advertencia');
     expect(classifyHr(41, HR).severity).toBe('advertencia');
     expect(classifyHr(40, HR)).toEqual({tipo: 'bradicardia', severity: 'critica', thresholdExceeded: 40});
   });
@@ -1010,11 +1060,11 @@ describe('evaluateHr', () => {
     expect(r.isNewEpisode).toBe(true);
   });
 
-  test('bradicardia sin alerta activa → nueva alerta', () => {
-    const r = evaluateHr(makeHrInput({bpm: 45}));
+  test('bradicardia sin alerta activa → nueva alerta (leve, HU-99)', () => {
+    const r = evaluateHr(makeHrInput({bpm: 48}));
     expect(r.shouldAlert).toBe(true);
     expect(r.tipo).toBe('bradicardia');
-    expect(r.severity).toBe('advertencia');
+    expect(r.severity).toBe('leve');
     expect(r.thresholdExceeded).toBe(50);
   });
 
