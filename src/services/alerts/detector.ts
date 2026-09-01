@@ -41,7 +41,14 @@ import {
 // --- Severity Rank Helper ---
 
 function severityRank(s: AlertSeverity): number {
-  return s === 'critica' ? 2 : s === 'advertencia' ? 1 : 0;
+  return s === 'critica' ? 3 : s === 'advertencia' ? 2 : s === 'leve' ? 1 : 0;
+}
+
+/** Prefijo de título por severidad (HU-99: 'leve' expresa aviso temprano). */
+function severityPrefix(s: AlertSeverity): string {
+  if (s === 'critica') return 'Alerta crítica';
+  if (s === 'advertencia') return 'Alerta';
+  return 'Aviso leve';
 }
 
 // ======================================================================
@@ -85,13 +92,18 @@ export function evaluateSpo2(input: Spo2EvaluationInput): DetectionResult {
 
 /**
  * Classify SpO2 value into a severity level (pure function).
+ * HU-99 CA-02: añade nivel 'leve' como banda pre-warning (warning - banda <= spo2 < warning).
  */
 export function classifySeverity(
   spo2Percent: number,
   thresholds: Spo2Thresholds = DEFAULT_SPO2_THRESHOLDS,
 ): AlertSeverity | null {
   if (spo2Percent < thresholds.criticalPercent) return 'critica';
-  if (spo2Percent < thresholds.warningPercent) return 'advertencia';
+  if (spo2Percent < thresholds.warningPercent) {
+    const banda = thresholds.leveBandPercent ?? 2;
+    if (spo2Percent >= thresholds.warningPercent - banda) return 'leve';
+    return 'advertencia';
+  }
   return null;
 }
 
@@ -111,15 +123,14 @@ export function buildAlertRecord(
   const valorReg = input.spo2Percent;
   const umbral = detection.thresholdExceeded ?? input.thresholds.warningPercent;
 
-  const titulo =
-    detection.severity === 'critica'
-      ? 'Alerta crítica: SpO₂ muy baja'
-      : 'Alerta: SpO₂ baja';
+  const titulo = `${severityPrefix(detection.severity)}: SpO₂ ${detection.severity === 'critica' ? 'muy baja' : 'baja'}`;
 
   const mensaje =
     detection.severity === 'critica'
       ? `Saturación de oxígeno en ${valorReg}% (umbral crítico: ${umbral}%). Seek immediate medical attention.`
-      : `Saturación de oxígeno en ${valorReg}% (umbral de alerta: ${umbral}%). Monitor closely.`;
+      : detection.severity === 'leve'
+        ? `Saturación de oxígeno en ${valorReg}% (umbral de alerta: ${umbral}%). Se acerca al límite personal, monitorizar.`
+        : `Saturación de oxígeno en ${valorReg}% (umbral de alerta: ${umbral}%). Monitor closely.`;
 
   return {
     id_usuario: userId,
@@ -182,19 +193,23 @@ export function resolveBpThresholds(
 
 /**
  * Classify a single BP value into a severity level.
+ * HU-99 CA-02: 'leve' como banda pre-warning relativa al warning efectivo.
  */
 function classifySingleBp(
   value: number,
   warningThreshold: number,
   criticalThreshold: number,
   direction: 'high' | 'low',
+  leveBand: number = 5,
 ): AlertSeverity | null {
   if (direction === 'high') {
     if (value >= criticalThreshold) return 'critica';
     if (value >= warningThreshold) return 'advertencia';
+    if (value > warningThreshold - leveBand) return 'leve';
   } else {
     if (value <= criticalThreshold) return 'critica';
     if (value <= warningThreshold) return 'advertencia';
+    if (value < warningThreshold + leveBand) return 'leve';
   }
   return null;
 }
@@ -208,8 +223,9 @@ function evaluateSingleBp(
   criticalHigh: number,
   warningLow: number,
   criticalLow: number,
+  leveBand: number = 5,
 ): BpSingleResult {
-  const highSeverity = classifySingleBp(value, warningHigh, criticalHigh, 'high');
+  const highSeverity = classifySingleBp(value, warningHigh, criticalHigh, 'high', leveBand);
   if (highSeverity) {
     return {
       shouldAlert: true,
@@ -218,7 +234,7 @@ function evaluateSingleBp(
     };
   }
 
-  const lowSeverity = classifySingleBp(value, warningLow, criticalLow, 'low');
+  const lowSeverity = classifySingleBp(value, warningLow, criticalLow, 'low', leveBand);
   if (lowSeverity) {
     return {
       shouldAlert: true,
@@ -260,6 +276,7 @@ export function evaluateBp(input: BpEvaluationInput): BpDetectionResult {
     effectiveThresholds.sistolicaCritical,
     effectiveThresholds.sistolicaLowWarning,
     effectiveThresholds.sistolicaLowCritical,
+    effectiveThresholds.leveBandMmhg ?? 5,
   );
 
   const diastResult = evaluateSingleBp(
@@ -268,6 +285,7 @@ export function evaluateBp(input: BpEvaluationInput): BpDetectionResult {
     effectiveThresholds.diastolicaCritical,
     effectiveThresholds.diastolicaLowWarning,
     effectiveThresholds.diastolicaLowCritical,
+    effectiveThresholds.leveBandMmhg ?? 5,
   );
 
   const systolicAlert = sistResult.shouldAlert;
@@ -393,11 +411,11 @@ export function buildBpAlertRecord(
   const contexto = input.contexto ?? 'normal';
 
   // Build titulo
-  const severityPrefix = severity === 'critica' ? 'Alerta critica' : 'Alerta';
+  const severityPrefixLabel = severityPrefix(severity);
   const typeLabel = alertType === 'hipertension' ? 'Presion arterial alta' : 'Presion arterial baja';
   const titulo = isCombined
-    ? `${severityPrefix}: ${typeLabel} (combinada)`
-    : `${severityPrefix}: ${typeLabel}`;
+    ? `${severityPrefixLabel}: ${typeLabel} (combinada)`
+    : `${severityPrefixLabel}: ${typeLabel}`;
 
   // Build mensaje with measured values and thresholds (CA-03)
   const systolicRange = `${thresholds.sistolicaLowWarning}-${thresholds.sistolicaWarning}`;
@@ -454,11 +472,15 @@ export function classifyHr(
   bpm: number,
   thresholds: HrThresholds = DEFAULT_HR_THRESHOLDS,
 ): {tipo: 'taquicardia' | 'bradicardia' | null; severity: AlertSeverity | null; thresholdExceeded: number | null} {
+  const banda = thresholds.leveBandBpm ?? 5;
   // Taquicardia (high direction, CA-01/CA-02)
   if (bpm >= thresholds.tachyCritical) {
     return {tipo: 'taquicardia', severity: 'critica', thresholdExceeded: thresholds.tachyCritical};
   }
   if (bpm > thresholds.tachyWarning) {
+    if (bpm <= thresholds.tachyWarning + banda) {
+      return {tipo: 'taquicardia', severity: 'leve', thresholdExceeded: thresholds.tachyWarning};
+    }
     return {tipo: 'taquicardia', severity: 'advertencia', thresholdExceeded: thresholds.tachyWarning};
   }
   // Bradicardia (low direction, CA-01/CA-02)
@@ -466,6 +488,9 @@ export function classifyHr(
     return {tipo: 'bradicardia', severity: 'critica', thresholdExceeded: thresholds.bradyCritical};
   }
   if (bpm < thresholds.bradyWarning) {
+    if (bpm >= thresholds.bradyWarning - banda) {
+      return {tipo: 'bradicardia', severity: 'leve', thresholdExceeded: thresholds.bradyWarning};
+    }
     return {tipo: 'bradicardia', severity: 'advertencia', thresholdExceeded: thresholds.bradyWarning};
   }
   return {tipo: null, severity: null, thresholdExceeded: null};
@@ -576,10 +601,7 @@ export function buildHrAlertRecord(
 
   const {bpm, thresholds} = input;
   const isTachy = detection.tipo === 'taquicardia';
-  const severityPrefix = detection.severity === 'critica' ? 'Alerta critica' : 'Alerta';
-  const typeLabel = isTachy ? 'Frecuencia cardiaca alta (taquicardia)' : 'Frecuencia cardiaca baja (bradicardia)';
-
-  const titulo = `${severityPrefix}: ${typeLabel}`;
+  const titulo = `${severityPrefix(detection.severity)}: ${isTachy ? 'Frecuencia cardiaca alta (taquicardia)' : 'Frecuencia cardiaca baja (bradicardia)'}`;
 
   const umbral = detection.thresholdExceeded ?? (isTachy ? thresholds.tachyWarning : thresholds.bradyWarning);
   const diff = Math.abs(bpm - umbral);

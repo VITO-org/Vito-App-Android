@@ -16,10 +16,13 @@
  * Severity levels for health alerts.
  * Maps to varchar(20) in Supabase (no enum).
  * - 'INFO': informational, no action needed
- * - 'advertencia': SpO₂ between warning and critical thresholds
- * - 'critica': SpO₂ below critical threshold
+ * - 'leve': pre-warning band — close to the (personalized) warning threshold
+ *   but not yet crossing it (HU-99 CA-02)
+ * - 'advertencia': between warning and critical thresholds (moderate
+ *   deviation from baseline — acts as the 'moderada' tier)
+ * - 'critica': beyond critical threshold
  */
-export type AlertSeverity = 'INFO' | 'advertencia' | 'critica';
+export type AlertSeverity = 'INFO' | 'leve' | 'advertencia' | 'critica';
 
 // ─── Alert Type ──────────────────────────────────────────────────
 
@@ -57,12 +60,15 @@ export interface Spo2Thresholds {
   warningPercent: number;
   /** SpO₂ below this value triggers a 'critica' alert (default: 85%). */
   criticalPercent: number;
+  /** HU-99 CA-02: banda pre-warning (%). 'leve' si warning - banda <= spo2 < warning. Default: 2. */
+  leveBandPercent?: number;
 }
 
 /** Default thresholds per spec: <90% = advertencia, <85% = crítica. */
 export const DEFAULT_SPO2_THRESHOLDS: Spo2Thresholds = {
   warningPercent: 90,
   criticalPercent: 85,
+  leveBandPercent: 2,
 };
 
 // ─── Escalation Configuration ────────────────────────────────────
@@ -115,6 +121,8 @@ export interface BpThresholds {
   diastolicaLowWarning: number;
   /** Diastolic lower bound — below this = 'critica' hypotension (default: 50 mmHg). */
   diastolicaLowCritical: number;
+  /** HU-99 CA-02: banda pre-warning (mmHg). 'leve' si warning < valor <= warning + banda (alta) o warning - banda <= valor < warning (baja). Default: 5. */
+  leveBandMmhg?: number;
 }
 
 /** Default OMS thresholds for BP alert detection. */
@@ -127,6 +135,7 @@ export const DEFAULT_BP_THRESHOLDS: BpThresholds = {
   sistolicaLowCritical: 80,
   diastolicaLowWarning: 60,
   diastolicaLowCritical: 50,
+  leveBandMmhg: 5,
 };
 
 // ─── BP Special Context (CA-04) ─────────────────────────────────
@@ -246,6 +255,8 @@ export interface HrThresholds {
   bradyWarning: number;
   /** FC below this triggers 'bradicardia' critica (default: 40 lpm). */
   bradyCritical: number;
+  /** HU-99 CA-02: banda pre-warning (lpm). Taqui leve si warning < bpm <= warning + banda; bradi leve si warning - banda <= bpm < warning. Default: 5. */
+  leveBandBpm?: number;
 }
 
 /** Default HR thresholds for HU-42 alert detection. */
@@ -254,6 +265,7 @@ export const DEFAULT_HR_THRESHOLDS: HrThresholds = {
   tachyCritical: 120,
   bradyWarning: 50,
   bradyCritical: 40,
+  leveBandBpm: 5,
 };
 
 /**

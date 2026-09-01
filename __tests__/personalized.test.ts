@@ -69,6 +69,7 @@ describe('deriveSpo2Thresholds', () => {
     expect(deriveSpo2Thresholds(ms(97, 1))).toEqual({
       warningPercent: 93,
       criticalPercent: 90,
+      leveBandPercent: 2,
     });
   });
 
@@ -77,6 +78,7 @@ describe('deriveSpo2Thresholds', () => {
     expect(deriveSpo2Thresholds(ms(91, 1.5))).toEqual({
       warningPercent: 88,
       criticalPercent: 85,
+      leveBandPercent: 2,
     });
   });
 
@@ -92,6 +94,7 @@ describe('deriveSpo2Thresholds', () => {
     expect(deriveSpo2Thresholds(ms(85, 2))).toEqual({
       warningPercent: 88,
       criticalPercent: 83,
+      leveBandPercent: 2,
     });
   });
 });
@@ -108,6 +111,7 @@ describe('deriveHrThresholds', () => {
       tachyCritical: 120,
       bradyWarning: 42,
       bradyCritical: 37,
+      leveBandBpm: 5,
     });
     // Semántica: FC de reposo 47 lpm ya NO dispara bradicardia
     expect(47 >= t.bradyWarning).toBe(true);
@@ -190,7 +194,7 @@ describe('resolveEffectiveThresholds', () => {
     const r = resolveEffectiveThresholds(defaults, makeMetrics());
     expect(r.origen).toEqual({spo2: 'personalizado', bp: 'personalizado', hr: 'personalizado'});
     // Spo2 personalizada (97 ± 1)
-    expect(r.spo2).toEqual({warningPercent: 93, criticalPercent: 90});
+    expect(r.spo2).toEqual({warningPercent: 93, criticalPercent: 90, leveBandPercent: 2});
     // HR/BP normales → derivación coincide con OMS
     expect(r.hr).toEqual(DEFAULT_HR_THRESHOLDS);
     expect(r.bp).toEqual(DEFAULT_BP_THRESHOLDS);
@@ -495,9 +499,9 @@ describe('AlertEngine con baseline personalizado (HU-98)', () => {
     const engine = new AlertEngine(deps);
 
     const alert = await engine.evaluateSpo2Reading('u1', 89, 'wearable');
-    // Estándar: warn < 90 → 89 dispara advertencia
+    // Estándar: warn < 90 → 89 cae en la banda leve HU-99
     expect(alert).not.toBeNull();
-    expect(alert!.severidad).toBe('advertencia');
+    expect(alert!.severidad).toBe('leve');
     expect(alert!.datos).toMatchObject({umbral_origen: 'estandar', umbral_configurado: 90});
 
     engine.dispose();
