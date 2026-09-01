@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../services/supabase/client';
 import * as api from '../services/supabase/api';
-import type { PerfilUsuario, DatosClinicosConfig, RolUsuario } from '../services/supabase/models';
+import type { PerfilUsuario, RolUsuario } from '../services/supabase/models';
 
 // ─── Types ───
 
@@ -22,7 +22,6 @@ interface SupabaseContextValue {
   // Profile actions
   refreshProfile: () => Promise<void>;
   updateProfile: (data: Partial<PerfilUsuario> & { id_usuario: string }) => Promise<void>;
-  updateClinicalConfig: (data: Partial<DatosClinicosConfig> & { id_usuario: string }) => Promise<void>;
 
   // Utilidad
   getUserId: () => string | null;
@@ -211,13 +210,6 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
     }
   }, [getUserId]);
 
-  const updateClinicalConfig = useCallback(
-    async (data: Partial<DatosClinicosConfig> & { id_usuario: string }) => {
-      await api.upsertDatosClinicosConfig(data);
-    },
-    [],
-  );
-
   // ─── Value ───
 
   const value: SupabaseContextValue = {
@@ -232,7 +224,6 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
     signOut: signOutFn,
     refreshProfile,
     updateProfile,
-    updateClinicalConfig,
     getUserId,
     forceRefreshProfile,
   };
