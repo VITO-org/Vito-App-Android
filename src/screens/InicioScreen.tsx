@@ -10,6 +10,7 @@ import PrimaryButton from '../components/PrimaryButton';
 import AppIcon, {type AppIconName} from '../components/AppIcon';
 import VitoAvatar from '../components/VitoAvatar';
 import StatusIndicator from '../components/StatusIndicator';
+import ActiveAlertsBanner from '../components/ActiveAlertsBanner';
 import {colors, spacing, fontSize, shadows} from '../theme';
 import {buildSignosFromSummary, getMetricasBienestar} from '../utils/signosVitales';
 
@@ -43,6 +44,9 @@ const InicioScreen: React.FC = () => {
     lastSync,
     requestPermissionsAndLoad,
     refreshData,
+    activeAlerts,
+    confirmAlert,
+    refreshAlerts,
   } = useHealth();
   const {session, profile} = useSupabase();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -139,6 +143,13 @@ const InicioScreen: React.FC = () => {
           <AppIcon name="alertas" size={20} />
         </TouchableOpacity>
       </View>
+
+      {/* ── Alertas activas (HU-37) ── */}
+      <ActiveAlertsBanner
+        alerts={activeAlerts}
+        onDismiss={confirmAlert}
+        onSeeAll={() => navigation.navigate('Alertas' as any)}
+      />
 
       {/* ── Card Estado General ── */}
       <Card>
