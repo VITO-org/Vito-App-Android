@@ -120,6 +120,58 @@ export interface BaselineClinico {
 }
 export type BaselineClinicoInsert = Omit<BaselineClinico, 'id'> & { id?: string };
 
+// ─── TABLA: baseline_personalizado (HU-98 — baseline por paciente) ───
+/**
+ * Estadísticas históricas del propio paciente (media, desviación estándar,
+ * P25, P75) por métrica, calculadas server-side sobre los últimos 28 días
+ * de datos_reloj (excluyendo lecturas sospechosas).
+ * `es_valido=false` => la app hace fallback a los rangos clínicos estándar.
+ */
+export interface BaselinePersonalizado {
+  id: string;
+  id_usuario: string;
+  // ── FC (lpm) ──
+  hr_media: number | null;
+  hr_desv_std: number | null;
+  hr_p25: number | null;
+  hr_p75: number | null;
+  hr_n_muestras: number | null;
+  // ── PA sistólica (mmHg) ──
+  bp_sist_media: number | null;
+  bp_sist_desv_std: number | null;
+  bp_sist_p25: number | null;
+  bp_sist_p75: number | null;
+  bp_sist_n_muestras: number | null;
+  // ── PA diastólica (mmHg) ──
+  bp_diast_media: number | null;
+  bp_diast_desv_std: number | null;
+  bp_diast_p25: number | null;
+  bp_diast_p75: number | null;
+  bp_diast_n_muestras: number | null;
+  // ── SpO2 (%) ──
+  spo2_media: number | null;
+  spo2_desv_std: number | null;
+  spo2_p25: number | null;
+  spo2_p75: number | null;
+  spo2_n_muestras: number | null;
+  // ── Temperatura (°C) ──
+  temp_media: number | null;
+  temp_desv_std: number | null;
+  temp_p25: number | null;
+  temp_p75: number | null;
+  temp_n_muestras: number | null;
+  // ── Metadata del cálculo ──
+  /** Días distintos con datos dentro de la ventana de cálculo. */
+  dias_historial: number | null;
+  /** Ventana usada para el cálculo, en días. */
+  ventana_dias: number | null;
+  /** true cuando hay >= min días y >= min muestras → umbrales aplicables. */
+  es_valido: boolean | null;
+  ultima_actualizacion: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
 // ─── TABLA: sintomas (catálogo controlado) ───
 export interface Sintoma {
   id_sintomas: string;
@@ -239,6 +291,9 @@ export interface AlertaDatos extends Record<string, unknown> {
   is_combined?: boolean;
   /** Special measurement context ('normal', 'post_medicacion', 'reposo_nocturno'). */
   contexto?: string;
+  // ── HU-98: baseline personalizado ──
+  /** Origen de los umbrales usados ('personalizado' | 'estandar'). */
+  umbral_origen?: string;
 }
 
 export interface Alerta {
