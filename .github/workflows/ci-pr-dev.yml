@@ -85,6 +85,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.11.0'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
       - name: Gradle cache
         uses: actions/cache@v4
         with:
@@ -109,12 +118,10 @@ jobs:
       - name: Android unit tests
         id: android_test
         run: cd android && ./gradlew testDebugUnitTest --no-daemon
-        continue-on-error: true
 
       - name: Build Android (debug)
         id: build
         run: cd android && ./gradlew assembleDebug --no-daemon --parallel --build-cache
-        continue-on-error: true
 
   discord-notify:
     needs: [jira-sync, js-lint-test, android-build]
