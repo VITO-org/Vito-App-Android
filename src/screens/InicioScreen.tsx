@@ -13,6 +13,7 @@ import StatusIndicator from '../components/StatusIndicator';
 import {colors, spacing, fontSize, shadows} from '../theme';
 import {buildSignosFromSummary, getMetricasBienestar} from '../utils/signosVitales';
 
+
 type RootStackParamList = {
   MainTabs: undefined;
   DetalleSigno: {
@@ -75,7 +76,7 @@ const InicioScreen: React.FC = () => {
   }, [hcStatus, permissionsGranted, loading, error, summary, requestPermissionsAndLoad, refreshData]);
 
   // Construir vitals desde la fuente única de datos
-  const allSignos = buildSignosFromSummary(summary);
+  const allSignos = buildSignosFromSummary(summary, lastSync);
 
   // InicioScreen: solo signos vitales (excluye bienestar),
   // combina sistólica+diastólica en un solo card "Presión arterial"

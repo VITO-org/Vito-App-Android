@@ -22,9 +22,9 @@ type Props = NativeStackScreenProps<RootStackParamList, 'TodosLosSignos'>;
  * Único punto de render — los datos vienen de buildSignosFromSummary.
  */
 const TodosLosSignosScreen: React.FC<Props> = ({navigation}) => {
-  const {summary, loading} = useHealth();
+  const {summary, loading, lastSync} = useHealth();
 
-  const allSignos = buildSignosFromSummary(summary);
+  const allSignos = buildSignosFromSummary(summary, lastSync);
   const signosVitales = getSignosVitales(allSignos);
   const bienestar = getMetricasBienestar(allSignos);
 
