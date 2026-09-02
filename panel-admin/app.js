@@ -213,7 +213,7 @@ async function loadAlerts() {
     const filterSeverity = document.getElementById('filterSeverity').value;
     const filterUser = document.getElementById('filterUser').value.trim();
 
-    let query = 'select=*,usuario:id_usuario(nombre,apellido)&order=created_at.desc&limit=50';
+    let query = 'select=*&order=created_at.desc&limit=50';
 
     if (filterType) {
       query += `&tipo=eq.${filterType}`;
