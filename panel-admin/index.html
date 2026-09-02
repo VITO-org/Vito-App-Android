@@ -30,9 +30,11 @@
         <form id="alertForm" class="form">
           <!-- Usuario -->
           <div class="form-group">
-            <label for="userId">ID de Usuario</label>
-            <input type="text" id="userId" placeholder="UUID del usuario" required>
-            <small>El UUID del usuario en Supabase (tabla usuario)</small>
+            <label for="userId">Usuario</label>
+            <select id="userId" required>
+              <option value="">Cargando usuarios...</option>
+            </select>
+            <small>Seleccioná el usuario para generarle la alerta</small>
           </div>
 
           <!-- Tipo de Signo Vital -->

@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initForm();
   initFilters();
   checkConnection();
+  loadUsers();
   loadAlerts();
 });
 
@@ -43,6 +44,46 @@ async function checkConnection() {
     dotEl.classList.add('error');
     textEl.textContent = 'Error de conexión';
     console.error('Supabase connection error:', error);
+  }
+}
+
+// ============================================
+// Cargar usuarios desde Supabase
+// ============================================
+
+async function loadUsers() {
+  const selectEl = document.getElementById('userId');
+
+  try {
+    const response = await fetch(
+      `${REST_BASE}/perfil_usuario?select=id_usuario,nombre,apellido&order=nombre.asc`,
+      { headers: getHeaders() }
+    );
+
+    if (!response.ok) {
+      throw new Error('Error al cargar usuarios');
+    }
+
+    const perfiles = await response.json();
+
+    if (perfiles.length === 0) {
+      selectEl.innerHTML = '<option value="">No hay usuarios</option>';
+      return;
+    }
+
+    selectEl.innerHTML = '<option value="">Seleccionar usuario...</option>';
+
+    perfiles.forEach(p => {
+      const nombre = [p.nombre, p.apellido].filter(Boolean).join(' ') || 'Sin nombre';
+      const option = document.createElement('option');
+      option.value = p.id_usuario;
+      option.textContent = `${nombre} (${p.id_usuario.substring(0, 8)}...)`;
+      selectEl.appendChild(option);
+    });
+
+  } catch (error) {
+    console.error('Error loading users:', error);
+    selectEl.innerHTML = '<option value="">Error al cargar usuarios</option>';
   }
 }
 
