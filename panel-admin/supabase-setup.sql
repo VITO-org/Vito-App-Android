@@ -35,6 +35,18 @@ CREATE POLICY "anon_select_alertas"
   USING (true);
 
 -- ============================================
+-- 3. perfil_usuario: Policy de lectura para anon
+-- ============================================
+-- El panel web necesita leer los perfiles para mostrar el desplegable
+-- de usuarios. Sin esta policy, el dropdown dice "No hay usuarios".
+
+CREATE POLICY "anon_select_perfil_usuario"
+  ON perfil_usuario
+  FOR SELECT
+  TO anon
+  USING (true);
+
+-- ============================================
 -- Verificación (ejecutar después de aplicar los cambios)
 -- ============================================
 
@@ -55,6 +67,12 @@ SELECT policyname, cmd, roles
 FROM pg_policies 
 WHERE tablename = 'alerta';
 -- Esperado: "Usuarios ven sus propias alertas" (ALL, public) + "anon_select_alertas" (SELECT, anon)
+
+-- Verificar policies de perfil_usuario
+SELECT policyname, cmd, roles 
+FROM pg_policies 
+WHERE tablename = 'perfil_usuario';
+-- Esperado: "anon_select_perfil_usuario" (SELECT, anon)
 
 -- Verificar que el panel puede leer alertas
 SELECT * FROM alerta ORDER BY created_at DESC LIMIT 5;
