@@ -2,6 +2,24 @@
 
 Panel web de administración para generar datos de prueba y verificar que el sistema de alertas de VITO Health Connect funciona correctamente.
 
+## Configuración Inicial (Supabase)
+
+Antes de usar el panel, ejecutá el script `supabase-setup.sql` en el SQL Editor de Supabase. Esto habilita las permisos necesarios para que el panel pueda insertar datos y leer alertas.
+
+```sql
+-- 1. Deshabilitar RLS en datos_reloj (para permitir inserciones anónimas)
+ALTER TABLE datos_reloj DISABLE ROW LEVEL SECURITY;
+
+-- 2. Crear policy de lectura para anon en alerta
+CREATE POLICY "anon_select_alertas"
+  ON alerta
+  FOR SELECT
+  TO anon
+  USING (true);
+```
+
+> ⚠️ Estos cambios son solo para testing. En producción, RLS debe estar habilitado.
+
 ## Uso Rápido
 
 1. Abrí `index.html` en tu navegador (Chrome, Firefox o Safari)
@@ -69,11 +87,12 @@ Aparece en AlertasScreen
 
 ```
 panel-admin/
-├── index.html      # Página principal
-├── styles.css      # Estilos
-├── app.js          # Lógica de la aplicación
-├── config.js       # Configuración de Supabase
-└── README.md       # Este archivo
+├── index.html           # Página principal
+├── styles.css           # Estilos
+├── app.js               # Lógica de la aplicación
+├── config.js            # Configuración de Supabase
+├── supabase-setup.sql   # Script de configuración en Supabase
+└── README.md            # Este archivo
 ```
 
 ## Requisitos
