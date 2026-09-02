@@ -53,6 +53,7 @@ async function checkConnection() {
 
 async function loadUsers() {
   const selectEl = document.getElementById('userId');
+  const filterEl = document.getElementById('filterUser');
 
   try {
     const response = await fetch(
@@ -72,13 +73,21 @@ async function loadUsers() {
     }
 
     selectEl.innerHTML = '<option value="">Seleccionar usuario...</option>';
+    filterEl.innerHTML = '<option value="">Todos</option>';
 
     perfiles.forEach(p => {
       const nombre = [p.nombre, p.apellido].filter(Boolean).join(' ') || 'Sin nombre';
-      const option = document.createElement('option');
-      option.value = p.id_usuario;
-      option.textContent = `${nombre} (${p.id_usuario.substring(0, 8)}...)`;
-      selectEl.appendChild(option);
+      const label = `${nombre} (${p.id_usuario.substring(0, 8)}...)`;
+
+      const option1 = document.createElement('option');
+      option1.value = p.id_usuario;
+      option1.textContent = label;
+      selectEl.appendChild(option1);
+
+      const option2 = document.createElement('option');
+      option2.value = p.id_usuario;
+      option2.textContent = label;
+      filterEl.appendChild(option2);
     });
 
   } catch (error) {
@@ -336,7 +345,7 @@ function updateStats(alerts) {
 function initFilters() {
   document.getElementById('filterType').addEventListener('change', loadAlerts);
   document.getElementById('filterSeverity').addEventListener('change', loadAlerts);
-  document.getElementById('filterUser').addEventListener('input', debounce(loadAlerts, 500));
+  document.getElementById('filterUser').addEventListener('change', loadAlerts);
   document.getElementById('refreshBtn').addEventListener('click', loadAlerts);
 }
 
