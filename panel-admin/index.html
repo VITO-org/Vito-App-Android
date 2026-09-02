@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VITO - Panel de Testing de Alertas</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-content">
+        <h1>VITO Admin Panel</h1>
+        <p class="subtitle">Testing de Alertas y Notificaciones</p>
+      </div>
+      <div class="connection-status" id="connectionStatus">
+        <span class="status-dot"></span>
+        <span class="status-text">Conectando...</span>
+      </div>
+    </header>
+
+    <!-- Main Grid -->
+    <div class="grid">
+      <!-- Panel Izquierdo: Generar Alerta -->
+      <section class="panel">
+        <h2>Generar Alerta de Prueba</h2>
+        
+        <!-- Formulario -->
+        <form id="alertForm" class="form">
+          <!-- Usuario -->
+          <div class="form-group">
+            <label for="userId">ID de Usuario</label>
+            <input type="text" id="userId" placeholder="UUID del usuario" required>
+            <small>El UUID del usuario en Supabase (tabla usuario)</small>
+          </div>
+
+          <!-- Tipo de Signo Vital -->
+          <div class="form-group">
+            <label for="vitalType">Tipo de Signo Vital</label>
+            <select id="vitalType" required>
+              <option value="">Seleccionar...</option>
+              <option value="spo2">SpO₂ (Saturación de oxígeno)</option>
+              <option value="hr">Frecuencia Cardíaca</option>
+              <option value="bp">Presión Arterial</option>
+            </select>
+          </div>
+
+          <!-- Valores de SpO₂ -->
+          <div class="vital-fields" id="spo2Fields" style="display:none;">
+            <div class="form-group">
+              <label for="spo2Value">SpO₂ (%)</label>
+              <input type="number" id="spo2Value" min="0" max="100" step="0.1" placeholder="Ej: 82">
+              <small>Normal: 95-100% | Advertencia: &lt;90% | Crítico: &lt;85%</small>
+            </div>
+          </div>
+
+          <!-- Valores de FC -->
+          <div class="vital-fields" id="hrFields" style="display:none;">
+            <div class="form-group">
+              <label for="hrValue">Frecuencia Cardíaca (bpm)</label>
+              <input type="number" id="hrValue" min="0" max="300" step="1" placeholder="Ej: 130">
+              <small>Normal: 50-100 bpm | Taquicardia: &gt;100 | Bradicardia: &lt;50</small>
+            </div>
+          </div>
+
+          <!-- Valores de PA -->
+          <div class="vital-fields" id="bpFields" style="display:none;">
+            <div class="form-group">
+              <label for="bpSistolica">Presión Sistólica (mmHg)</label>
+              <input type="number" id="bpSistolica" min="0" max="300" step="1" placeholder="Ej: 170">
+              <small>Normal: 90-140 | Hipertensión: &gt;140 | Hipotensión: &lt;90</small>
+            </div>
+            <div class="form-group">
+              <label for="bpDiastolica">Presión Diastólica (mmHg)</label>
+              <input type="number" id="bpDiastolica" min="0" max="200" step="1" placeholder="Ej: 105">
+              <small>Normal: 60-90 | Hipertensión: &gt;90 | Hipotensión: &lt;60</small>
+            </div>
+          </div>
+
+          <!-- Contexto (solo para PA) -->
+          <div class="form-group" id="contextoField" style="display:none;">
+            <label for="contexto">Contexto de medición</label>
+            <select id="contexto">
+              <option value="normal">Normal</option>
+              <option value="post_medicacion">Post medicación</option>
+              <option value="reposo_nocturno">Reposo nocturno</option>
+            </select>
+          </div>
+
+          <!-- Botón -->
+          <button type="submit" class="btn btn-primary" id="submitBtn">
+            Generar Alerta
+          </button>
+        </form>
+
+        <!-- Resultado -->
+        <div class="result" id="result" style="display:none;">
+          <div class="result-content"></div>
+        </div>
+      </section>
+
+      <!-- Panel Derecho: Alertas Existentes -->
+      <section class="panel">
+        <h2>Alertas Existentes</h2>
+        
+        <!-- Filtros -->
+        <div class="filters">
+          <div class="filter-group">
+            <label for="filterType">Tipo</label>
+            <select id="filterType">
+              <option value="">Todas</option>
+              <option value="hipoxia">Hipoxia</option>
+              <option value="taquicardia">Taquicardia</option>
+              <option value="bradicardia">Bradicardia</option>
+              <option value="hipertension">Hipertensión</option>
+              <option value="hipotension">Hipotensión</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="filterSeverity">Severidad</label>
+            <select id="filterSeverity">
+              <option value="">Todas</option>
+              <option value="critica">Crítica</option>
+              <option value="advertencia">Advertencia</option>
+              <option value="INFO">Info</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="filterUser">Usuario</label>
+            <input type="text" id="filterUser" placeholder="UUID del usuario">
+          </div>
+          <button class="btn btn-secondary" id="refreshBtn">Actualizar</button>
+        </div>
+
+        <!-- Lista de alertas -->
+        <div class="alerts-list" id="alertsList">
+          <div class="loading">Cargando alertas...</div>
+        </div>
+
+        <!-- Estadísticas -->
+        <div class="stats" id="stats">
+          <div class="stat">
+            <span class="stat-value" id="statTotal">0</span>
+            <span class="stat-label">Total</span>
+          </div>
+          <div class="stat">
+            <span class="stat-value stat-critical" id="statCritical">0</span>
+            <span class="stat-label">Críticas</span>
+          </div>
+          <div class="stat">
+            <span class="stat-value stat-warning" id="statWarning">0</span>
+            <span class="stat-label">Advertencia</span>
+          </div>
+          <div class="stat">
+            <span class="stat-value stat-unread" id="statUnread">0</span>
+            <span class="stat-label">No leídas</span>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <p>VITO Health Connect - Panel de Testing v1.0</p>
+      <p class="footer-note">⚠️ Este panel es solo para desarrollo y testing. No usar en producción.</p>
+    </footer>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
