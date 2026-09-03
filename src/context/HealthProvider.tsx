@@ -21,6 +21,7 @@ import {
   insertDatosReloj,
   markDatosRelojReemplazado,
   insertAlerta,
+  getAlertas,
   getAlertasActivas,
   marcarAlertaLeida,
   updateAlertaDatos,
@@ -381,7 +382,7 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
     const userId = getUserId();
     if (!userId) return;
     try {
-      const alerts = await getAlertasActivas(userId);
+      const alerts = await getAlertas(userId);
       setActiveAlerts(alerts);
     } catch {
       // Best-effort: don't crash the app if alerts can't be loaded
@@ -427,7 +428,7 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
     refreshData,
     // HU-41: Alertas
     activeAlerts,
-    activeAlertsCount: activeAlerts.length,
+    activeAlertsCount: activeAlerts.filter(a => !a.leida_en).length,
     confirmAlert,
     refreshAlerts,
   };
