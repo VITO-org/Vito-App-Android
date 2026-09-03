@@ -1,6 +1,6 @@
 import React from 'react';
 import {View, TouchableOpacity, Image, StyleSheet, Platform} from 'react-native';
-import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
+import {createBottomTabNavigator, type BottomTabBarButtonProps} from '@react-navigation/bottom-tabs';
 import {colors, spacing, shadows} from '../theme';
 import AppIcon from '../components/AppIcon';
 import {useHealth} from '../context/HealthProvider';
@@ -35,11 +35,16 @@ const TAB_LABELS: Record<keyof BottomTabParamList, string> = {
 // ---------------------------------------------------------------------------
 // Botón central VITO — más grande, circular, con la mascota
 // ---------------------------------------------------------------------------
-const CenterTabButton: React.FC<{
-  children: React.ReactNode;
-  onPress?: () => void;
-  accessibilityState?: {selected?: boolean};
-}> = ({children, onPress, accessibilityState}) => {
+type CenterTabButtonProps = Pick<
+  BottomTabBarButtonProps,
+  'children' | 'onPress' | 'accessibilityState'
+>;
+
+const CenterTabButton: React.FC<CenterTabButtonProps> = ({
+  children,
+  onPress,
+  accessibilityState,
+}) => {
   const isSelected = accessibilityState?.selected ?? false;
   return (
     <TouchableOpacity
@@ -116,7 +121,13 @@ const BottomTabNavigator: React.FC = () => {
         options={{
           tabBarLabel: TAB_LABELS.VITO,
           tabBarIcon: () => null,
-          tabBarButton: props => <CenterTabButton {...props} />,
+          tabBarButton: ({children, onPress, accessibilityState}) => (
+            <CenterTabButton
+              children={children}
+              onPress={onPress}
+              accessibilityState={accessibilityState}
+            />
+          ),
         }}
       />
 

@@ -85,6 +85,10 @@ export type DatosRelojInsert = {
   horas_sueno?: number | null;
   recorded_at?: string | null;
   sospechoso?: boolean | null;
+  /** Origen de dato: 'wearable' | 'manual' (HU-25 CA-02/CA-03, versionado/auditoría). Simetría con DatosReloj. */
+  origen?: OrigenDato | null;
+  /** id del registro wearable que ganó el conflicto y reemplazó a este (HU-25 CA-03). Simetría con DatosReloj. */
+  reemplazado_por?: string | null;
 };
 
 // ─── TABLA: dato_salud_ml (series de tiempo normalizado para ML) ───
@@ -258,7 +262,7 @@ export type PrediccionRiesgoInsert = Omit<PrediccionRiesgo, 'id' | 'created_at'>
 
 // ─── TABLA: alerta (HU-41 — Sistema de Alertas Inteligentes) ───
 export type TipoAlerta = 'hipoxia' | 'hipertension' | 'hipotension' | 'taquicardia' | 'bradicardia';
-export type SeveridadAlerta = 'INFO' | 'advertencia' | 'critica';
+export type SeveridadAlerta = 'INFO' | 'leve' | 'advertencia' | 'critica';
 
 /**
  * Datos flexibles almacenados en el jsonb `datos` de cada alerta.
