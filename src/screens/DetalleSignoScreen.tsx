@@ -8,7 +8,7 @@ import FlechaIcon from '../components/FlechaIcon';
 import ResumenEstadistico from '../components/ResumenEstadistico';
 import {useSupabase} from '../context/SupabaseProvider';
 import {getDatosReloj, getBaseline} from '../services/supabase/api';
-import type {DatoReloj, BaselineClinico} from '../services/supabase/models';
+import type {DatosReloj, BaselineClinico} from '../services/supabase/models';
 import {getDailyAveragesForRange} from '../services/HealthDataCache';
 import {
   VistaReporte,
@@ -36,8 +36,8 @@ const VISTAS: {key: VistaReporte; label: string}[] = [
 
 const DAY_LABELS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
-/** Extrae el valor numérico de un DatoReloj según el tipo de signo vital. */
-function extraerValor(dato: DatoReloj, tipo: TipoSignoVital): number | null {
+/** Extrae el valor numérico de un DatosReloj según el tipo de signo vital. */
+function extraerValor(dato: DatosReloj, tipo: TipoSignoVital): number | null {
   switch (tipo) {
     case 'frecuencia_cardiaca': return dato.frec_cardiaca_bpm;
     case 'presion_sistolica':   return dato.bp_sistolica;
@@ -63,7 +63,7 @@ function extraerValorCache(
 
 /** Agrupa registros por día y devuelve el promedio. */
 function agruparPorDia(
-  datos: DatoReloj[],
+  datos: DatosReloj[],
   tipo: TipoSignoVital,
   normalMin: number,
   normalMax: number,
@@ -302,22 +302,15 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
             noOfSections={5}
             yAxisOffset={0}
             formatYLabel={formatYLabel}
-            referenceLine={{
-              config: {
-                color: colors.primarySoft,
-                thickness: 1.5,
-                dashWidth: 6,
-                dashGap: 4,
-                labelComponent: () => (
-                  <Text style={styles.refLabel}>
-                    Normal: {normalMin}–{normalMax}
-                  </Text>
-                ),
-              },
-              value: refLineValue,
+            referenceLine1Config={{
+              color: colors.primarySoft,
+              thickness: 1.5,
+              dashWidth: 6,
+              dashGap: 4,
+              labelText: `Normal: ${normalMin}–${normalMax}`,
+              labelTextStyle: styles.refLabel,
             }}
-            onFocus={(item: {value: number; label: string; dataPointText: string}) => {}}
-            pressPointIndex={-1}
+            referenceLine1Position={refLineValue}
             hideRules={false}
             rulesColor={colors.border}
             rulesType="dashed"
@@ -383,15 +376,15 @@ function getBaselineRange(baseline: BaselineClinico, tipo: TipoSignoVital): {min
   return null;
 }
 
-/** Obtiene datos del cache local y los convierte a DatoReloj[] */
+/** Obtiene datos del cache local y los convierte a DatosReloj[] */
 async function getCacheData(
   desde: Date,
   hasta: Date,
   tipo: TipoSignoVital,
-): Promise<DatoReloj[]> {
+): Promise<DatosReloj[]> {
   try {
     const cached = await getDailyAveragesForRange(desde, hasta);
-    const datos: DatoReloj[] = [];
+    const datos: DatosReloj[] = [];
     for (const day of cached) {
       const val = extraerValorCache(day.averages, tipo);
       if (val != null && val > 0) {
@@ -403,8 +396,10 @@ async function getCacheData(
           bp_diastolica: day.averages.bloodPressureDiastolic,
           spo2_pct: day.averages.spo2Percent,
           temperatura: day.averages.bodyTemperatureCelsius,
+          nivel_estres: null,
           actividad_pasos: day.averages.steps,
           horas_sueno: day.averages.sleepMinutes / 60,
+          sospechoso: null,
           recorded_at: `${day.date}T12:00:00Z`,
         });
       }

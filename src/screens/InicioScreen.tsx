@@ -23,6 +23,7 @@ type RootStackParamList = {
     unit: string;
     icon: string;
   };
+  TodosLosSignos: undefined;
   RegistrarSintoma: undefined;
   HistorialSintomas: undefined;
 };
@@ -184,7 +185,11 @@ const InicioScreen: React.FC = () => {
       )}
 
       {error && (
-        <Card style={[styles.warningCard, errorSeverity === 'error' && styles.errorCard]}>
+        <Card
+          style={[
+            styles.warningCard,
+            ...(errorSeverity === 'error' ? [styles.errorCard] : []),
+          ]}>
           <Text style={styles.warningTitle}>
             {errorSeverity === 'error' ? 'Error' : 'Aviso'}
           </Text>

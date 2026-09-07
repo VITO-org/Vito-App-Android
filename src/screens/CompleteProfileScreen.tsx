@@ -76,7 +76,7 @@ const VITAL_RANGES = {
  */
 const CompleteProfileScreen: React.FC = () => {
   const navigation = useNavigation();
-  const {session, updateProfile, updateClinicalConfig, getUserId} = useSupabase();
+  const {session, updateProfile, getUserId} = useSupabase();
 
   const [nombre, setNombre] = useState('');
   const [apellido, setApellido] = useState('');
