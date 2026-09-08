@@ -178,7 +178,7 @@ const ConfiguracionScreen: React.FC = () => {
     }, [getUserId, session]),
   );
 
-  const {preferences: notifPrefs, updatePreferences: updateNotifPrefs, loading: notifLoading} = useNotifications();
+  const {preferences: notifPrefs, updatePreferences: updateNotifPrefs, updateHorarioSilencioso, loading: notifLoading} = useNotifications();
 
   // ── Persistir intervalo (CA-01): PATCH de una columna, no pisa el perfil ──
   const handleSeleccionarIntervalo = useCallback(
@@ -383,6 +383,42 @@ const ConfiguracionScreen: React.FC = () => {
               {notifPrefs.alertas_info ? 'ON' : 'OFF'}
             </Text>
           </TouchableOpacity>
+        </View>
+
+        <View style={styles.sectionDivider} />
+
+        {/* ── CA-05: Horario silencioso (las críticas siempre se entregan) ── */}
+        <View style={styles.notifRow}>
+          <View style={styles.notifInfo}>
+            <Text style={styles.notifLabel}>Horario silencioso</Text>
+            <Text style={styles.notifDesc}>
+              {notifPrefs.horario_silencioso_inicio && notifPrefs.horario_silencioso_fin
+                ? `No molestar ${notifPrefs.horario_silencioso_inicio.slice(0, 5)}–${notifPrefs.horario_silencioso_fin.slice(0, 5)} (críticas siempre llegan)`
+                : 'No molestar desactivado'}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.notifRow}>
+          {[
+            {label: '23–07', inicio: '23:00:00', fin: '07:00:00'},
+            {label: '22–06', inicio: '22:00:00', fin: '06:00:00'},
+            {label: '00–06', inicio: '00:00:00', fin: '06:00:00'},
+          ].map(preset => {
+            const activo =
+              notifPrefs.horario_silencioso_inicio === preset.inicio &&
+              notifPrefs.horario_silencioso_fin === preset.fin;
+            return (
+              <TouchableOpacity
+                key={preset.label}
+                style={[styles.toggleBtn, activo && styles.toggleActive]}
+                onPress={() => updateHorarioSilencioso(preset.inicio, preset.fin)}
+                disabled={notifLoading || !notifPrefs.push_habilitado}>
+                <Text style={[styles.toggleText, activo && styles.toggleTextActive]}>
+                  {preset.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </Card>
 
