@@ -7,11 +7,13 @@ import {
   FlatList,
   TouchableOpacity,
   RefreshControl,
+  ScrollView,
   ActivityIndicator,
   Modal,
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Linking,
 } from 'react-native';
 import {useNavigation, useFocusEffect} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
@@ -19,17 +21,31 @@ import Card from '../components/Card';
 import PrimaryButton from '../components/PrimaryButton';
 import {useSupabase} from '../context/SupabaseProvider';
 import {colors, spacing, fontSize} from '../theme';
-import {normalizarTelefono, validarContacto, FRECUENCIAS, RELACIONES} from '../services/contactos';
+import {
+  normalizarTelefono,
+  validarContacto,
+  FRECUENCIAS,
+  RELACIONES,
+  CANALES,
+  EVENTOS,
+  CANAL_DEFAULT,
+  EVENTOS_DEFAULT,
+  ES_PRINCIPAL_DEFAULT,
+  buildWhatsAppLink,
+} from '../services/contactos';
 import {
   getContactos,
   insertContacto,
   updateContacto,
   deleteContacto,
+  marcarPrincipal,
 } from '../services/supabase/api';
 import type {
   ContactoConfianza,
   FrecuenciaNotificacion,
   RelacionContacto,
+  CanalNotificacion,
+  TipoEventoNotificacion,
 } from '../services/supabase/models';
 import type {RootStackParamList} from '../navigation/RootNavigator';
 
@@ -42,6 +58,16 @@ function labelRelacion(valor: RelacionContacto): string {
 function labelFrecuencia(valor: FrecuenciaNotificacion): string {
   return FRECUENCIAS.find(f => f.valor === valor)?.label ?? valor;
 }
+
+function labelCanal(valor: CanalNotificacion): string {
+  return CANALES.find(c => c.valor === valor)?.label ?? valor;
+}
+
+function labelEvento(valor: TipoEventoNotificacion): string {
+  return EVENTOS.find(e => e.valor === valor)?.label ?? valor;
+}
+
+const MENSAJE_WHATSAPP = 'Mensaje de Vito';
 
 /**
  * Contactos de confianza (HU-16): lista de familiares/médicos con alta,
@@ -67,6 +93,9 @@ const ContactosConfianzaScreen: React.FC = () => {
   const [frecuencia, setFrecuencia] = useState<FrecuenciaNotificacion>(FRECUENCIA_DEFAULT);
   const [guardando, setGuardando] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [canal, setCanal] = useState<CanalNotificacion>(CANAL_DEFAULT);
+  const [tiposEvento, setTiposEvento] = useState<TipoEventoNotificacion[]>(EVENTOS_DEFAULT);
+  const [esPrincipal, setEsPrincipal] = useState(ES_PRINCIPAL_DEFAULT);
 
   const cargarContactos = useCallback(async () => {
     const userId = getUserId();
@@ -106,6 +135,9 @@ const ContactosConfianzaScreen: React.FC = () => {
     setTelefono('');
     setEmail('');
     setFrecuencia(FRECUENCIA_DEFAULT);
+    setCanal(CANAL_DEFAULT);
+    setTiposEvento(EVENTOS_DEFAULT);
+    setEsPrincipal(ES_PRINCIPAL_DEFAULT);
     setFormError(null);
     setGuardando(false);
   }, []);
@@ -134,6 +166,9 @@ const ContactosConfianzaScreen: React.FC = () => {
     setTelefono(c.telefono);
     setEmail(c.email);
     setFrecuencia(c.frecuencia_notificacion);
+    setCanal(c.canal);
+    setTiposEvento(c.tipos_evento);
+    setEsPrincipal(c.es_principal);
   }, [editandoId, contactos]);
 
   const confirmarEliminar = useCallback(
@@ -167,7 +202,16 @@ const ContactosConfianzaScreen: React.FC = () => {
   );
 
   const handleGuardar = useCallback(async () => {
-    const form = {nombre, relacion, telefono, email, frecuencia_notificacion: frecuencia};
+    const form = {
+      nombre,
+      relacion,
+      telefono,
+      email,
+      frecuencia_notificacion: frecuencia,
+      canal,
+      tipos_evento: tiposEvento,
+      es_principal: esPrincipal,
+    };
     const err = validarContacto(form, {
       email: session?.user?.email,
       telefono: profile?.telefono ?? null,
@@ -195,6 +239,9 @@ const ContactosConfianzaScreen: React.FC = () => {
             telefono: normalizarTelefono(telefono),
             email: email.trim().toLowerCase(),
             frecuencia_notificacion: frecuencia,
+            canal,
+            tipos_evento: tiposEvento,
+            es_principal: esPrincipal,
           },
           session?.access_token,
         );
@@ -207,6 +254,9 @@ const ContactosConfianzaScreen: React.FC = () => {
             telefono: normalizarTelefono(telefono),
             email: email.trim().toLowerCase(),
             frecuencia_notificacion: frecuencia,
+            canal,
+            tipos_evento: tiposEvento,
+            es_principal: false,
           },
           session?.access_token,
         );
@@ -226,6 +276,9 @@ const ContactosConfianzaScreen: React.FC = () => {
     telefono,
     email,
     frecuencia,
+    canal,
+    tiposEvento,
+    esPrincipal,
     editandoId,
     session,
     profile,
@@ -234,37 +287,119 @@ const ContactosConfianzaScreen: React.FC = () => {
     cargarContactos,
   ]);
 
+  const handleCambiarPrincipal = useCallback(() => {
+    const userId = getUserId();
+    if (!userId || !editandoId) return;
+    const nuevoValor = !esPrincipal;
+    if (!nuevoValor) {
+      setEsPrincipal(false);
+      return;
+    }
+    if (esPrincipal) return;
+    const otroPrincipal = contactos.find(c => c.es_principal && c.id !== editandoId);
+    if (otroPrincipal) {
+      Alert.alert(
+        'Marcar como principal',
+        `¿Querés marcar a ${nombre.trim()} como contacto principal? Esto reemplazará a ${otroPrincipal.nombre}.`,
+        [
+          {text: 'Cancelar', style: 'cancel'},
+          {
+            text: 'Confirmar',
+            onPress: async () => {
+              try {
+                await marcarPrincipal(editandoId, userId, session?.access_token);
+                setEsPrincipal(true);
+                cargarContactos();
+              } catch (e: unknown) {
+                Alert.alert('Error', (e as {message?: string}).message ?? 'No se pudo cambiar el contacto principal.');
+              }
+            },
+          },
+        ],
+      );
+    } else {
+      setEsPrincipal(true);
+    }
+  }, [editandoId, esPrincipal, nombre, contactos, getUserId, session, cargarContactos]);
+
+  const accionWhatsApp = useCallback((contacto: ContactoConfianza) => {
+    Linking.openURL(buildWhatsAppLink(contacto.telefono, MENSAJE_WHATSAPP));
+  }, []);
+
+  const toggleEvento = useCallback((evento: TipoEventoNotificacion) => {
+    setTiposEvento(prev =>
+      prev.includes(evento) ? prev.filter(e => e !== evento) : [...prev, evento],
+    );
+  }, []);
+
   const renderContacto = useCallback(
-    ({item}: {item: ContactoConfianza}) => (
-      <Card>
-        <View style={styles.cardHeader}>
-          <Text style={styles.cardNombre}>{item.nombre}</Text>
-          <View style={styles.relacionBadge}>
-            <Text style={styles.relacionBadgeText}>{labelRelacion(item.relacion)}</Text>
+    ({item}: {item: ContactoConfianza}) => {
+      const badgeBg =
+        item.estado_opt_in === 'pendiente'
+          ? styles.estadoPendiente
+          : item.estado_opt_in === 'confirmado'
+          ? styles.estadoConfirmado
+          : item.estado_opt_in === 'rechazado'
+          ? styles.estadoRechazado
+          : styles.estadoVencido;
+      const badgeText =
+        item.estado_opt_in === 'pendiente'
+          ? styles.estadoPendienteText
+          : item.estado_opt_in === 'confirmado'
+          ? styles.estadoConfirmadoText
+          : item.estado_opt_in === 'rechazado'
+          ? styles.estadoRechazadoText
+          : styles.estadoVencidoText;
+      const eventoStr = item.tipos_evento.map(t => labelEvento(t).toLowerCase()).join(', ');
+      return (
+        <Card>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardNombre}>{item.nombre}</Text>
+            <View style={styles.badgesRow}>
+              {item.es_principal && (
+                <Text style={styles.principalBadge}>Principal</Text>
+              )}
+              <View style={[styles.estadoBadge, badgeBg]}>
+                <Text style={[styles.estadoBadgeText, badgeText]}>
+                  {item.estado_opt_in}
+                </Text>
+              </View>
+              <View style={styles.relacionBadge}>
+                <Text style={styles.relacionBadgeText}>{labelRelacion(item.relacion)}</Text>
+              </View>
+            </View>
           </View>
-        </View>
 
-        <View style={styles.cardContacto}>
-          <Text style={styles.cardContactoLine}>📞 {item.telefono}</Text>
-          <Text style={styles.cardContactoLine}>✉️ {item.email}</Text>
-        </View>
-
-        <View style={styles.cardFooter}>
-          <Text style={styles.frecuenciaLabel}>
-            Frecuencia: {labelFrecuencia(item.frecuencia_notificacion)}
-          </Text>
-          <View style={styles.cardAcciones}>
-            <TouchableOpacity onPress={() => abrirEdicion(item)} hitSlop={8}>
-              <Text style={styles.accionEditar}>Editar</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => confirmarEliminar(item)} hitSlop={8}>
-              <Text style={styles.accionEliminar}>Eliminar</Text>
-            </TouchableOpacity>
+          <View style={styles.cardContacto}>
+            <Text style={styles.cardContactoLine}>📞 {item.telefono}</Text>
+            <Text style={styles.cardContactoLine}>✉️ {item.email}</Text>
+            <Text style={styles.cardContactoLine}>
+              Canal: {labelCanal(item.canal)} · {eventoStr}
+            </Text>
           </View>
-        </View>
-      </Card>
-    ),
-    [abrirEdicion, confirmarEliminar],
+
+          <View style={styles.cardFooter}>
+            <Text style={styles.frecuenciaLabel}>
+              Frecuencia: {labelFrecuencia(item.frecuencia_notificacion)}
+            </Text>
+            <View style={styles.cardAcciones}>
+              {item.canal === 'whatsapp' && (
+                <TouchableOpacity onPress={() => accionWhatsApp(item)} hitSlop={8}>
+                  <Text style={styles.accionSecundaria}>WhatsApp</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity onPress={() => abrirEdicion(item)} hitSlop={8}>
+                <Text style={styles.accionEditar}>Editar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => confirmarEliminar(item)} hitSlop={8}>
+                <Text style={styles.accionEliminar}>Eliminar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Card>
+      );
+    },
+    [abrirEdicion, confirmarEliminar, accionWhatsApp],
   );
 
   const listaVacia = (
@@ -329,8 +464,13 @@ const ContactosConfianzaScreen: React.FC = () => {
         onRequestClose={cerrarModal}>
         <View style={styles.modalOverlay}>
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-            <View style={styles.modalSheet}>
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.modalKav}>
+            <ScrollView
+              style={styles.modalSheet}
+              contentContainerStyle={styles.modalContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}>
               <Text style={styles.modalTitle}>
                 {editandoId ? 'Editar contacto' : 'Nuevo contacto'}
               </Text>
@@ -421,6 +561,76 @@ const ContactosConfianzaScreen: React.FC = () => {
                 ))}
               </View>
 
+              {/* Canal (selector segmentado) */}
+              <Text style={styles.label}>Canal de notificación</Text>
+              <View style={styles.segmentRow}>
+                {CANALES.map(c => (
+                  <TouchableOpacity
+                    key={c.valor}
+                    activeOpacity={0.7}
+                    style={[
+                      styles.segmentButton,
+                      canal === c.valor && styles.segmentButtonActive,
+                    ]}
+                    onPress={() => setCanal(c.valor)}>
+                    <Text
+                      style={[
+                        styles.segmentText,
+                        canal === c.valor && styles.segmentTextActive,
+                      ]}>
+                      {c.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Eventos (pills multi-select) */}
+              <Text style={styles.label}>Tipos de evento *</Text>
+              <View style={styles.frecuenciaWrap}>
+                {EVENTOS.map(e => (
+                  <TouchableOpacity
+                    key={e.valor}
+                    activeOpacity={0.7}
+                    style={[
+                      styles.frecuenciaButton,
+                      tiposEvento.includes(e.valor) && styles.frecuenciaButtonActive,
+                    ]}
+                    onPress={() => toggleEvento(e.valor)}>
+                    <Text
+                      style={[
+                        styles.frecuenciaOptionText,
+                        tiposEvento.includes(e.valor) && styles.frecuenciaOptionTextActive,
+                      ]}>
+                      {tiposEvento.includes(e.valor) ? '✓ ' : ''}
+                      {e.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Principal (toggle ON/OFF, solo edición) */}
+              {editandoId && (
+                <View style={styles.principalRow}>
+                  <View style={styles.principalInfo}>
+                    <Text style={styles.principalLabel}>Contacto principal</Text>
+                    <Text style={styles.principalDesc}>
+                      Recibe todas las alertas (máximo uno por usuario)
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[
+                      styles.toggleBtn,
+                      esPrincipal && styles.toggleActive,
+                    ]}
+                    onPress={handleCambiarPrincipal}>
+                    <Text
+                      style={[styles.toggleText, esPrincipal && styles.toggleTextActive]}>
+                      {esPrincipal ? 'ON' : 'OFF'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
               <PrimaryButton
                 title="Guardar contacto"
                 onPress={handleGuardar}
@@ -433,7 +643,7 @@ const ContactosConfianzaScreen: React.FC = () => {
                 disabled={guardando}>
                 <Text style={styles.modalCancelText}>Cancelar</Text>
               </TouchableOpacity>
-            </View>
+            </ScrollView>
           </KeyboardAvoidingView>
         </View>
       </Modal>
@@ -496,6 +706,54 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     marginRight: 8,
   },
+  badgesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  principalBadge: {
+    backgroundColor: colors.primaryDark,
+    borderRadius: spacing.badgeBorderRadius,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    fontSize: fontSize.badge,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    overflow: 'hidden',
+  },
+  estadoBadge: {
+    borderRadius: spacing.badgeBorderRadius,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  estadoPendiente: {
+    backgroundColor: colors.warningLight,
+  },
+  estadoPendienteText: {
+    color: colors.warning,
+  },
+  estadoConfirmado: {
+    backgroundColor: colors.successLight,
+  },
+  estadoConfirmadoText: {
+    color: colors.success,
+  },
+  estadoRechazado: {
+    backgroundColor: colors.dangerLight,
+  },
+  estadoRechazadoText: {
+    color: colors.danger,
+  },
+  estadoVencido: {
+    backgroundColor: colors.backgroundLight,
+  },
+  estadoVencidoText: {
+    color: colors.textSecondary,
+  },
+  estadoBadgeText: {
+    fontSize: fontSize.badge,
+    fontWeight: '600',
+  },
   relacionBadge: {
     backgroundColor: colors.successLight,
     borderRadius: spacing.badgeBorderRadius,
@@ -538,6 +796,11 @@ const styles = StyleSheet.create({
     fontSize: fontSize.caption,
     fontWeight: '700',
     color: colors.primary,
+  },
+  accionSecundaria: {
+    fontSize: fontSize.caption,
+    fontWeight: '700',
+    color: colors.primaryTeal,
   },
   accionEliminar: {
     fontSize: fontSize.caption,
@@ -589,10 +852,15 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'flex-end',
   },
+  modalKav: {
+    maxHeight: '92%',
+  },
   modalSheet: {
     backgroundColor: colors.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
+  },
+  modalContent: {
     paddingHorizontal: spacing.screenPaddingHorizontal,
     paddingTop: 20,
     paddingBottom: 28,
@@ -699,6 +967,51 @@ const styles = StyleSheet.create({
     fontSize: fontSize.body,
     color: colors.textSecondary,
     fontWeight: '600',
+  },
+
+  // ── Principal (toggle ON/OFF) ──
+  principalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    marginTop: 14,
+    paddingTop: 12,
+  },
+  principalInfo: {
+    flexShrink: 1,
+    marginRight: 12,
+  },
+  principalLabel: {
+    fontSize: fontSize.body,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  principalDesc: {
+    fontSize: fontSize.caption,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  toggleBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  toggleActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  toggleText: {
+    fontSize: fontSize.caption,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  toggleTextActive: {
+    color: '#FFFFFF',
   },
 });
 

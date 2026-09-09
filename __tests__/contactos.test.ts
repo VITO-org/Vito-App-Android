@@ -18,8 +18,15 @@ import {
   buildGetContactosQuery,
   buildDeleteContactoQuery,
   buildUpdateContactoQuery,
+  buildWhatsAppLink,
+  resolverReemplazoPrincipal,
   FRECUENCIAS,
   RELACIONES,
+  CANALES,
+  EVENTOS,
+  CANAL_DEFAULT,
+  EVENTOS_DEFAULT,
+  ES_PRINCIPAL_DEFAULT,
 } from '../src/services/contactos';
 import type {ContactoForm} from '../src/services/contactos';
 
@@ -30,6 +37,9 @@ function formValido(): ContactoForm {
     telefono: '+54 11 5555-1234',
     email: 'juan@casa.com',
     frecuencia_notificacion: 'diaria',
+    canal: 'app_interna',
+    tipos_evento: ['fisiologico', 'medicacion'],
+    es_principal: false,
   };
 }
 
@@ -221,6 +231,127 @@ describe('RELACIONES', () => {
     for (const r of RELACIONES) {
       expect(r.valor).toBeTruthy();
       expect(r.label).toBeTruthy();
+    }
+  });
+});
+
+// ═══════════════════════════════════════════
+// validarContacto: canal y tipos_evento (HU-54)
+// ═══════════════════════════════════════════
+
+describe('validarContacto — canal', () => {
+  test('canal fuera del catálogo → error', () => {
+    expect(
+      validarContacto({...formValido(), canal: 'fax' as never}),
+    ).toBe('Elegí el canal de notificación');
+  });
+
+  test('canales válidos → null', () => {
+    expect(validarContacto({...formValido(), canal: 'app_interna'})).toBeNull();
+    expect(validarContacto({...formValido(), canal: 'whatsapp'})).toBeNull();
+  });
+});
+
+describe('validarContacto — tipos_evento', () => {
+  test('tipos_evento vacío → error', () => {
+    expect(validarContacto({...formValido(), tipos_evento: []})).toBe(
+      'Elegí al menos un tipo de evento',
+    );
+  });
+
+  test('tipos_evento con valor fuera del enum → error', () => {
+    expect(
+      validarContacto({...formValido(), tipos_evento: ['fisiologico', 'telepatia' as never]}),
+    ).toBe('Tipo de evento inválido');
+  });
+
+  test('tipos_evento válidos → null', () => {
+    expect(validarContacto({...formValido(), tipos_evento: ['fisiologico']})).toBeNull();
+    expect(
+      validarContacto({...formValido(), tipos_evento: ['fisiologico', 'medicacion', 'estado_animo']}),
+    ).toBeNull();
+  });
+});
+
+// ═══════════════════════════════════════════
+// buildWhatsAppLink (HU-54)
+// ═══════════════════════════════════════════
+
+describe('buildWhatsAppLink', () => {
+  test('quita el + y conserva solo dígitos', () => {
+    expect(buildWhatsAppLink('+541155551234', 'Hola')).toBe(
+      'https://wa.me/541155551234?text=Hola',
+    );
+  });
+
+  test('sin + mantiene el mismo resultado', () => {
+    expect(buildWhatsAppLink('541155551234', 'Hola')).toBe(
+      'https://wa.me/541155551234?text=Hola',
+    );
+  });
+
+  test('texto con espacios y caracteres especiales → encodeURIComponent', () => {
+    expect(buildWhatsAppLink('+541155551234', 'Hola ¿Cómo estás?')).toBe(
+      'https://wa.me/541155551234?text=Hola%20%C2%BFC%C3%B3mo%20est%C3%A1s%3F',
+    );
+  });
+});
+
+// ═══════════════════════════════════════════
+// resolverReemplazoPrincipal (HU-54)
+// ═══════════════════════════════════════════
+
+describe('resolverReemplazoPrincipal', () => {
+  test('mismo id → null (no-op)', () => {
+    expect(resolverReemplazoPrincipal('c1', 'c1')).toBeNull();
+  });
+
+  test('hay principal viejo → desmarcar el viejo, marcar el nuevo', () => {
+    expect(resolverReemplazoPrincipal('c1', 'c2')).toEqual({
+      desmarcar: ['c1'],
+      marcar: 'c2',
+    });
+  });
+
+  test('sin principal → solo marcar', () => {
+    expect(resolverReemplazoPrincipal(null, 'c2')).toEqual({
+      desmarcar: [],
+      marcar: 'c2',
+    });
+  });
+});
+
+// ═══════════════════════════════════════════
+// Defaults (HU-54)
+// ═══════════════════════════════════════════
+
+describe('defaults HU-54', () => {
+  test('CANAL_DEFAULT / EVENTOS_DEFAULT / ES_PRINCIPAL_DEFAULT correctos', () => {
+    expect(CANAL_DEFAULT).toBe('app_interna');
+    expect(EVENTOS_DEFAULT).toContain('fisiologico');
+    expect(ES_PRINCIPAL_DEFAULT).toBe(false);
+  });
+});
+
+describe('CANALES', () => {
+  test('2 opciones con valor y label no vacíos', () => {
+    expect(CANALES).toHaveLength(2);
+    for (const c of CANALES) {
+      expect(c.valor).toBeTruthy();
+      expect(c.label).toBeTruthy();
+    }
+  });
+});
+
+describe('EVENTOS', () => {
+  test('3 opciones: fisiologico, medicacion, estado_animo', () => {
+    expect(EVENTOS).toHaveLength(3);
+    const valores = EVENTOS.map(e => e.valor);
+    expect(valores).toEqual(
+      expect.arrayContaining(['fisiologico', 'medicacion', 'estado_animo']),
+    );
+    for (const e of EVENTOS) {
+      expect(e.label).toBeTruthy();
     }
   });
 });

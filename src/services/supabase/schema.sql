@@ -350,11 +350,14 @@ CREATE INDEX idx_baseline_personalizado_pendientes
   ON baseline_personalizado(ultima_actualizacion);
 
 -- ============================================
--- 15. CONTACTO_CONFIANZA (HU-16 — registro de contactos de confianza)
+-- 15. CONTACTO_CONFIANZA (HU-16/HU-54 — registro de contactos de confianza)
 --     Una fila por contacto del usuario (familiar / médico / otro) con
 --     la frecuencia de notificación preferida por contacto.
+--     HU-54 agrega: tipos_evento (jsonb), canal, estado_opt_in (dato, sin flujo),
+--     es_principal (constraint parcial único: un solo principal por usuario).
 --     RLS (select/insert/update/delete own + service_role_all): ver
---     scripts/migrations/2026-09-08_hu16_contacto_confianza.sql
+--     scripts/migrations/2026-09-08_hu16_contacto_confianza.sql y
+--     scripts/migrations/2026-09-09_hu54_configuracion_notificaciones_contacto.sql
 -- ============================================
 CREATE TABLE contacto_confianza (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -365,6 +368,12 @@ CREATE TABLE contacto_confianza (
   email varchar(255) NOT NULL,
   frecuencia_notificacion varchar(20) NOT NULL DEFAULT 'inmediata'
     CHECK (frecuencia_notificacion IN ('inmediata', 'diaria', 'semanal', 'sin_notificaciones')),
+  tipos_evento jsonb NOT NULL DEFAULT '["fisiologico"]',
+  canal varchar(20) NOT NULL DEFAULT 'app_interna'
+    CHECK (canal IN ('app_interna', 'whatsapp')),
+  estado_opt_in varchar(20) NOT NULL DEFAULT 'pendiente'
+    CHECK (estado_opt_in IN ('pendiente', 'confirmado', 'rechazado', 'vencido')),
+  es_principal boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
@@ -372,4 +381,8 @@ CREATE TABLE contacto_confianza (
 CREATE INDEX idx_contacto_confianza_usuario
   ON contacto_confianza(id_usuario);
 
-COMMENT ON TABLE public.contacto_confianza IS 'Contactos de confianza del usuario (HU-16). RLS: solo el dueño (auth.uid()=id_usuario) puede select/insert/update/delete.';
+CREATE UNIQUE INDEX contacto_confianza_un_principal
+  ON contacto_confianza(id_usuario)
+  WHERE es_principal = true;
+
+COMMENT ON TABLE public.contacto_confianza IS 'Contactos de confianza del usuario (HU-16/HU-54). RLS: solo el dueño (auth.uid()=id_usuario) puede select/insert/update/delete.';
