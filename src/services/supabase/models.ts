@@ -350,6 +350,27 @@ export interface NotificacionEntrega {
 }
 export type NotificacionEntregaInsert = Omit<NotificacionEntrega, 'id' | 'created_at'> & { id?: string; created_at?: string };
 
+// ─── TABLA: contacto_confianza (HU-16 — registro de contactos de confianza) ───
+export type RelacionContacto = 'familiar' | 'medico' | 'otro';
+export type FrecuenciaNotificacion = 'inmediata' | 'diaria' | 'semanal' | 'sin_notificaciones';
+
+export interface ContactoConfianza {
+  id: string;
+  id_usuario: string;
+  nombre: string;
+  relacion: RelacionContacto;
+  telefono: string;
+  email: string;
+  frecuencia_notificacion: FrecuenciaNotificacion;
+  created_at: string | null;
+  updated_at: string | null;
+}
+export type ContactoConfianzaInsert = Omit<ContactoConfianza, 'id' | 'created_at' | 'updated_at'> & {
+  id?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
 // ─── Application-level types ───
 
 export interface HealthSummaryForSync {

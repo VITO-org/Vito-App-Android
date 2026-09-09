@@ -1,6 +1,7 @@
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from './client';
 import { normalizeVital } from '../vitals';
 import { expandDatosRelojToDatoSaludML } from '../datoSaludML';
+import { buildGetContactosQuery, buildDeleteContactoQuery, buildUpdateContactoQuery } from '../contactos';
 import type {
   PerfilUsuario,
   BaselineClinico,
@@ -27,6 +28,8 @@ import type {
   DispositivoUsuarioInsert,
   PreferenciaNotificacion,
   PreferenciaNotificacionInsert,
+  ContactoConfianza,
+  ContactoConfianzaInsert,
 } from './models';
 
 // ═══════════════════════════════════════════
@@ -937,4 +940,61 @@ export async function upsertPreferenciaNotificacion(
   const row = rows[0];
   if (!row) throw new Error('No se pudieron guardar las preferencias');
   return row;
+}
+
+// ═══════════════════════════════════════════
+// CONTACTOS DE CONFIANZA (HU-16)
+// ═══════════════════════════════════════════
+
+export async function getContactos(
+  userId: string,
+  accessToken?: string | null,
+): Promise<ContactoConfianza[]> {
+  const rows = await rawRestFetch<ContactoConfianza[]>('contacto_confianza', {
+    query: buildGetContactosQuery(userId), // 'select=*&id_usuario=eq.<userId>&order=nombre.asc'
+    accessToken,
+  });
+  return rows ?? [];
+}
+
+export async function insertContacto(
+  contacto: ContactoConfianzaInsert,
+  accessToken?: string | null,
+): Promise<ContactoConfianza> {
+  const rows = await rawRestFetch<ContactoConfianza[]>('contacto_confianza', {
+    method: 'POST',
+    body: { ...contacto, updated_at: new Date().toISOString() },
+    prefer: 'return=representation',
+    accessToken,
+  });
+  const row = rows[0];
+  if (!row) throw new Error('No se pudo crear el contacto');
+  return row;
+}
+
+export async function updateContacto(
+  id: string,
+  cambios: Partial<Omit<ContactoConfianzaInsert, 'id_usuario'>>,
+  accessToken?: string | null,
+): Promise<void> {
+  await rawRestFetch<null>('contacto_confianza', {
+    method: 'PATCH',
+    body: { ...cambios, updated_at: new Date().toISOString() },
+    prefer: 'return=minimal',
+    query: buildUpdateContactoQuery(id), // 'id=eq.<id>'
+    accessToken,
+  });
+}
+
+export async function deleteContacto(
+  id: string,
+  idUsuario: string,
+  accessToken?: string | null,
+): Promise<void> {
+  await rawRestFetch<null>('contacto_confianza', {
+    method: 'DELETE',
+    prefer: 'return=minimal',
+    query: buildDeleteContactoQuery(id, idUsuario), // 'id=eq.<id>&id_usuario=eq.<idUsuario>'
+    accessToken,
+  });
 }
