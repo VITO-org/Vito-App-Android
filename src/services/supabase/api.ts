@@ -994,7 +994,34 @@ export async function deleteContacto(
   await rawRestFetch<null>('contacto_confianza', {
     method: 'DELETE',
     prefer: 'return=minimal',
-    query: buildDeleteContactoQuery(id, idUsuario), // 'id=eq.<id>&id_usuario=eq.<idUsuario>'
+    query: buildDeleteContactoQuery(id, idUsuario),
+    accessToken,
+  });
+}
+
+/**
+ * Marca un contacto como principal (es_principal=true) y desmarca
+ * los anteriores. 2 updates secuenciales: desmarcar todos → marcar el nuevo.
+ * El constraint parcial UNIQUE en DB es safety net contra race conditions.
+ */
+export async function marcarPrincipal(
+  contactoId: string,
+  userId: string,
+  accessToken?: string | null,
+): Promise<void> {
+  const now = new Date().toISOString();
+  await rawRestFetch<null>('contacto_confianza', {
+    method: 'PATCH',
+    body: {es_principal: false, updated_at: now},
+    prefer: 'return=minimal',
+    query: `id_usuario=eq.${userId}`,
+    accessToken,
+  });
+  await rawRestFetch<null>('contacto_confianza', {
+    method: 'PATCH',
+    body: {es_principal: true, updated_at: now},
+    prefer: 'return=minimal',
+    query: `id=eq.${contactoId}`,
     accessToken,
   });
 }

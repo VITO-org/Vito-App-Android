@@ -5,6 +5,8 @@
 import type {
   FrecuenciaNotificacion,
   RelacionContacto,
+  CanalNotificacion,
+  TipoEventoNotificacion,
 } from './supabase/models';
 
 export type ContactoForm = {
@@ -13,6 +15,9 @@ export type ContactoForm = {
   telefono: string;
   email: string;
   frecuencia_notificacion: FrecuenciaNotificacion;
+  canal: CanalNotificacion;
+  tipos_evento: TipoEventoNotificacion[];
+  es_principal: boolean;
 };
 
 export const FRECUENCIAS: {valor: FrecuenciaNotificacion; label: string}[] = [
@@ -26,6 +31,21 @@ export const RELACIONES: {valor: RelacionContacto; label: string}[] = [
   {valor: 'familiar', label: 'Familiar'},
   {valor: 'medico', label: 'Médico'},
   {valor: 'otro', label: 'Otro'},
+];
+
+export const CANAL_DEFAULT: CanalNotificacion = 'app_interna';
+export const EVENTOS_DEFAULT: TipoEventoNotificacion[] = ['fisiologico'];
+export const ES_PRINCIPAL_DEFAULT = false;
+
+export const CANALES: {valor: CanalNotificacion; label: string}[] = [
+  {valor: 'app_interna', label: 'App de Vito'},
+  {valor: 'whatsapp', label: 'WhatsApp'},
+];
+
+export const EVENTOS: {valor: TipoEventoNotificacion; label: string}[] = [
+  {valor: 'fisiologico', label: 'Fisiológicos'},
+  {valor: 'medicacion', label: 'Medicación'},
+  {valor: 'estado_animo', label: 'Estado de ánimo'},
 ];
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -71,6 +91,15 @@ export function validarContacto(
   const frecuenciaValida = FRECUENCIAS.some(f => f.valor === form.frecuencia_notificacion);
   if (!frecuenciaValida) return 'Frecuencia de notificación inválida';
 
+  const canalValido = CANALES.some(c => c.valor === form.canal);
+  if (!canalValido) return 'Elegí el canal de notificación';
+
+  if (!form.tipos_evento || form.tipos_evento.length === 0) {
+    return 'Elegí al menos un tipo de evento';
+  }
+  const eventosValidos = form.tipos_evento.every(t => EVENTOS.some(e => e.valor === t));
+  if (!eventosValidos) return 'Tipo de evento inválido';
+
   if (email.toLowerCase() === authed?.email?.toLowerCase()) {
     return 'No podés agregarte a vos mismo como contacto';
   }
@@ -93,4 +122,27 @@ export function buildDeleteContactoQuery(id: string, idUsuario: string): string 
 
 export function buildUpdateContactoQuery(id: string): string {
   return `id=eq.${id}`;
+}
+
+/** Construye un link wa.me con el teléfono (solo dígitos) y mensaje encodeado. */
+export function buildWhatsAppLink(telefono: string, mensaje: string): string {
+  const digitos = telefono.replace(/[^0-9]/g, '');
+  return `https://wa.me/${digitos}?text=${encodeURIComponent(mensaje)}`;
+}
+
+/**
+ * Resuelve el reemplazo de principal entre dos contactos.
+ * - Mismo id → null (no-op)
+ * - Hay principal viejo → {desmarcar: [viejo], marcar: nuevo}
+ * - No hay principal → {desmarcar: [], marcar: nuevo}
+ */
+export function resolverReemplazoPrincipal(
+  actualPrincipalId: string | null,
+  nuevoId: string,
+): {desmarcar: string[]; marcar: string} | null {
+  if (actualPrincipalId === nuevoId) return null;
+  return {
+    desmarcar: actualPrincipalId ? [actualPrincipalId] : [],
+    marcar: nuevoId,
+  };
 }

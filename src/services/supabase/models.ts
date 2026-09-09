@@ -350,9 +350,12 @@ export interface NotificacionEntrega {
 }
 export type NotificacionEntregaInsert = Omit<NotificacionEntrega, 'id' | 'created_at'> & { id?: string; created_at?: string };
 
-// ─── TABLA: contacto_confianza (HU-16 — registro de contactos de confianza) ───
+// ─── TABLA: contacto_confianza (HU-16 / HU-54 — registro de contactos de confianza) ───
 export type RelacionContacto = 'familiar' | 'medico' | 'otro';
 export type FrecuenciaNotificacion = 'inmediata' | 'diaria' | 'semanal' | 'sin_notificaciones';
+export type CanalNotificacion = 'app_interna' | 'whatsapp';
+export type TipoEventoNotificacion = 'fisiologico' | 'medicacion' | 'estado_animo';
+export type EstadoOptIn = 'pendiente' | 'confirmado' | 'rechazado' | 'vencido';
 
 export interface ContactoConfianza {
   id: string;
@@ -362,13 +365,22 @@ export interface ContactoConfianza {
   telefono: string;
   email: string;
   frecuencia_notificacion: FrecuenciaNotificacion;
+  tipos_evento: TipoEventoNotificacion[];
+  canal: CanalNotificacion;
+  estado_opt_in: EstadoOptIn;
+  es_principal: boolean;
   created_at: string | null;
   updated_at: string | null;
 }
-export type ContactoConfianzaInsert = Omit<ContactoConfianza, 'id' | 'created_at' | 'updated_at'> & {
+export type ContactoConfianzaInsert = Omit<
+  ContactoConfianza,
+  'id' | 'created_at' | 'updated_at' | 'estado_opt_in'
+> & {
   id?: string;
   created_at?: string;
   updated_at?: string;
+  /** Dato con default 'pendiente' en DB; el alta no lo envía. */
+  estado_opt_in?: EstadoOptIn;
 };
 
 // ─── Application-level types ───
