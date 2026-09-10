@@ -12,6 +12,7 @@ import TodosLosSignosScreen from '../screens/TodosLosSignosScreen';
 import RegistrarSintomaScreen from '../screens/RegistrarSintomaScreen';
 import HistorialSintomasScreen from '../screens/HistorialSintomasScreen';
 import ContactosConfianzaScreen from '../screens/ContactosConfianzaScreen';
+import PrediccionRiesgoScreen from '../screens/PrediccionRiesgoScreen';
 import {useSupabase} from '../context/SupabaseProvider';
 
 export type RootStackParamList = {
@@ -31,6 +32,7 @@ export type RootStackParamList = {
   RegistrarSintoma: undefined;
   HistorialSintomas: undefined;
   ContactosConfianza: undefined;
+  PrediccionRiesgo: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -112,6 +114,13 @@ function RootNavigatorContent() {
         <Stack.Screen
           name="ContactosConfianza"
           component={ContactosConfianzaScreen}
+          options={{animation: 'slide_from_right'}}
+        />
+      )}
+      {session && (
+        <Stack.Screen
+          name="PrediccionRiesgo"
+          component={PrediccionRiesgoScreen}
           options={{animation: 'slide_from_right'}}
         />
       )}

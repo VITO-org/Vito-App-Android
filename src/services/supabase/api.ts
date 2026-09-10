@@ -668,6 +668,61 @@ export async function getHistorialPredicciones(
   return (data as PrediccionRiesgo[]) ?? [];
 }
 
+/**
+ * Respuesta de la Edge Function `prediccion-riesgo`.
+ * (La Edge Function devuelve esto + persiste la fila en prediccion_riesgo.)
+ */
+export interface PrediccionRiesgoApiResponse {
+  riesgo: 'bajo' | 'medio' | 'alto';
+  score: number;
+  modelo_version: string;
+  factores_mas_influyentes: Record<string, number>;
+  prediccion_id: string | null;
+  disclaimer: string;
+}
+
+/**
+ * Llama a la Edge Function `prediccion-riesgo` (ML Cloud, modelo RandomForest
+ * Kaggle-Cardio 70k exportado como risk_model_trees.json).
+ *
+ * Mismo patrón que rawRestFetch: fetch directo + JWT del header Authorization.
+ * El payload `vector` es armado por src/services/prediccionRiesgo.ts
+ * (buildPredictionPayload) con el orden FEATURE_ORDER de 10 features.
+ */
+export async function callPrediccionRiesgo(
+  vector: number[],
+  accessToken?: string | null,
+): Promise<PrediccionRiesgoApiResponse> {
+  const token = await resolveAccessToken(accessToken);
+  const url = `${SUPABASE_URL}/functions/v1/prediccion-riesgo`;
+  const headers: Record<string, string> = {
+    apikey: SUPABASE_ANON_KEY,
+    Authorization: `Bearer ${token}`,
+    'Content-Type': 'application/json',
+  };
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ vector }),
+  });
+
+  if (!res.ok) {
+    let message = `HTTP ${res.status}`;
+    try {
+      const errBody = (await res.json()) as { error?: string; message?: string };
+      message = errBody.error ?? errBody.message ?? message;
+    } catch {
+      // cuerpo no JSON → mensaje genérico
+    }
+    const err = new Error(message) as Error & { status?: number };
+    err.status = res.status;
+    throw err;
+  }
+
+  return (await res.json()) as PrediccionRiesgoApiResponse;
+}
+
 // ═══════════════════════════════════════════
 // PROMEDIO SEMANAL ML (solo lectura — lo llena pipeline Python)
 // ═══════════════════════════════════════════

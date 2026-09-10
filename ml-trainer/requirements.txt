@@ -1,10 +1,13 @@
-pandas==2.2.3
-numpy==1.26.4
-scikit-learn==1.5.1
-matplotlib==3.9.2
-seaborn==0.13.2
-jupyter==1.0.0
-tensorflow==2.17.0
-xgboost==2.1.1
-imbalanced-learn==0.12.4
-shap==0.46.0
+# Pipeline ML VITO (HU-91, evolución cloud).
+# ACAVE: NO requiere TensorFlow — el export es ONNX vía skl2onnx.
+# Python 3.14 puede no tener wheels para todas las versiones fijadas:
+# si pip falla, crear venv con Python 3.11/3.12 (pyenv) o usar rangos flexibles.
+pandas>=2.2.3
+numpy>=1.26.4
+scikit-learn>=1.5.1
+joblib>=1.4.2
+skl2onnx>=1.17.0
+onnx>=1.16.2
+# Solo necesarios para evaluate.py (plots). Opcional si no se corre evaluate.
+matplotlib>=3.9.2
+seaborn>=0.13.2

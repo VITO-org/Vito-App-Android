@@ -1,0 +1,32 @@
+{
+  "modelo": "RandomForestClassifier",
+  "modelo_version": "v1.0.0",
+  "features": [
+    "age",
+    "sex_male",
+    "bmi",
+    "bp_sistolica",
+    "bp_diastolica",
+    "cholesterol_ord",
+    "diabetes",
+    "smoking",
+    "alcohol",
+    "active"
+  ],
+  "n_features": 10,
+  "classes": [
+    0,
+    1
+  ],
+  "target": "cardio",
+  "test_accuracy": 0.7357,
+  "test_roc_auc": 0.8008,
+  "n_train": 54638,
+  "n_test": 13660,
+  "score_umbral_medio": 33,
+  "score_umbral_alto": 66,
+  "dataset": "cardio_train.csv (Kaggle Cardiovascular, 70k registros, se\u00f1al real)",
+  "arquitectura": "cloud edge function (Deno + ONNX) \u2014 reemplaza TFLite on-device HU-91",
+  "nota_clinica": "Modelo sobre dataset poblacional p\u00fablico: evaluaci\u00f3n educativa, NO diagn\u00f3stico m\u00e9dico.",
+  "deuda_documentada": "Features que Vito recolecta pero el dataset cardio no soporta (FC, estr\u00e9s, sue\u00f1o, dieta, antecedentes, medicaci\u00f3n, triglic\u00e9ridos) quedan fuera del modelo v1."
+}

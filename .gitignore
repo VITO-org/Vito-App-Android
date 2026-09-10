@@ -53,3 +53,11 @@ ml-trainer/models/
 
 *.deb
 *.apk
+
+# ML Trainer venv (Python 3.11)
+.ml-trainer-venv/
+
+# Datasets derivados (regenerables con label_data.py + features.py)
+ml-trainer/data/dataset_labeled.csv
+ml-trainer/data/features.csv
+ml-trainer/data/cardio_train.csv

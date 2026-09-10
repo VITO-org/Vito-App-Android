@@ -1,62 +1,66 @@
-import pandas as pd
-import numpy as np
+"""
+Feature engineering para el pipeline de VITO (HU-91, evolución cloud).
 
-INPUT_PATH = "data/dataset_labeled.csv"
-OUTPUT_PATH = "data/features.csv"
+Lee data/dataset_labeled.csv (salida de label_data.py) y genera
+data/features.csv con EXACTAMENTE las 10 features del contrato (FEATURE_ORDER
+de src/services/prediccionRiesgo.ts) + target binario `cardio`.
+
+CONTRATO DE ORDEN: el modelo ONNX NO expone nombres, solo índices. Índice 0 =
+age, índice 9 = active, etc. No se agregan features derivadas fuera del
+contrato: la app RN solo puede enviar lo que el contrato define.
+"""
+
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+
+INPUT_PATH = Path("data/dataset_labeled.csv")
+OUTPUT_PATH = Path("data/features.csv")
+
+# Mismo orden que label_data.py / src/services/prediccionRiesgo.ts
+FEATURE_ORDER = [
+    "age",
+    "sex_male",
+    "bmi",
+    "bp_sistolica",
+    "bp_diastolica",
+    "cholesterol_ord",
+    "diabetes",
+    "smoking",
+    "alcohol",
+    "active",
+]
+
+TARGET = "cardio"
 
 
 def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
-    features = df.copy()
+    """Valida integridad y reordena según el contrato."""
+    missing = [c for c in FEATURE_ORDER if c not in df.columns]
+    if missing:
+        raise SystemExit(f"Faltan features del contrato: {missing}")
 
-    # Age groups
-    features["age_group"] = pd.cut(
-        features["age"],
-        bins=[0, 30, 40, 50, 60, 120],
-        labels=[0, 1, 2, 3, 4]
-    ).astype(float)
-
-    # Heart rate pressure product (RPP = HR * SBP / 100)
-    if "thalach" in features and "trestbps" in features:
-        features["rpp"] = features["thalach"] * features["trestbps"] / 100.0
-
-    # Cholesterol ratio (chol / HDL) — fallback if HDL not available
-    if "chol" in features and "fbs" in features:
-        features["chol_fbs_ratio"] = features["chol"] / (features["fbs"] + 1)
-
-    # Mean arterial pressure (MAP = DBP + 1/3 * (SBP - DBP))
-    # Using trestbps as SBP estimate
-    if "trestbps" in features:
-        features["map_estimate"] = features["trestbps"] * 0.666 + 60.0
-
-    # ST segment slope severity
-    if "oldpeak" in features and "slope" in features:
-        features["st_severity"] = features["oldpeak"] * features["slope"]
-
-    # Max heart rate percentage (approx: 220 - age)
-    if "thalach" in features and "age" in features:
-        features["hr_percent"] = features["thalach"] / (220.0 - features["age"])
-
-    # Exercise angina interaction
-    if "exang" in features and "oldpeak" in features:
-        features["angina_st_depression"] = features["exang"] * features["oldpeak"]
-
-    # Simple risk interaction terms
-    if all(c in features for c in ["age", "chol", "trestbps"]):
-        features["age_chol_bp"] = (
-            features["age"].rank(pct=True)
-            * features["chol"].rank(pct=True)
-            * features["trestbps"].rank(pct=True)
-        )
-
-    return features
+    out = df[FEATURE_ORDER + [TARGET]].copy()
+    return out
 
 
 def main():
+    if not INPUT_PATH.exists():
+        raise SystemExit(f"No existe {INPUT_PATH}. Corré primero label_data.py")
+
     df = pd.read_csv(INPUT_PATH)
-    df_feat = engineer_features(df)
-    df_feat.to_csv(OUTPUT_PATH, index=False)
-    print(f"Features engineered. Shape: {df_feat.shape}")
-    print(f"Columns: {list(df_feat.columns)}")
+    features = engineer_features(df)
+
+    nulls = features.isnull().sum()
+    null_cols = nulls[nulls > 0]
+    if not null_cols.empty:
+        print("⚠️ Columnas con nulls:", null_cols.to_dict())
+
+    features.to_csv(OUTPUT_PATH, index=False)
+    print(f"Features → {OUTPUT_PATH} ({features.shape[0]} filas, {features.shape[1]} col)")
+    print("Columnas:", list(features.columns))
+    print("Target:", features[TARGET].value_counts().to_dict())
 
 
 if __name__ == "__main__":

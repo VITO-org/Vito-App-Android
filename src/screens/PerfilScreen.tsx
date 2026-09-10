@@ -56,6 +56,10 @@ const PerfilScreen: React.FC = () => {
     navigation.navigate('ContactosConfianza');
   };
 
+  const handleNavigatePrediccionRiesgo = () => {
+    navigation.navigate('PrediccionRiesgo');
+  };
+
   const handleSignOut = () => {
     Alert.alert(
       'Cerrar sesión',
@@ -112,6 +116,7 @@ const PerfilScreen: React.FC = () => {
       {/* Opciones */}
       <Card>
         {([
+          {icon: '❤️', label: 'Riesgo cardiovascular', onPress: handleNavigatePrediccionRiesgo},
           {icon: '📋', label: 'Datos personales', onPress: handleNavigateEditarPerfil, iconSource: require('../assets/icons/ic-datos-personales.png')},
           {icon: '👥', label: 'Contactos de confianza', onPress: handleNavigateContactos},
           {icon: '⚙️', label: 'Configuración', onPress: handleNavigateConfiguracion, iconSource: require('../assets/icons/ic-ajustes.png')},
@@ -121,7 +126,7 @@ const PerfilScreen: React.FC = () => {
         ] as PerfilOptionProps[]).map((opt, i) => (
           <React.Fragment key={opt.label}>
             <PerfilOption {...opt} />
-            {i < 5 && <View style={styles.divider} />}
+            {i < 6 && <View style={styles.divider} />}
           </React.Fragment>
         ))}
       </Card>

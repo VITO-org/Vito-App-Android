@@ -1,31 +1,42 @@
-import pandas as pd
-import numpy as np
+"""
+Evaluación del modelo de riesgo cardiovascular (HU-91, evolución cloud).
+
+Lee data/features.csv (target cardio binario), carga el joblib de train.py si
+existe (si no, re-entrena) y produce reportes + plots en models/reports/.
+Umbrales de riesgo bajo/medio/alto: 33/66 sobre score 0-100 (mapearRiesgo()).
+"""
+
 import json
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import seaborn as sns
-import os
 from pathlib import Path
 
-from sklearn.model_selection import train_test_split, cross_val_score
-from sklearn.preprocessing import LabelEncoder, StandardScaler
+import joblib
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn as sns
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import (
+    ConfusionMatrixDisplay,
     classification_report,
     confusion_matrix,
-    ConfusionMatrixDisplay,
     roc_auc_score,
-    precision_recall_fscore_support,
 )
+from sklearn.model_selection import cross_val_score, train_test_split
 
-INPUT_PATH = "data/features.csv"
-MODEL_DIR = "models"
-REPORT_DIR = os.path.join(MODEL_DIR, "reports")
-METADATA_PATH = os.path.join(MODEL_DIR, "metadata.json")
+INPUT_PATH = Path("data/features.csv")
+MODEL_DIR = Path("models")
+REPORT_DIR = MODEL_DIR / "reports"
+JOBLIB_MODEL_PATH = MODEL_DIR / "risk_model.joblib"
 
-TARGET_COL = "riesgo"
-FEATURE_DROP = [TARGET_COL, "id", "patient_id", "timestamp"]
+TARGET = "cardio"
+
+FEATURE_ORDER = [
+    "age", "sex_male", "bmi", "bp_sistolica", "bp_diastolica",
+    "cholesterol_ord", "diabetes", "smoking", "alcohol", "active",
+]
 
 
 def plot_confusion_matrix(y_true, y_pred, labels, path: str):
@@ -40,7 +51,7 @@ def plot_confusion_matrix(y_true, y_pred, labels, path: str):
     print(f"Matriz guardada en {path}")
 
 
-def plot_feature_importance(model, feature_names: list[str], top_n: int = 15, path: str = None):
+def plot_feature_importance(model, feature_names, top_n=15, path=None):
     importances = model.feature_importances_
     indices = np.argsort(importances)[::-1][:top_n]
 
@@ -57,64 +68,62 @@ def plot_feature_importance(model, feature_names: list[str], top_n: int = 15, pa
 
 
 def main():
-    os.makedirs(REPORT_DIR, exist_ok=True)
+    if not INPUT_PATH.exists():
+        raise SystemExit(f"No existe {INPUT_PATH}. Corré primero label_data.py + features.py")
+
+    REPORT_DIR.mkdir(exist_ok=True)
 
     df = pd.read_csv(INPUT_PATH)
-    drop_cols = [c for c in FEATURE_DROP if c in df.columns]
-    X = df.drop(columns=drop_cols)
-    y = df[TARGET_COL]
-    X = X.select_dtypes(include=[np.number]).fillna(0)
-
-    le = LabelEncoder()
-    y_encoded = le.fit_transform(y)
-
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
+    X = df[FEATURE_ORDER].copy()
+    y = df[TARGET].astype(int)
 
     X_train, X_test, y_train, y_test = train_test_split(
-        X_scaled, y, test_size=0.2, random_state=42, stratify=y_encoded
+        X, y, test_size=0.2, random_state=42, stratify=y
     )
 
-    rf = RandomForestClassifier(
-        n_estimators=200,
-        max_depth=12,
-        min_samples_leaf=4,
-        class_weight="balanced",
-        random_state=42,
-        n_jobs=-1,
-    )
-    rf.fit(X_train, y_train)
+    if JOBLIB_MODEL_PATH.exists():
+        rf = joblib.load(JOBLIB_MODEL_PATH)
+        print(f"Modelo cargado desde {JOBLIB_MODEL_PATH}")
+    else:
+        rf = RandomForestClassifier(
+            n_estimators=300,
+            max_depth=14,
+            min_samples_leaf=3,
+            class_weight="balanced",
+            random_state=42,
+            n_jobs=-1,
+        )
+        rf.fit(X_train, y_train)
+        print("Modelo re-entrenado (no existía el joblib).")
 
     y_pred = rf.predict(X_test)
+    y_prob = rf.predict_proba(X_test)[:, 1]
 
-    report = classification_report(y_test, y_pred, output_dict=True)
-    cm = confusion_matrix(y_test, y_pred)
+    print("=== Reporte de Clasificación (test) ===")
+    print(classification_report(y_test, y_pred, digits=4))
+    print(f"ROC-AUC: {roc_auc_score(y_test, y_prob):.4f}")
 
-    print("=== Reporte de Clasificación ===")
-    print(classification_report(y_test, y_pred))
+    plot_confusion_matrix(y_test, y_pred, [0, 1],
+                          str(REPORT_DIR / "confusion_matrix.png"))
+    plot_feature_importance(rf, FEATURE_ORDER,
+                            path=str(REPORT_DIR / "feature_importance.png"))
 
-    # Matriz de confusión
-    plot_confusion_matrix(y_test, y_pred, le.classes_.tolist(),
-                          os.path.join(REPORT_DIR, "confusion_matrix.png"))
-
-    # Feature importance
-    plot_feature_importance(rf, X.columns.tolist(),
-                            path=os.path.join(REPORT_DIR, "feature_importance.png"))
-
-    # Cross-validation
-    cv_scores = cross_val_score(rf, X_scaled, y_encoded, cv=5, scoring="accuracy")
+    cv_scores = cross_val_score(rf, X, y, cv=5, scoring="accuracy")
     print(f"\nCross-validation (5-folds): mean={cv_scores.mean():.4f} ± {cv_scores.std():.4f}")
 
-    # Guardar reporte como JSON
-    report_path = os.path.join(REPORT_DIR, "evaluation_report.json")
-    with open(report_path, "w") as f:
+    report = classification_report(y_test, y_pred, output_dict=True)
+    with open(REPORT_DIR / "evaluation_report.json", "w") as f:
         json.dump({
             "classification_report": report,
-            "confusion_matrix": cm.tolist(),
+            "confusion_matrix": confusion_matrix(y_test, y_pred).tolist(),
+            "roc_auc": round(float(roc_auc_score(y_test, y_prob)), 4),
             "cv_mean_accuracy": round(float(cv_scores.mean()), 4),
             "cv_std_accuracy": round(float(cv_scores.std()), 4),
+            "feature_importance": {
+                f: round(float(imp), 4) for f, imp in
+                zip(FEATURE_ORDER, rf.feature_importances_)
+            },
         }, f, indent=2)
-
     print(f"\nReportes guardados en {REPORT_DIR}/")
 
 
