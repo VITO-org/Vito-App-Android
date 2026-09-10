@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "91802697932",
+    "project_id": "vito-39dda",
+    "storage_bucket": "vito-39dda.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:91802697932:android:1e7636d6ff10490d628269",
+        "android_client_info": {
+          "package_name": "com.vito.healthconnect.rn"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDqdhaVnJtaY6Ic32pEXS6MSddUu_Cy5LQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

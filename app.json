@@ -8,6 +8,7 @@
     "orientation": "portrait",
     "android": {
       "package": "com.vito.healthconnect.rn",
+      "googleServicesFile": "./android/app/google-services.json",
       "versionCode": 1,
       "permissions": [
         "android.permission.health.READ_HEART_RATE",
