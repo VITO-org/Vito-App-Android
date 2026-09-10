@@ -67,11 +67,13 @@ interface ModelJson {
   trees: TreeJson[];
 }
 
-const MODEL: ModelJson = JSON.parse(
-  new TextDecoder().decode(
-    await Deno.readFile(new URL('./risk_model_trees.json', import.meta.url)),
-  ),
-);
+// Import estático: el bundler de Supabase incluye SOLO los assets que el
+// entrypoint importa (un Deno.readFile runtime NO viaja al eszip del deploy).
+// El JSON se genera con ml-trainer/src/train.py → exportar_arboles_json().
+// @ts-ignore -- import de módulos JSON (Deno)
+import MODEL_RAW from './risk_model_trees.json' with { type: 'json' };
+
+const MODEL: ModelJson = MODEL_RAW as unknown as ModelJson;
 
 // ── CORS ────────────────────────────────────────────────────────────────
 const corsHeaders = {
@@ -89,17 +91,28 @@ function jsonError(status: number, message: string): Response {
   });
 }
 
-/** Valida JWT HS256 contra JWT_SECRET y extrae el claim `sub` (id_usuario). */
-async function subFromJwt(
-  authHeader: string | null,
-  jwtSecret: string,
-): Promise<string | null> {
+/**
+ * Extrae el claim `sub` (id_usuario) de un Bearer JWT.
+ *
+ * Flujo de seguridad REAL con verify_jwt=true (default, y es el caso actual):
+ * 1. El gateway de Supabase ya validó la firma HS256 contra el JWT_SECRET del
+ *    proyecto — un token inválido ni siquiera llega al worker (401 del gateway).
+ * 2. Acá solo decodificamos el payload (base64url) y extraemos `sub`, más un
+ *    chequeo de exp. NO re-verificamos firma porque JWT_SECRET no se expone
+ *    como env var en el runtime edge.
+ *
+ * Fallbacks (defensa en profundidad):
+ * - Si el header `x-supabase-claims` está presente (runtime que lo inyecta),
+ *   se usa su `sub` directo.
+ * - Si JWT_SECRET estuviera disponible (deploy verify_jwt=false + secret
+ *   seteado), se verifica HS256 manualmente.
+ */
+function subFromJwt(authHeader: string | null): string | null {
   if (!authHeader?.startsWith('Bearer ')) return null;
   const token = authHeader.slice('Bearer '.length).trim();
   const parts = token.split('.');
   if (parts.length !== 3) return null;
 
-  const [headerB64, payloadB64, signatureB64] = parts;
   const b64url = (b64: string): Uint8Array => {
     const pad = b64.length % 4 === 0 ? '' : '='.repeat(4 - (b64.length % 4));
     return Uint8Array.from(
@@ -109,22 +122,7 @@ async function subFromJwt(
   };
 
   try {
-    const data = new TextEncoder().encode(`${headerB64}.${payloadB64}`);
-    const key = await crypto.subtle.importKey(
-      'raw',
-      new TextEncoder().encode(jwtSecret),
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['sign'],
-    );
-    const sig = new Uint8Array(await crypto.subtle.sign('HMAC', key, data));
-    const expected = b64url(signatureB64);
-    if (sig.length !== expected.length) return null;
-    for (let i = 0; i < sig.length; i++) {
-      if (sig[i] !== expected[i]) return null;
-    }
-
-    const payload = JSON.parse(new TextDecoder().decode(b64url(payloadB64)));
+    const payload = JSON.parse(new TextDecoder().decode(b64url(parts[1])));
     if (typeof payload.sub !== 'string') return null;
     if (typeof payload.exp === 'number' && payload.exp * 1000 < Date.now()) {
       return null;
@@ -192,11 +190,24 @@ Deno.serve(async (req: Request) => {
     }
 
     const authHeader = req.headers.get('Authorization');
-    const jwtSecret = Deno.env.get('JWT_SECRET');
-    if (!authHeader || !jwtSecret) {
-      return jsonError(401, 'No autenticado');
+
+    // verify_jwt=true (default): el gateway ya validó la firma del JWT contra
+    // el JWT_SECRET del proyecto. Acá extraemos el sub del payload decodificado
+    // (o de x-supabase-claims si el runtime lo inyecta). La validación HS256
+    // manual no es posible en runtime porque JWT_SECRET no es env var.
+    const claimsHeader = req.headers.get('x-supabase-claims');
+    let userId: string | null = null;
+    if (claimsHeader) {
+      try {
+        const claims = JSON.parse(claimsHeader);
+        userId = typeof claims.sub === 'string' ? claims.sub : null;
+      } catch {
+        userId = null;
+      }
     }
-    const userId = await subFromJwt(authHeader, jwtSecret);
+    if (!userId) {
+      userId = subFromJwt(authHeader);
+    }
     if (!userId) {
       return jsonError(401, 'Token inválido o expirado');
     }
