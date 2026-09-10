@@ -1,8 +1,15 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { useSupabase } from './SupabaseProvider';
+
+// EAS projectId (app.json extra.eas.projectId). Obligatorio en APK
+// standalone: getExpoPushTokenAsync() sin projectId tira en físico.
+const EAS_PROJECT_ID =
+  (Constants.expoConfig?.extra as any)?.eas?.projectId ??
+  'fa67daf3-789f-4cc2-a373-ceb1507c4a50';
 import { registerDispositivo, getPreferenciaNotificacion, upsertPreferenciaNotificacion, marcarRecibidaPorAlerta, marcarLeidaPorAlerta } from '../services/supabase/api';
 import type { DispositivoUsuario } from '../services/supabase/models';
 
@@ -148,7 +155,7 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!hasPermission) return;
 
     try {
-      const tokenData = await Notifications.getExpoPushTokenAsync();
+      const tokenData = await Notifications.getExpoPushTokenAsync({ projectId: EAS_PROJECT_ID });
       const token = tokenData.data;
       setExpoPushToken(token);
 

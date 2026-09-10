@@ -282,7 +282,10 @@ export interface PreferenciaNotificacion {
 export type PreferenciaNotificacionInsert = Omit<PreferenciaNotificacion, 'updated_at'> & { updated_at?: string };
 
 // ─── TABLA: notificacion_entrega (registro de entregas push) ───
-export type EstadoNotificacion = 'enviada' | 'recibida' | 'leida';
+// 'fallida' la escribe la Edge Function evaluar-evento server-side
+// (token revocado / error Expo / excepción de red). La app local sólo
+// usa 'enviada' | 'recibida' | 'leida'.
+export type EstadoNotificacion = 'enviada' | 'recibida' | 'leida' | 'fallida';
 
 export interface NotificacionEntrega {
   id: string;
