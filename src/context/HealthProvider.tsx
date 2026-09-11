@@ -21,11 +21,13 @@ import {
   insertDatosReloj,
   markDatosRelojReemplazado,
   insertAlerta,
+  getAlertas,
   getAlertasActivas,
   marcarAlertaLeida,
   updateAlertaDatos,
   insertDatosRelojYML,
   SyncMLPartialError,
+  getBaselinePersonalizado,
 } from '../services/supabase/api';
 import type {Alerta} from '../services/supabase/models';
 import {sendAlertNotification} from '../services/notifications';
@@ -164,6 +166,14 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
               bpm: r.frec_cardiaca_bpm as number,
               recordedAt: r.recorded_at as string,
             }));
+        },
+        // HU-98: baseline personalizado para umbrales adaptativos (fallback estándar si falla)
+        getPersonalizedBaseline: async (uid) => {
+          try {
+            return await getBaselinePersonalizado(uid);
+          } catch {
+            return null;
+          }
         },
       });
 
@@ -372,7 +382,7 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
     const userId = getUserId();
     if (!userId) return;
     try {
-      const alerts = await getAlertasActivas(userId);
+      const alerts = await getAlertas(userId);
       setActiveAlerts(alerts);
     } catch {
       // Best-effort: don't crash the app if alerts can't be loaded
@@ -418,7 +428,7 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
     refreshData,
     // HU-41: Alertas
     activeAlerts,
-    activeAlertsCount: activeAlerts.length,
+    activeAlertsCount: activeAlerts.filter(a => !a.leida_en).length,
     confirmAlert,
     refreshAlerts,
   };

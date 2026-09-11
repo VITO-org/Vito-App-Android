@@ -10,8 +10,10 @@ import PrimaryButton from '../components/PrimaryButton';
 import AppIcon, {type AppIconName} from '../components/AppIcon';
 import VitoAvatar from '../components/VitoAvatar';
 import StatusIndicator from '../components/StatusIndicator';
+import ActiveAlertsBanner from '../components/ActiveAlertsBanner';
 import {colors, spacing, fontSize, shadows} from '../theme';
 import {buildSignosFromSummary, getMetricasBienestar} from '../utils/signosVitales';
+
 
 type RootStackParamList = {
   MainTabs: undefined;
@@ -21,6 +23,7 @@ type RootStackParamList = {
     unit: string;
     icon: string;
   };
+  TodosLosSignos: undefined;
   RegistrarSintoma: undefined;
   HistorialSintomas: undefined;
 };
@@ -42,6 +45,9 @@ const InicioScreen: React.FC = () => {
     lastSync,
     requestPermissionsAndLoad,
     refreshData,
+    activeAlerts,
+    confirmAlert,
+    refreshAlerts,
   } = useHealth();
   const {session, profile} = useSupabase();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -75,7 +81,7 @@ const InicioScreen: React.FC = () => {
   }, [hcStatus, permissionsGranted, loading, error, summary, requestPermissionsAndLoad, refreshData]);
 
   // Construir vitals desde la fuente única de datos
-  const allSignos = buildSignosFromSummary(summary);
+  const allSignos = buildSignosFromSummary(summary, lastSync);
 
   // InicioScreen: solo signos vitales (excluye bienestar),
   // combina sistólica+diastólica en un solo card "Presión arterial"
@@ -139,6 +145,13 @@ const InicioScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
+      {/* ── Alertas activas (HU-37) ── */}
+      <ActiveAlertsBanner
+        alerts={activeAlerts}
+        onDismiss={confirmAlert}
+        onSeeAll={() => navigation.navigate('Alertas' as any)}
+      />
+
       {/* ── Card Estado General ── */}
       <Card>
         <View style={styles.statusRow}>
@@ -172,7 +185,11 @@ const InicioScreen: React.FC = () => {
       )}
 
       {error && (
-        <Card style={[styles.warningCard, errorSeverity === 'error' && styles.errorCard]}>
+        <Card
+          style={[
+            styles.warningCard,
+            ...(errorSeverity === 'error' ? [styles.errorCard] : []),
+          ]}>
           <Text style={styles.warningTitle}>
             {errorSeverity === 'error' ? 'Error' : 'Aviso'}
           </Text>

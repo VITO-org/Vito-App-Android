@@ -268,13 +268,11 @@ CREATE TABLE preferencia_notificacion (
     push_habilitado boolean DEFAULT true,
     alertas_criticas boolean DEFAULT true,
     alertas_info boolean DEFAULT true,
-    horario_silencioso_inicio time DEFAULT '23:00:00',
-    horario_silencioso_fin time DEFAULT '07:00:00',
     updated_at timestamptz DEFAULT now()
 );
 
 -- ============================================
--- 13. NOTIFICACION_ENTREGA (registro de entregas push)
+-- 13. NOTIFICACION_ENTREGA (Fase 2 — registro de entregas push)
 -- ============================================
 CREATE TABLE notificacion_entrega (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -294,3 +292,103 @@ CREATE INDEX idx_notificacion_entrega_alerta
 
 CREATE INDEX idx_notificacion_entrega_usuario
   ON notificacion_entrega(id_usuario);
+
+-- ============================================
+-- 14. BASELINE_PERSONALIZADO (HU-98 — baseline personalizado por paciente)
+--     Una fila por usuario con stats por métrica (media, desv. estándar,
+--     P25, P75). Referida como "§9" en el documento de diseño HU-98.
+--     RLS + funciones de cálculo: ver scripts/migrations/2026-08-23_hu98_baseline_personalizado.sql
+-- ============================================
+CREATE TABLE baseline_personalizado (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id_usuario UUID NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
+
+  -- ── FC (lpm) ──
+  hr_media NUMERIC(6,2),
+  hr_desv_std NUMERIC(6,2),
+  hr_p25 NUMERIC(6,2),
+  hr_p75 NUMERIC(6,2),
+  hr_n_muestras INTEGER,
+
+  -- ── PA sistólica (mmHg) ──
+  bp_sist_media NUMERIC(6,2),
+  bp_sist_desv_std NUMERIC(6,2),
+  bp_sist_p25 NUMERIC(6,2),
+  bp_sist_p75 NUMERIC(6,2),
+  bp_sist_n_muestras INTEGER,
+
+  -- ── PA diastólica (mmHg) ──
+  bp_diast_media NUMERIC(6,2),
+  bp_diast_desv_std NUMERIC(6,2),
+  bp_diast_p25 NUMERIC(6,2),
+  bp_diast_p75 NUMERIC(6,2),
+  bp_diast_n_muestras INTEGER,
+
+  -- ── SpO2 (%) ──
+  spo2_media NUMERIC(5,2),
+  spo2_desv_std NUMERIC(5,2),
+  spo2_p25 NUMERIC(5,2),
+  spo2_p75 NUMERIC(5,2),
+  spo2_n_muestras INTEGER,
+
+  -- ── Temperatura (°C) ──
+  temp_media NUMERIC(5,2),
+  temp_desv_std NUMERIC(5,2),
+  temp_p25 NUMERIC(5,2),
+  temp_p75 NUMERIC(5,2),
+  temp_n_muestras INTEGER,
+
+  -- ── Metadata del cálculo ──
+  dias_historial INTEGER,
+  ventana_dias INTEGER NOT NULL DEFAULT 28,
+  es_valido BOOLEAN NOT NULL DEFAULT FALSE,
+
+  ultima_actualizacion TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Índice único sobre id_usuario: lookup + soporte de upsert (ON CONFLICT).
+CREATE UNIQUE INDEX idx_baseline_personalizado_usuario
+  ON baseline_personalizado(id_usuario);
+
+CREATE INDEX idx_baseline_personalizado_pendientes
+  ON baseline_personalizado(ultima_actualizacion);
+
+-- ============================================
+-- 15. CONTACTO_CONFIANZA (HU-16/HU-54 — registro de contactos de confianza)
+--     Una fila por contacto del usuario (familiar / médico / otro) con
+--     la frecuencia de notificación preferida por contacto.
+--     HU-54 agrega: tipos_evento (jsonb), canal, estado_opt_in (dato, sin flujo),
+--     es_principal (constraint parcial único: un solo principal por usuario).
+--     RLS (select/insert/update/delete own + service_role_all): ver
+--     scripts/migrations/2026-09-08_hu16_contacto_confianza.sql y
+--     scripts/migrations/2026-09-09_hu54_configuracion_notificaciones_contacto.sql
+-- ============================================
+CREATE TABLE contacto_confianza (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  id_usuario uuid NOT NULL REFERENCES public.usuario(id) ON DELETE CASCADE,
+  nombre varchar(120) NOT NULL,
+  relacion varchar(20) NOT NULL CHECK (relacion IN ('familiar', 'medico', 'otro')),
+  telefono varchar(30) NOT NULL,
+  email varchar(255) NOT NULL,
+  frecuencia_notificacion varchar(20) NOT NULL DEFAULT 'inmediata'
+    CHECK (frecuencia_notificacion IN ('inmediata', 'diaria', 'semanal', 'sin_notificaciones')),
+  tipos_evento jsonb NOT NULL DEFAULT '["fisiologico"]',
+  canal varchar(20) NOT NULL DEFAULT 'app_interna'
+    CHECK (canal IN ('app_interna', 'whatsapp')),
+  estado_opt_in varchar(20) NOT NULL DEFAULT 'pendiente'
+    CHECK (estado_opt_in IN ('pendiente', 'confirmado', 'rechazado', 'vencido')),
+  es_principal boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_contacto_confianza_usuario
+  ON contacto_confianza(id_usuario);
+
+CREATE UNIQUE INDEX contacto_confianza_un_principal
+  ON contacto_confianza(id_usuario)
+  WHERE es_principal = true;
+
+COMMENT ON TABLE public.contacto_confianza IS 'Contactos de confianza del usuario (HU-16/HU-54). RLS: solo el dueño (auth.uid()=id_usuario) puede select/insert/update/delete.';

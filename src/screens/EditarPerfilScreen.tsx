@@ -32,7 +32,7 @@ const SEXOS: {key: SexoBiologico; label: string}[] = [
  */
 const EditarPerfilScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const {session, profile, updateProfile, updateClinicalConfig, getUserId} = useSupabase();
+  const {session, profile, updateProfile, getUserId} = useSupabase();
 
   // ── Estado del formulario ──
   const [nombre, setNombre] = useState('');

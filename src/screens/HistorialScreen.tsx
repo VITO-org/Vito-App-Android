@@ -17,7 +17,7 @@ import {useSupabase} from '../context/SupabaseProvider';
 import {useHealth} from '../context/HealthProvider';
 import {getDatosReloj} from '../services/supabase/api';
 import {getDailyAveragesForRange, type DailyAverages} from '../services/HealthDataCache';
-import type {DatoReloj} from '../services/supabase/models';
+import type {DatosReloj} from '../services/supabase/models';
 import type {HealthSummary} from '../types/health';
 import {NORMAL_RANGES} from '../data/mockReportes';
 import {buildSignosFromResumen, type Resumen} from '../utils/signosVitales';
@@ -42,7 +42,7 @@ const PERIODOS: {key: Periodo; label: string; dias: number}[] = [
   {key: '90d', label: '90 días', dias: 90},
 ];
 
-function calcularResumen(datos: DatoReloj[]): Resumen {
+function calcularResumen(datos: DatosReloj[]): Resumen {
   const acc = {
     fc: [] as number[],
     sist: [] as number[],
@@ -133,7 +133,7 @@ const HistorialScreen: React.FC = () => {
 
   const [periodo, setPeriodo] = useState<Periodo>('7d');
   const [loading, setLoading] = useState(true);
-  const [datos, setDatos] = useState<DatoReloj[]>([]);
+  const [datos, setDatos] = useState<DatosReloj[]>([]);
   const [cacheDays, setCacheDays] = useState<{date: string; averages: DailyAverages}[]>([]);
   const [usingCache, setUsingCache] = useState(false);
 
@@ -153,7 +153,7 @@ const HistorialScreen: React.FC = () => {
       const desde = new Date(Date.now() - dias * 24 * 60 * 60 * 1000);
 
       // 1️⃣ Intentar desde Supabase (datos_reloj)
-      let dbData: DatoReloj[] = [];
+      let dbData: DatosReloj[] = [];
       try {
         const result = await getDatosReloj(userId, {
           from: desde.toISOString(),
@@ -306,7 +306,7 @@ const HistorialScreen: React.FC = () => {
 
   // ─── Últimas lecturas ───
   // Si hay datos de DB, mostrar individuales; si no, mostrar promedios diarios del caché
-  const ultimasLecturas: DatoReloj[] = datos.length > 0
+  const ultimasLecturas: DatosReloj[] = datos.length > 0
     ? [...datos]
         .sort((a, b) => new Date(b.recorded_at ?? 0).getTime() - new Date(a.recorded_at ?? 0).getTime())
         .slice(0, 20)
@@ -325,6 +325,7 @@ const HistorialScreen: React.FC = () => {
             nivel_estres: null,
             actividad_pasos: d.averages.steps ? Math.round(d.averages.steps) : null,
             horas_sueno: d.averages.sleepMinutes > 0 ? d.averages.sleepMinutes / 60 : null,
+            sospechoso: null,
             recorded_at: d.date + 'T12:00:00',
           }))
       : [];

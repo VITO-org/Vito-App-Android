@@ -211,7 +211,7 @@ const HistorialSintomasScreen: React.FC = () => {
       ) : (
         <FlatList
           data={filtrados}
-          keyExtractor={item => item.id}
+          keyExtractor={item => `${item.id_usuario}_${item.recorded_at ?? item.fecha ?? item.id_sintomas}`}
           renderItem={renderSintoma}
           contentContainerStyle={styles.listContent}
           refreshControl={

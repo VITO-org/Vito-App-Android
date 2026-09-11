@@ -1,9 +1,11 @@
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from './client';
 import { normalizeVital } from '../vitals';
 import { expandDatosRelojToDatoSaludML } from '../datoSaludML';
+import { buildGetContactosQuery, buildDeleteContactoQuery, buildUpdateContactoQuery } from '../contactos';
 import type {
   PerfilUsuario,
   BaselineClinico,
+  BaselinePersonalizado,
   DatosReloj,
   DatosRelojInsert,
   DatoSaludML,
@@ -26,6 +28,8 @@ import type {
   DispositivoUsuarioInsert,
   PreferenciaNotificacion,
   PreferenciaNotificacionInsert,
+  ContactoConfianza,
+  ContactoConfianzaInsert,
   NotificacionEntrega,
   NotificacionEntregaInsert,
 } from './models';
@@ -492,6 +496,41 @@ export async function upsertBaseline(
 }
 
 // ═══════════════════════════════════════════
+// BASELINE PERSONALIZADO (HU-98)
+// ═══════════════════════════════════════════
+
+/**
+ * Get the user's personalized baseline (HU-98).
+ * Returns null when no baseline has been calculated yet.
+ */
+export async function getBaselinePersonalizado(
+  userId: string,
+  accessToken?: string | null,
+): Promise<BaselinePersonalizado | null> {
+  const rows = await rawRestFetch<BaselinePersonalizado[]>('baseline_personalizado', {
+    query: `select=*&id_usuario=eq.${userId}&limit=1`,
+    accessToken,
+  });
+  return rows?.[0] ?? null;
+}
+
+/**
+ * Trigger server-side recalculation of the personalized baseline (HU-98).
+ * Calls the SECURITY DEFINER RPC `recalcular_baseline_personalizado`,
+ * which computes media/stddev/P25/P75 per metric over the last 28 days.
+ */
+export async function recalcularBaseline(
+  userId: string,
+  accessToken?: string | null,
+): Promise<void> {
+  await rawRestFetch<null>('rpc/recalcular_baseline_personalizado', {
+    method: 'POST',
+    body: {p_id_usuario: userId},
+    accessToken,
+  });
+}
+
+// ═══════════════════════════════════════════
 // FACTORES DE RIESGO CARDÍACO (ML)
 // ═══════════════════════════════════════════
 
@@ -906,7 +945,91 @@ export async function upsertPreferenciaNotificacion(
 }
 
 // ═══════════════════════════════════════════
-// NOTIFICACION_ENTREGA (delivery log)
+// CONTACTOS DE CONFIANZA (HU-16)
+// ═══════════════════════════════════════════
+
+export async function getContactos(
+  userId: string,
+  accessToken?: string | null,
+): Promise<ContactoConfianza[]> {
+  const rows = await rawRestFetch<ContactoConfianza[]>('contacto_confianza', {
+    query: buildGetContactosQuery(userId), // 'select=*&id_usuario=eq.<userId>&order=nombre.asc'
+    accessToken,
+  });
+  return rows ?? [];
+}
+
+export async function insertContacto(
+  contacto: ContactoConfianzaInsert,
+  accessToken?: string | null,
+): Promise<ContactoConfianza> {
+  const rows = await rawRestFetch<ContactoConfianza[]>('contacto_confianza', {
+    method: 'POST',
+    body: { ...contacto, updated_at: new Date().toISOString() },
+    prefer: 'return=representation',
+    accessToken,
+  });
+  const row = rows[0];
+  if (!row) throw new Error('No se pudo crear el contacto');
+  return row;
+}
+
+export async function updateContacto(
+  id: string,
+  cambios: Partial<Omit<ContactoConfianzaInsert, 'id_usuario'>>,
+  accessToken?: string | null,
+): Promise<void> {
+  await rawRestFetch<null>('contacto_confianza', {
+    method: 'PATCH',
+    body: { ...cambios, updated_at: new Date().toISOString() },
+    prefer: 'return=minimal',
+    query: buildUpdateContactoQuery(id), // 'id=eq.<id>'
+    accessToken,
+  });
+}
+
+export async function deleteContacto(
+  id: string,
+  idUsuario: string,
+  accessToken?: string | null,
+): Promise<void> {
+  await rawRestFetch<null>('contacto_confianza', {
+    method: 'DELETE',
+    prefer: 'return=minimal',
+    query: buildDeleteContactoQuery(id, idUsuario),
+    accessToken,
+  });
+}
+
+/**
+ * Marca un contacto como principal (es_principal=true) y desmarca
+ * los anteriores. 2 updates secuenciales: desmarcar todos → marcar el nuevo.
+ * El constraint parcial UNIQUE en DB es safety net contra race conditions.
+ */
+export async function marcarPrincipal(
+  contactoId: string,
+  userId: string,
+  accessToken?: string | null,
+): Promise<void> {
+  const now = new Date().toISOString();
+  await rawRestFetch<null>('contacto_confianza', {
+    method: 'PATCH',
+    body: {es_principal: false, updated_at: now},
+    prefer: 'return=minimal',
+    query: `id_usuario=eq.${userId}`,
+    accessToken,
+  });
+  await rawRestFetch<null>('contacto_confianza', {
+    method: 'PATCH',
+    body: {es_principal: true, updated_at: now},
+    prefer: 'return=minimal',
+    query: `id=eq.${contactoId}`,
+    accessToken,
+  });
+}
+
+// ═══════════════════════════════════════════
+// NOTIFICACION_ENTREGA (delivery log — merge scrum-95: CA-06)
 // ═══════════════════════════════════════════
 
 /**

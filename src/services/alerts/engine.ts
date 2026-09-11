@@ -1,6 +1,8 @@
 /**
  * Alert Engine — HU-41 orchestration layer.
  * Extended HU-43 (BP) and HU-42 (heart rate).
+ * Extended HU-98: umbrales efectivos por usuario combinando defaults con
+ * el baseline personalizado (caché 1h, tag `umbral_origen` en datos jsonb).
  *
  * Ties together detection, persistence, and escalation into a single
  * entry point that HealthProvider calls after each sync cycle.
@@ -53,6 +55,19 @@ import {
   computeHrTrend,
 } from './detector';
 import {EscalationManager} from './escalation';
+import type {BaselinePersonalizado} from '../supabase/models';
+import type {
+  EffectiveThresholds,
+  PersonalizationConfig,
+} from './personalized';
+import {
+  PERSONALIZATION_DEFAULTS,
+  baselineRowToMetrics,
+  resolveEffectiveThresholds as resolveThresholdsFromMetrics,
+} from './personalized';
+
+/** TTL de la caché de baseline personalizado por usuario (HU-98): 1 hora. */
+const BASELINE_CACHE_TTL_MS = 60 * 60 * 1000;
 
 // ─── Dependency Interfaces ───────────────────────────────────────
 
@@ -74,6 +89,11 @@ export interface AlertSupabaseDeps {
     userId: string,
     fromIso: string,
   ) => Promise<{bpm: number; recordedAt: string}[]>;
+  /**
+   * Optional: baseline personalizado del usuario (HU-98). Cuando falta o falla
+   * el fetch, el engine hace fallback silencioso a los umbrales estándar.
+   */
+  getPersonalizedBaseline?: (userId: string) => Promise<BaselinePersonalizado | null>;
 }
 
 /** Configuration for the alert engine. */
@@ -83,6 +103,8 @@ export interface AlertEngineConfig {
   bpContextoOverrides: BpContextoOverrides;
   hrThresholds: HrThresholds;
   escalation: EscalationConfig;
+  /** Configuración de personalización de umbrales (HU-98). Default: guardarriles clínicos. */
+  personalization?: PersonalizationConfig;
 }
 
 const DEFAULT_CONFIG: AlertEngineConfig = {
@@ -91,6 +113,7 @@ const DEFAULT_CONFIG: AlertEngineConfig = {
   bpContextoOverrides: DEFAULT_BP_CONTEXTO_OVERRIDES,
   hrThresholds: DEFAULT_HR_THRESHOLDS,
   escalation: DEFAULT_ESCALATION_CONFIG,
+  personalization: PERSONALIZATION_DEFAULTS,
 };
 
 // ─── Alert Engine ────────────────────────────────────────────────
@@ -107,6 +130,10 @@ export class AlertEngine {
 
   // In-memory cache of active alerts per user (for fast dedup checks)
   private activeAlertsCache: Map<string, AlertRecord[]> = new Map();
+
+  // HU-98: caché de umbrales efectivos por usuario (TTL 1h — evita re-fetch
+  // del baseline en cada lectura; se refresca solo al expirar).
+  private baselineCache: Map<string, {expiresAt: number; value: EffectiveThresholds}> = new Map();
 
   constructor(
     deps: AlertSupabaseDeps,
@@ -144,32 +171,35 @@ export class AlertEngine {
     dispositivoOrigen: string = 'wearable',
     now: Date = new Date(),
   ): Promise<AlertRecord | null> {
-    // 1. Get active (unread) alerts for this user (from cache or Supabase)
+    // 1. Umbrales efectivos (estándar o personalizados HU-98, con caché 1h)
+    const effective = await this.resolveEffectiveThresholds(userId);
+
+    // 2. Get active (unread) alerts for this user (from cache or Supabase)
     const activeAlerts = await this.getActiveAlerts(userId);
     const activeSpo2Alert = activeAlerts.find(a => a.tipo === 'hipoxia');
     const hasActiveAlert = !!activeSpo2Alert;
     const activeAlertSeverity: AlertSeverity | null =
       activeSpo2Alert?.severidad ?? null;
 
-    // 2. Evaluate against thresholds
+    // 3. Evaluate against thresholds
     const detection = evaluateSpo2({
       spo2Percent,
-      thresholds: this.config.thresholds,
+      thresholds: effective.spo2,
       hasActiveAlert,
       activeAlertSeverity,
       readingTimestamp: now.toISOString(),
       dispositivoOrigen,
     });
 
-    // 3. Check if existing episode resolved
-    if (hasActiveAlert && activeSpo2Alert && isEpisodeResolved(spo2Percent, this.config.thresholds)) {
+    // 4. Check if existing episode resolved
+    if (hasActiveAlert && activeSpo2Alert && isEpisodeResolved(spo2Percent, effective.spo2)) {
       await this.resolveAlert(activeSpo2Alert, now);
       return null;
     }
 
-    // 4. Generate new alert if needed
+    // 5. Generate new alert if needed
     if (detection.shouldAlert) {
-      return this.generateAlert(userId, spo2Percent, dispositivoOrigen, detection.severity!, now);
+      return this.generateAlert(userId, spo2Percent, dispositivoOrigen, detection.severity!, now, effective);
     }
 
     return null;
@@ -195,7 +225,10 @@ export class AlertEngine {
     contexto: BpContextoEspecial = 'normal',
     now: Date = new Date(),
   ): Promise<AlertRecord | null> {
-    // 1. Get active (unread) alerts for this user
+    // 1. Umbrales efectivos (estándar o personalizados HU-98, con caché 1h)
+    const effective = await this.resolveEffectiveThresholds(userId);
+
+    // 2. Get active (unread) alerts for this user
     const activeAlerts = await this.getActiveAlerts(userId);
     const activeBpAlert = activeAlerts.find(
       a => a.tipo === 'hipertension' || a.tipo === 'hipotension',
@@ -204,11 +237,11 @@ export class AlertEngine {
     const activeAlertSeverity: AlertSeverity | null =
       activeBpAlert?.severidad ?? null;
 
-    // 2. Evaluate against thresholds
+    // 3. Evaluate against thresholds
     const detection = evaluateBp({
       sistolica,
       diastolica,
-      thresholds: this.config.bpThresholds,
+      thresholds: effective.bp,
       hasActiveAlert,
       activeAlertSeverity,
       readingTimestamp: now.toISOString(),
@@ -217,16 +250,16 @@ export class AlertEngine {
       contextoOverrides: this.config.bpContextoOverrides,
     });
 
-    // 3. If no alert needed, check if existing episode resolved
+    // 4. If no alert needed, check if existing episode resolved
     if (!detection.shouldAlert) {
       if (hasActiveAlert && activeBpAlert) {
         // Check if both values are back in normal range
         const sistNormal =
-          sistolica >= this.config.bpThresholds.sistolicaLowWarning &&
-          sistolica < this.config.bpThresholds.sistolicaWarning;
+          sistolica >= effective.bp.sistolicaLowWarning &&
+          sistolica < effective.bp.sistolicaWarning;
         const diastNormal =
-          diastolica >= this.config.bpThresholds.diastolicaLowWarning &&
-          diastolica < this.config.bpThresholds.diastolicaWarning;
+          diastolica >= effective.bp.diastolicaLowWarning &&
+          diastolica < effective.bp.diastolicaWarning;
         if (sistNormal && diastNormal) {
           await this.resolveAlert(activeBpAlert, now);
         }
@@ -234,8 +267,8 @@ export class AlertEngine {
       return null;
     }
 
-    // 4. Generate new alert if needed
-    return this.generateBpAlert(userId, sistolica, diastolica, dispositivoOrigen, contexto, detection, now);
+    // 5. Generate new alert if needed
+    return this.generateBpAlert(userId, sistolica, diastolica, dispositivoOrigen, contexto, detection, now, effective);
   }
 
   /**
@@ -254,7 +287,10 @@ export class AlertEngine {
     dispositivoOrigen: string = 'wearable',
     now: Date = new Date(),
   ): Promise<AlertRecord | null> {
-    // 1. Get active (unread) alerts for this user
+    // 1. Umbrales efectivos (estándar o personalizados HU-98, con caché 1h)
+    const effective = await this.resolveEffectiveThresholds(userId);
+
+    // 2. Get active (unread) alerts for this user
     const activeAlerts = await this.getActiveAlerts(userId);
     const activeHrAlert = activeAlerts.find(
       a => a.tipo === 'taquicardia' || a.tipo === 'bradicardia',
@@ -263,7 +299,7 @@ export class AlertEngine {
     const activeAlertSeverity: AlertSeverity | null =
       activeHrAlert?.severidad ?? null;
 
-    // 2. Compute trend from recent history when the dep is wired (CA-04).
+    // 3. Compute trend from recent history when the dep is wired (CA-04).
     //    Failure to fetch history must never block alerting -> fallback 'estable'.
     let trend: HrTrend = 'estable';
     if (this.deps.getRecentHeartRates) {
@@ -276,24 +312,24 @@ export class AlertEngine {
       }
     }
 
-    // 3. Evaluate against thresholds
+    // 4. Evaluate against thresholds
     const detection = evaluateHr({
       bpm,
-      thresholds: this.config.hrThresholds,
+      thresholds: effective.hr,
       hasActiveAlert,
       activeAlertSeverity,
     });
 
-    // 4. If no alert needed, check if existing episode resolved (FC back in range)
+    // 5. If no alert needed, check if existing episode resolved (FC back in range)
     if (!detection.shouldAlert) {
-      if (hasActiveAlert && activeHrAlert && isHrEpisodeResolved(bpm, this.config.hrThresholds)) {
+      if (hasActiveAlert && activeHrAlert && isHrEpisodeResolved(bpm, effective.hr)) {
         await this.resolveAlert(activeHrAlert, now);
       }
       return null;
     }
 
-    // 5. Generate new alert if needed
-    return this.generateHrAlert(userId, bpm, dispositivoOrigen, detection, trend, now);
+    // 6. Generate new alert if needed
+    return this.generateHrAlert(userId, bpm, dispositivoOrigen, detection, trend, now, effective);
   }
 
   /**
@@ -369,9 +405,53 @@ export class AlertEngine {
   dispose(): void {
     this.escalationManager.dispose();
     this.activeAlertsCache.clear();
+    this.baselineCache.clear();
   }
 
   // ── Private Methods ─────────────────────────────────────────
+
+  /**
+   * Resuelve los umbrales efectivos para un usuario (HU-98): combina los
+   * defaults configurados con su baseline personalizado si existe y es válido.
+   * Resultado cacheado por usuario con TTL de 1 hora.
+   */
+  private async resolveEffectiveThresholds(userId: string): Promise<EffectiveThresholds> {
+    const nowMs = Date.now();
+    const cached = this.baselineCache.get(userId);
+    if (cached && cached.expiresAt > nowMs) {
+      return cached.value;
+    }
+
+    let effective: EffectiveThresholds = this.defaultEffectiveThresholds();
+
+    if (this.deps.getPersonalizedBaseline) {
+      try {
+        const row = await this.deps.getPersonalizedBaseline(userId);
+        if (row) {
+          effective = resolveThresholdsFromMetrics(
+            this.defaultEffectiveThresholds(),
+            baselineRowToMetrics(row),
+            this.config.personalization ?? PERSONALIZATION_DEFAULTS,
+          );
+        }
+      } catch {
+        // Fallback silencioso: umbrales estándar si el fetch del baseline falla
+      }
+    }
+
+    this.baselineCache.set(userId, {expiresAt: nowMs + BASELINE_CACHE_TTL_MS, value: effective});
+    return effective;
+  }
+
+  /** Umbrales estándar actuales de la config (respeta setThresholds en runtime). */
+  private defaultEffectiveThresholds(): EffectiveThresholds {
+    return {
+      spo2: {...this.config.thresholds},
+      bp: {...this.config.bpThresholds},
+      hr: {...this.config.hrThresholds},
+      origen: {spo2: 'estandar', bp: 'estandar', hr: 'estandar'},
+    };
+  }
 
   private async getActiveAlerts(userId: string): Promise<AlertRecord[]> {
     // Check cache first
@@ -397,10 +477,11 @@ export class AlertEngine {
     dispositivoOrigen: string,
     severity: AlertSeverity,
     now: Date,
+    effective: EffectiveThresholds,
   ): Promise<AlertRecord> {
     const input = {
       spo2Percent,
-      thresholds: this.config.thresholds,
+      thresholds: effective.spo2,
       hasActiveAlert: false,
       activeAlertSeverity: null,
       readingTimestamp: now.toISOString(),
@@ -412,12 +493,18 @@ export class AlertEngine {
       severity,
       thresholdExceeded:
         severity === 'critica'
-          ? this.config.thresholds.criticalPercent
-          : this.config.thresholds.warningPercent,
+          ? effective.spo2.criticalPercent
+          : effective.spo2.warningPercent,
       isNewEpisode: true,
     };
 
     const alertInsert = buildAlertRecord(input, detection, userId, now);
+
+    // HU-98: marcar el origen de los umbrales usados
+    alertInsert.datos = {
+      ...(alertInsert.datos ?? {}),
+      umbral_origen: effective.origen.spo2,
+    };
 
     // Persist to Supabase
     const alert = await this.deps.insertAlert(alertInsert);
@@ -444,11 +531,12 @@ export class AlertEngine {
     contexto: BpContextoEspecial,
     detection: import('./types').BpDetectionResult,
     now: Date,
+    effective: EffectiveThresholds,
   ): Promise<AlertRecord> {
     const input = {
       sistolica,
       diastolica,
-      thresholds: this.config.bpThresholds,
+      thresholds: effective.bp,
       hasActiveAlert: false,
       activeAlertSeverity: null,
       readingTimestamp: now.toISOString(),
@@ -458,6 +546,12 @@ export class AlertEngine {
     };
 
     const alertInsert = buildBpAlertRecord(input, detection, userId, now);
+
+    // HU-98: marcar el origen de los umbrales usados
+    alertInsert.datos = {
+      ...(alertInsert.datos ?? {}),
+      umbral_origen: effective.origen.bp,
+    };
 
     // Persist to Supabase
     const alert = await this.deps.insertAlert(alertInsert);
@@ -483,16 +577,23 @@ export class AlertEngine {
     detection: import('./types').HrDetectionResult,
     trend: HrTrend,
     now: Date,
+    effective: EffectiveThresholds,
   ): Promise<AlertRecord> {
     const input = {
       bpm,
-      thresholds: this.config.hrThresholds,
+      thresholds: effective.hr,
       hasActiveAlert: false,
       activeAlertSeverity: null,
       dispositivoOrigen,
     };
 
     const alertInsert = buildHrAlertRecord(input, detection, userId, trend, now);
+
+    // HU-98: marcar el origen de los umbrales usados
+    alertInsert.datos = {
+      ...(alertInsert.datos ?? {}),
+      umbral_origen: effective.origen.hr,
+    };
 
     // Persist to Supabase
     const alert = await this.deps.insertAlert(alertInsert);

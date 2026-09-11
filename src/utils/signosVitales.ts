@@ -33,19 +33,38 @@ export interface SignoVitalItem {
   rangeLabel: string;
   /** Valor numérico crudo, null si no hay dato */
   rawValue: number | null;
+  /** CA-05: Mensaje alternativo cuando no hay datos (ej: "Sin datos recientes — 12 ago, 10:30"). */
+  noDataMessage?: string;
 }
 
 /**
  * Construye el listado completo de signos vitales y métricas
  * a partir del HealthSummary.
+ *
+ * @param lastSyncDate - CA-05: fecha del último sync para mostrar en "Sin datos recientes".
  */
-export function buildSignosFromSummary(summary: HealthSummary | null): SignoVitalItem[] {
+export function buildSignosFromSummary(
+  summary: HealthSummary | null,
+  lastSyncDate?: Date | null,
+): SignoVitalItem[] {
   const items: SignoVitalItem[] = [];
   const fc = NORMAL_RANGES.frecuencia_cardiaca;
   const sist = NORMAL_RANGES.presion_sistolica;
   const diast = NORMAL_RANGES.presion_diastolica;
   const spo2 = NORMAL_RANGES.saturacion_oxigeno;
   const temp = NORMAL_RANGES.temperatura;
+
+  /** Helper: construye mensaje "Sin datos recientes" con fecha si disponible. */
+  const noDataMsg = (date?: Date | null) => {
+    if (!date) return 'Sin datos recientes';
+    const formatted = date.toLocaleDateString('es-ES', {
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    return `Sin datos — ${formatted}`;
+  };
 
   // ── Signos vitales ──
 
@@ -63,6 +82,7 @@ export function buildSignosFromSummary(summary: HealthSummary | null): SignoVita
       : 'stable',
     rangeLabel: `${fc.min}-${fc.max} lpm`,
     rawValue: summary?.averageBpm ?? null,
+    noDataMessage: summary?.averageBpm == null ? noDataMsg(lastSyncDate) : undefined,
   });
 
   items.push({
@@ -79,6 +99,7 @@ export function buildSignosFromSummary(summary: HealthSummary | null): SignoVita
       : 'stable',
     rangeLabel: `${sist.min}-${sist.max} mmHg`,
     rawValue: summary?.bloodPressureSystolic ?? null,
+    noDataMessage: summary?.bloodPressureSystolic == null ? noDataMsg(lastSyncDate) : undefined,
   });
 
   items.push({
@@ -95,6 +116,7 @@ export function buildSignosFromSummary(summary: HealthSummary | null): SignoVita
       : 'stable',
     rangeLabel: `${diast.min}-${diast.max} mmHg`,
     rawValue: summary?.bloodPressureDiastolic ?? null,
+    noDataMessage: summary?.bloodPressureDiastolic == null ? noDataMsg(lastSyncDate) : undefined,
   });
 
   items.push({
@@ -111,6 +133,7 @@ export function buildSignosFromSummary(summary: HealthSummary | null): SignoVita
       : 'stable',
     rangeLabel: `${spo2.min}-${spo2.max}%`,
     rawValue: summary?.spo2Percent ?? null,
+    noDataMessage: summary?.spo2Percent == null ? noDataMsg(lastSyncDate) : undefined,
   });
 
   items.push({
@@ -127,6 +150,7 @@ export function buildSignosFromSummary(summary: HealthSummary | null): SignoVita
       : 'stable',
     rangeLabel: `${temp.min}-${temp.max} °C`,
     rawValue: summary?.bodyTemperatureCelsius ?? null,
+    noDataMessage: summary?.bodyTemperatureCelsius == null ? noDataMsg(lastSyncDate) : undefined,
   });
 
   // ── Resumen del día (actividad diaria) ──
