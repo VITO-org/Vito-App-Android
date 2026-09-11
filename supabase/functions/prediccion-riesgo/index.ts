@@ -48,11 +48,53 @@ const SCORE_UMBRAL_ALTO = 66;
 const DISCLAIMER =
   'Evaluación educativa basada en un modelo poblacional. No constituye diagnóstico médico.';
 
-// Importancia base por feature (heurística para "factores más influyentes").
-const FEATURE_IMPORTANCIA_BASE: Record<string, number> = {
-  age: 2, sex_male: 1, bmi: 1, bp_sistolica: 3, bp_diastolica: 2,
-  cholesterol_ord: 2, diabetes: 2, smoking: 3, alcohol: 2, active: 2,
+// Valores de referencia "san@s" (población general) para el análisis de
+// contribución local: reemplazar una feature por su referencia sintetiza el
+// contrafactual "¿qué pasaría si este usuario tuviera este valor normal?".
+const VALORES_REFERENCIA: Record<string, number> = {
+  age: 45,
+  sex_male: 0,
+  bmi: 25,
+  bp_sistolica: 120,
+  bp_diastolica: 80,
+  cholesterol_ord: 1,
+  diabetes: 0,
+  smoking: 0,
+  alcohol: 0,
+  active: 1,
 };
+
+/**
+ * Contribución local de cada feature (SHAP-univariado aproximado).
+ *
+ * Para cada feature i: delta_i = P(real) - P(counterfactual_i) donde
+ * counterfactual_i reemplaza SOLO la feature i por su valor de referencia
+ * sano. La diferencia de probabilidad indica cuánto empuja esa feature el
+ * riesgo (positivo = sube riesgo, negativo = lo baja), con las demás fijas.
+ *
+ * Devuelve el top-3 por |delta| como { feature: delta_puntos_porcentuales }.
+ * A diferencia de la heurística anterior (importancia_base × valor, que
+ * producía "presión 330"), esto es interpretable: un delta de -8.5 significa
+ * "esta feature baja el riesgo ~8.5 puntos porcentuales".
+ */
+function factoresMasInfluyentes(
+  model: ModelJson,
+  vector: number[],
+  probReal: number,
+): Record<string, number> {
+  const deltas: { name: string; delta: number }[] = FEATURE_ORDER.map((name, i) => {
+    const counterfactual = [...vector];
+    counterfactual[i] = VALORES_REFERENCIA[name] ?? 0;
+    const probCounter = probRiesgo(model, counterfactual);
+    // Delta en puntos porcentuales con 1 decimal
+    const delta = Math.round((probReal - probCounter) * 1000) / 10;
+    return { name, delta };
+  });
+  deltas.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+  const top: Record<string, number> = {};
+  for (const item of deltas.slice(0, 3)) top[item.name] = item.delta;
+  return top;
+}
 
 // ── Carga del modelo (una vez por warm start) ───────────────────────────
 interface TreeJson {
@@ -152,20 +194,6 @@ function probRiesgo(model: ModelJson, vector: number[]): number {
   return sumP1 / model.trees.length;
 }
 
-/** Top-3 features con mayor señal (heurística documentada, no SHAP). */
-function factoresMasInfluyentes(
-  vector: number[],
-): Record<string, number> {
-  const scored = FEATURE_ORDER.map((name, i) => ({
-    name,
-    factor: Math.round(FEATURE_IMPORTANCIA_BASE[name] * (vector[i] ?? 0) * 100) / 100,
-  }));
-  scored.sort((a, b) => b.factor - a.factor);
-  const top: Record<string, number> = {};
-  for (const item of scored.slice(0, 3)) top[item.name] = item.factor;
-  return top;
-}
-
 // ── Handler ─────────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
@@ -229,7 +257,9 @@ Deno.serve(async (req: Request) => {
         ? (body.modelo_version as string).slice(0, 20)
         : MODELO_VERSION_DEFAULT;
 
-    const factores = factoresMasInfluyentes(vector);
+    // Contribución local real (SHAP-univariado): cuánto empuja cada feature
+    // el riesgo vs. su valor de referencia sano. Top-3 por |delta|.
+    const factores = factoresMasInfluyentes(MODEL, vector, prob);
 
     // ── Persistir (service-role, id_usuario acotado al JWT verificado) ──
     const res = await fetch(
