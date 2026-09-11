@@ -1,0 +1,64 @@
+---
+schema_version: 1
+doc_type: design
+title: Tabla datos_prediccion_riesgo + formulario dedicado + validación previa antes
+  de evaluar
+created_at: '2026-09-11T19:43:53.668906Z'
+updated_at: '2026-09-11T19:43:53.668906Z'
+tags:
+- hu-91
+- ml
+- datos_prediccion_riesgo
+- formulario
+status: approved
+links: []
+vault_scope: local
+fingerprint: 5947bd41958ac52efa786b3c8fe79a5c707f6f9d50a43e761fd12e343b2729a3
+session_id: 2026-09-11_mejorar-flujo-de-evaluacion-de-riesgo-formulario-dedicado-tabla-datos-prediccion-riesgo-aviso-antes-de-evaluar
+spec_path: /Users/cristianvera21/Documents/proyecto-final/Vito-App-Android/.cortex/vault/specs/2026-09-11_mejorar-flujo-de-evaluacion-de-riesgo-formulario-dedicado-tabla-datos-prediccion-riesgo-aviso-antes-de-evaluar.md
+---
+
+# Tabla datos_prediccion_riesgo + formulario dedicado + validación previa antes de evaluar
+
+> *Design document — Pluggable Middle Phase 09.B.*
+> *Session: `2026-09-11_mejorar-flujo-de-evaluacion-de-riesgo-formulario-dedicado-tabla-datos-prediccion-riesgo-aviso-antes-de-evaluar` · Spec: `/Users/cristianvera21/Documents/proyecto-final/Vito-App-Android/.cortex/vault/specs/2026-09-11_mejorar-flujo-de-evaluacion-de-riesgo-formulario-dedicado-tabla-datos-prediccion-riesgo-aviso-antes-de-evaluar.md`*
+
+## Architecture decision
+
+Propuesta A (aprobada por el usuario). Se agrega una tabla nueva datos_prediccion_riesgo (1 fila por usuario, key id_usuario) que almacena las 10 features del contrato v2 en su estado 'duro' (lo que el usuario declara explícitamente), como fuente de verdad primaria para buildPredictionPayload. NO se modifica la imputación con DEFAULTS como mecanismo silencioso: la pantalla PrediccionRiesgoScreen valida ANTES de llamar a la Edge Function si la fila existe y está completa; si faltan campos, muestra aviso con la lista de faltantes + botón que navega a DatosPrediccionScreen (nueva). DatosPrediccionScreen es un formulario dedicado (peso, altura→BMI, presión sist/diast, colesterol ordinal, diabetes, tabaquismo, alcohol) que hace upsert a datos_prediccion_riesgo. Sexo y edad se toman del perfil (PerfilUsuario) en tiempo de evaluación, no del formulario. Factores_riesgo_cardiaco, perfil_usuario, promedio_semanal_ml y la Edge Function quedan intactos. Fallback: si la fila existe pero algún campo quedó NULL (p.ej. usuario parcial), buildPredictionPayload cae al DEFAULTS de ese feature específico y reporta imputados para la UI (mismo mecanismo actual, pero solo como red de seguridad tras la validación previa).
+
+## Data model changes
+
+- CREATE TABLE datos_prediccion_riesgo (id_usuario UUID PRIMARY KEY REFERENCES usuario(id) ON DELETE CASCADE, peso_kg DECIMAL(5,1), altura_cm DECIMAL(5,1), bp_sistolica INTEGER, bp_diastolica INTEGER, cholesterol_ord SMALLINT CHECK (cholesterol_ord IN (1,2,3)), diabetes BOOLEAN, smoking BOOLEAN, alcohol BOOLEAN, updated_at TIMESTAMPTZ DEFAULT NOW());
+- RLS: políticas iguales a las tablas hermanas (lectura/upsert para el dueño vía id_usuario) — replicar patrón existente de factores_riesgo_cardiaco/prediccion_riesgo
+- Sin FK circular ni índices extra: PK id_usuario es el índice
+
+## API contracts
+
+- POST /rest/v1/datos_prediccion_riesgo con Prefer: resolution=merge-duplicates,return=representation & on_conflict=id_usuario — body: {id_usuario, peso_kg, altura_cm, bp_sistolica, bp_diastolica, cholesterol_ord, diabetes, smoking, alcohol, updated_at}
+- GET /rest/v1/datos_prediccion_riesgo?select=*&id_usuario=eq.<uid>&limit=1 (vía rawRestFetch o query-builder supabase, patrón getFactoresRiesgoCardiaco)
+- Edge Function prediccion-riesgo NO cambia: sigue recibiendo {vector} con 10 features
+
+## Test plan
+
+- Unit: faltanTodos() — fila null → todos los campos de la lista faltantes
+- Unit: faltanAlgunos() — fila con diabetes NULL y cholesterol_ord NULL → solo esos 2 en faltantes
+- Unit: todosPresentes() — fila completa → [] faltantes y evaluar() procede
+- Unit: soloColesterolFaltante() — fila con todos menos cholesterol_ord → faltantes=['cholesterol_ord']
+- Unit: buildPredictionPayload con datos_prediccion_riesgo completo → vector usa valores declarados (no DEFAULTS), imputados=[]
+- Unit: buildPredictionPayload con fila parcial → feature faltante usa DEFAULTS y aparece en imputados (red de seguridad)
+- tsc --noEmit sin errores
+- jest: suite completa pasa (tests existentes + nuevos)
+
+## Risks
+
+- Tabla nueva puede quedar obsoleta si el usuario edita perfil (peso/altura) en EditarPerfilScreen — decisión: datos_prediccion_riesgo es fuente declarada; la UI de PrediccionRiesgo muestra las features usadas para transparentar
+- Usuario existente sin fila en datos_prediccion_riesgo → primera evaluación bloqueada con aviso (cambio intencional del flujo, requerido por la spec)
+- Si el RLS no se replica bien, upsert falla con 403 — verificar policy en staging tras aplicar schema
+- cholesterol_ord como CHECK IN (1,2,3) puede rechazar 0/valores raros del DEFAULTS — solo se escribe desde el formulario (1-3) así que sin conflicto
+
+---
+
+*Generated by `cortex-code-designer` (Pluggable Middle Phase 09.B). The
+implementer reads this document and follows it; deviations require a
+new checkpoint with the `unverified_claims` justifying the diff.*

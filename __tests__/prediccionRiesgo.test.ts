@@ -1,10 +1,11 @@
 import {
   buildPredictionPayload,
+  camposFaltantesPrediccion,
   FEATURE_ORDER,
   mapearRiesgo,
   MODELO_VERSION,
 } from '../src/services/prediccionRiesgo';
-import type { PerfilUsuario } from '../src/services/supabase/models';
+import type { PerfilUsuario, DatosPrediccionRiesgo } from '../src/services/supabase/models';
 
 /**
  * Tests del servicio puro de predicción de riesgo cardiovascular.
@@ -46,6 +47,24 @@ const idx = {
   alcohol: FEATURE_ORDER.indexOf('alcohol'),
   active: FEATURE_ORDER.indexOf('active'),
 };
+
+/** Fila declarada COMPLETA en datos_prediccion_riesgo (formulario dedicado). */
+function makeDatosCompletos(overrides: Partial<DatosPrediccionRiesgo> = {}): DatosPrediccionRiesgo {
+  return {
+    id_usuario: 'u1',
+    peso_kg: 72,
+    altura_cm: 173,
+    bp_sistolica: 118,
+    bp_diastolica: 76,
+    cholesterol_ord: 2,
+    diabetes: false,
+    smoking: false,
+    alcohol: true,
+    active: true,
+    updated_at: '2026-09-11T00:00:00Z',
+    ...overrides,
+  };
+}
 
 describe('buildPredictionPayload', () => {
   test('el vector respeta FEATURE_ORDER (10 features del contrato v2)', () => {
@@ -214,5 +233,195 @@ describe('mapearRiesgo (espejo Edge Function)', () => {
     expect(mapearRiesgo(65.99)).toBe('medio');
     expect(mapearRiesgo(66)).toBe('alto');
     expect(mapearRiesgo(100)).toBe('alto');
+  });
+});
+
+describe('camposFaltantesPrediccion', () => {
+  test('faltan todos: fila null + perfil sin peso/altura → bmi + bp + chol + bools + active faltantes', () => {
+    const faltantes = camposFaltantesPrediccion({
+      profile: makeProfile({ peso_kg: null, altura_cm: null }),
+    });
+    // age/sex_ok, pero bmi (peso/altura null) + bp + chol + diabetes + smoking + alcohol + active
+    expect(faltantes).toContain('bmi');
+    expect(faltantes).toContain('bp_sistolica');
+    expect(faltantes).toContain('bp_diastolica');
+    expect(faltantes).toContain('cholesterol_ord');
+    expect(faltantes).toContain('diabetes');
+    expect(faltantes).toContain('smoking');
+    expect(faltantes).toContain('alcohol');
+    expect(faltantes).toContain('active');
+    expect(faltantes).not.toContain('age');     // perfil tiene fecha_nac
+    expect(faltantes).not.toContain('sex_male'); // perfil tiene sexo
+  });
+
+  test('faltan algunos: solo cholesterol y diabetes faltantes', () => {
+    const faltantes = camposFaltantesPrediccion({
+      profile: makeProfile(),
+      datos: makeDatosCompletos({ cholesterol_ord: null, diabetes: null }),
+    });
+    expect(faltantes).toEqual(['cholesterol_ord', 'diabetes']);
+  });
+
+  test('todos presentes: fila completa + perfil completo → vacío', () => {
+    const faltantes = camposFaltantesPrediccion({
+      profile: makeProfile(),
+      datos: makeDatosCompletos(),
+    });
+    expect(faltantes).toEqual([]);
+  });
+
+  test('solo colesterol faltante', () => {
+    const faltantes = camposFaltantesPrediccion({
+      profile: makeProfile(),
+      datos: makeDatosCompletos({ cholesterol_ord: null }),
+    });
+    expect(faltantes).toEqual(['cholesterol_ord']);
+  });
+
+  test('active null en la fila → active es faltante (formulario dedicado)', () => {
+    const faltantes = camposFaltantesPrediccion({
+      profile: makeProfile(),
+      datos: makeDatosCompletos({ active: null }),
+    });
+    expect(faltantes).toContain('active');
+  });
+
+  test('perfil sin fecha_nac ni sexo → age y sex_male faltan', () => {
+    const faltantes = camposFaltantesPrediccion({
+      profile: makeProfile({ fecha_nac: null, sexo: null }),
+      datos: makeDatosCompletos(),
+    });
+    expect(faltantes).toContain('age');
+    expect(faltantes).toContain('sex_male');
+  });
+
+  test('BMI inválido con datos declarados (peso=300, altura=160) → bmi faltante', () => {
+    const faltantes = camposFaltantesPrediccion({
+      profile: makeProfile(),
+      datos: makeDatosCompletos({ peso_kg: 300, altura_cm: 160 }),
+    });
+    expect(faltantes).toContain('bmi');
+  });
+});
+
+describe('buildPredictionPayload con datos declarados (tabla nueva)', () => {
+  test('fila completa → usa valores declarados, imputados=[] (sin cholesterol default)', () => {
+    const payload = buildPredictionPayload({
+      profile: makeProfile(),
+      datos: makeDatosCompletos(),
+    });
+    // BMI: 72 / (173/100)² ≈ 24.08
+    expect(payload.vector[idx.bmi]).toBeCloseTo(72 / (173 / 100) ** 2, 1);
+    expect(payload.vector[idx.bp_sistolica]).toBe(118);
+    expect(payload.vector[idx.bp_diastolica]).toBe(76);
+    expect(payload.vector[idx.cholesterol_ord]).toBe(2);
+    expect(payload.vector[idx.diabetes]).toBe(0);
+    expect(payload.vector[idx.smoking]).toBe(0);
+    expect(payload.vector[idx.alcohol]).toBe(1);
+    expect(payload.imputados).not.toContain('cholesterol_ord');
+    expect(payload.imputados).not.toContain('bp_sistolica');
+    expect(payload.imputados).not.toContain('diabetes');
+  });
+
+  test('fila null → cholesterol imputado 1 (default), bools vía factores si existen', () => {
+    const payload = buildPredictionPayload({
+      profile: makeProfile(),
+      datos: null,
+      factores: {
+        id_usuario: 'u1', diabetes: true, antecedentes_familiares: null,
+        fumador: false, obesidad: null, consumo_alcohol: false,
+        tipo_dieta: null, problemas_cardiacos_previos: null,
+        uso_medicacion: null, updated_at: null,
+      },
+    });
+    expect(payload.vector[idx.cholesterol_ord]).toBe(1);
+    expect(payload.imputados).toContain('cholesterol_ord');
+    // diabetes → factores (legacy), dato no es null → 1
+    expect(payload.vector[idx.diabetes]).toBe(1);
+    expect(payload.presentes).toContain('diabetes');
+  });
+
+  test('datos declarados tienen precedencia sobre factores legacy para booleanos', () => {
+    const payload = buildPredictionPayload({
+      profile: makeProfile(),
+      datos: makeDatosCompletos({ diabetes: true, smoking: true, alcohol: false }),
+      factores: {
+        id_usuario: 'u1', diabetes: false, antecedentes_familiares: null,
+        fumador: false, obesidad: null, consumo_alcohol: true,
+        tipo_dieta: null, problemas_cardiacos_previos: null,
+        uso_medicacion: null, updated_at: null,
+      },
+    });
+    expect(payload.vector[idx.diabetes]).toBe(1);   // datos = true
+    expect(payload.vector[idx.smoking]).toBe(1);    // datos = true
+    expect(payload.vector[idx.alcohol]).toBe(0);    // datos = false
+  });
+
+  test('presión declarada tiene precedencia sobre promedio semanal', () => {
+    const payload = buildPredictionPayload({
+      profile: makeProfile(),
+      datos: makeDatosCompletos({ bp_sistolica: 135, bp_diastolica: 85 }),
+      promedio: {
+        id: 'm1', id_usuario: 'u1', semana_inicio: '2026-09-01',
+        bp_sistolica_prom: 110, bp_diastolica_prom: 70,
+        frec_cardiaca_prom: null, spo2_prom: null, nivel_estres_prom: null,
+        pasos_diarios_prom: null, horas_sueno_prom: null,
+        total_lecturas: null, created_at: null,
+      },
+    });
+    expect(payload.vector[idx.bp_sistolica]).toBe(135); // datos > promedio
+    expect(payload.vector[idx.bp_diastolica]).toBe(85);
+  });
+
+  test('BMI del perfil se usa si datos no tiene peso/altura', () => {
+    const payload = buildPredictionPayload({
+      profile: makeProfile({ peso_kg: 65, altura_cm: 165 }),
+      datos: makeDatosCompletos({ peso_kg: undefined as unknown as number, altura_cm: undefined as unknown as number }),
+    });
+    expect(payload.vector[idx.bmi]).toBeCloseTo(65 / (165 / 100) ** 2, 1);
+  });
+
+  test('active declarado (datos) tiene precedencia sobre el wearable', () => {
+    const activoDeclarado = buildPredictionPayload({
+      profile: makeProfile(),
+      datos: makeDatosCompletos({ active: true }),
+      promedio: {
+        id: 'm1', id_usuario: 'u1', semana_inicio: '2026-09-01',
+        bp_sistolica_prom: null, bp_diastolica_prom: null,
+        frec_cardiaca_prom: null, spo2_prom: null, nivel_estres_prom: null,
+        pasos_diarios_prom: 1200, horas_sueno_prom: null, // wearable dice inactivo
+        total_lecturas: null, created_at: null,
+      },
+    });
+    expect(activoDeclarado.vector[idx.active]).toBe(1); // declarado true gana
+    expect(activoDeclarado.presentes).toContain('active');
+
+    const inactivoDeclarado = buildPredictionPayload({
+      profile: makeProfile(),
+      datos: makeDatosCompletos({ active: false }),
+      promedio: {
+        id: 'm2', id_usuario: 'u1', semana_inicio: '2026-09-01',
+        bp_sistolica_prom: null, bp_diastolica_prom: null,
+        frec_cardiaca_prom: null, spo2_prom: null, nivel_estres_prom: null,
+        pasos_diarios_prom: 8000, horas_sueno_prom: null, // wearable dice activo
+        total_lecturas: null, created_at: null,
+      },
+    });
+    expect(inactivoDeclarado.vector[idx.active]).toBe(0); // declarado false gana
+  });
+
+  test('active null en datos → cae al wearable (>=5000 pasos = 1)', () => {
+    const payload = buildPredictionPayload({
+      profile: makeProfile(),
+      datos: makeDatosCompletos({ active: null }),
+      promedio: {
+        id: 'm1', id_usuario: 'u1', semana_inicio: '2026-09-01',
+        bp_sistolica_prom: null, bp_diastolica_prom: null,
+        frec_cardiaca_prom: null, spo2_prom: null, nivel_estres_prom: null,
+        pasos_diarios_prom: 6000, horas_sueno_prom: null,
+        total_lecturas: null, created_at: null,
+      },
+    });
+    expect(payload.vector[idx.active]).toBe(1);
   });
 });

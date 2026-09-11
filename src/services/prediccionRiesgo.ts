@@ -16,6 +16,7 @@
  */
 
 import type {
+  DatosPrediccionRiesgo,
   FactoresRiesgoCardiaco,
   PerfilUsuario,
   PromedioSemanalML,
@@ -59,6 +60,11 @@ export interface EntradaPrediccion {
   factores?: FactoresRiesgoCardiaco | null;
   /** Último promedio semanal disponible (la app decide cuál pasar). */
   promedio?: PromedioSemanalML | null;
+  /** Datos declarados por el usuario en DatosPrediccionScreen (tabla
+   *  datos_prediccion_riesgo). Fuente de verdad primaria para las features
+   *  que Vito no recolecta de forma nativa (BMI declarado, presión manual,
+   *  colesterol, diabetes, tabaquismo, alcohol). */
+  datos?: DatosPrediccionRiesgo | null;
 }
 
 export interface PayloadPrediccion {
@@ -88,19 +94,72 @@ function edadDesdeFechaNac(fechaNac: string | null): number | null {
 }
 
 /**
+ * Función de validación PREVIA a la evaluación (CA-03).
+ *
+ * Determina qué features del contrato v2 faltan para evaluar con datos reales
+ * del usuario, sin imputar en silencio:
+ *
+ * - age / sex_male: se toman del perfil (el formulario dedicado NO los pide).
+ * - bmi: del BMI declarado en `datos` o, si no, de peso/altura del perfil
+ *   (campos que el registro ya pide como opcionales).
+ * - bp_sistolica / bp_diastolica / cholesterol_ord / diabetes / smoking /
+ *   alcohol / active: SOLO de `datos` (tabla datos_prediccion_riesgo) — son
+ *   las features que Vito no recolecta de forma nativa o que el usuario
+ *   declara en el formulario dedicado (CA-02/CA-05).
+ *
+ * Devuelve la lista de features faltantes (vacía = se puede evaluar).
+ */
+export function camposFaltantesPrediccion(entrada: EntradaPrediccion): FeatureName[] {
+  const faltantes: FeatureName[] = [];
+  const { profile, datos } = entrada;
+
+  // ── Perfil ─────────────────────────────────────────────────
+  if (edadDesdeFechaNac(profile.fecha_nac) === null) faltantes.push('age');
+  if (profile.sexo === null || profile.sexo === undefined) faltantes.push('sex_male');
+
+  // ── BMI: declarado en datos, o peso/altura del perfil ──────
+  const peso = datos?.peso_kg ?? profile.peso_kg;
+  const altura = datos?.altura_cm ?? profile.altura_cm;
+  const bmiValido =
+    peso != null &&
+    altura != null &&
+    altura > 0 &&
+    peso / Math.pow(altura / 100, 2) >= 15 &&
+    peso / Math.pow(altura / 100, 2) <= 50;
+  if (!bmiValido) faltantes.push('bmi');
+
+  // ── Campos del formulario dedicado (tabla datos_prediccion_riesgo) ──
+  if (datos?.bp_sistolica == null) faltantes.push('bp_sistolica');
+  if (datos?.bp_diastolica == null) faltantes.push('bp_diastolica');
+  if (datos?.cholesterol_ord == null) faltantes.push('cholesterol_ord');
+  if (datos?.diabetes == null) faltantes.push('diabetes');
+  if (datos?.smoking == null) faltantes.push('smoking');
+  if (datos?.alcohol == null) faltantes.push('alcohol');
+  if (datos?.active == null) faltantes.push('active');
+
+  return faltantes;
+}
+
+/**
  * Arma el payload de features para la Edge Function.
  *
- * - Los datos presentes del usuario se usan tal cual (mismos rangos
- *   fisiológicos que la limpieza del entrenamiento: ap_hi 80-200, ap_lo
- *   50-140, BMI 15-50).
- * - Los datos ausentes (null/undefined) se imputan con DEFAULTS y se reportan
- *   en `imputados` para que la UI muestre que hubo supuestos.
- * - Booleans null → 0 (asumido negativo, reportado como imputado).
+ * Precedencia de fuentes por feature (datos declarados > nativas > defaults):
+ * - age/sex_male → perfil (registro).
+ * - bmi → datos_prediccion_riesgo (BMI declarado) > perfil.
+ * - bp → datos_prediccion_riesgo (presión manual) > promedio semanal.
+ * - cholesterol_ord → datos_prediccion_riesgo > default (1=normal).
+ * - diabetes/smoking/alcohol → datos_prediccion_riesgo > factores_riesgo_cardiaco.
+ * - active → datos_prediccion_riesgo (declarado) > promedio semanal (≥5000
+ *   pasos) > default conservador.
+ *
+ * Los faltantes se rellenan con DEFAULTS y se reportan en `imputados` como red
+ * de seguridad (por ejemplo fila parcial). El flujo normal valida ANTES con
+ * camposFaltantesPrediccion() para que la UI no impute en silencio (CA-03).
  */
 export function buildPredictionPayload(
   entrada: EntradaPrediccion,
 ): PayloadPrediccion {
-  const { profile, factores, promedio } = entrada;
+  const { profile, factores, promedio, datos } = entrada;
   const imputados: FeatureName[] = [];
   const presentes: FeatureName[] = [];
 
@@ -121,18 +180,19 @@ export function buildPredictionPayload(
   setValor('age', edad);
   setValor('sex_male', profile.sexo === 'M' ? 1 : 0);
 
-  // BMI = peso[kg] / (altura[m])² — mismo rango fisiológico que el
-  // entrenamiento (15-50). Fuera de rango → imputado (el modelo no lo vio).
+  // ── BMI: BMI declarado (datos) > peso/altura del perfil ───
+  const pesoDeclarado = datos?.peso_kg ?? profile.peso_kg;
+  const alturaDeclarada = datos?.altura_cm ?? profile.altura_cm;
   let bmi: number | null = null;
-  if (profile.peso_kg != null && profile.altura_cm != null && profile.altura_cm > 0) {
-    const calc = profile.peso_kg / Math.pow(profile.altura_cm / 100, 2);
+  if (pesoDeclarado != null && alturaDeclarada != null && alturaDeclarada > 0) {
+    const calc = pesoDeclarado / Math.pow(alturaDeclarada / 100, 2);
     bmi = calc >= 15 && calc <= 50 ? calc : null;
   }
   setValor('bmi', bmi);
 
-  // ── Promedio semanal ML ───────────────────────────────────
-  const bpSis = promedio?.bp_sistolica_prom ?? null;
-  const bpDia = promedio?.bp_diastolica_prom ?? null;
+  // ── Presión: manual declarada (datos) > promedio semanal ──
+  const bpSis = datos?.bp_sistolica ?? promedio?.bp_sistolica_prom ?? null;
+  const bpDia = datos?.bp_diastolica ?? promedio?.bp_diastolica_prom ?? null;
   // Rango fisiológico del entrenamiento: ap_hi 80-200, ap_lo 50-140, sis > dia.
   const bpSisValido =
     bpSis != null &&
@@ -146,24 +206,30 @@ export function buildPredictionPayload(
   setValor('bp_diastolica', bpSisValido ? Number(bpDia) : null);
 
   const pasos = promedio?.pasos_diarios_prom ?? null;
-  // active (binario): pasa=1 si el promedio semanal tiene >= 5000 pasos/día.
-  const active = pasos != null && Number(pasos) >= 5000 ? 1 : 0;
-  setValor('active', pasos != null ? active : null);
+  // active: (1) declarado en datos_prediccion_riesgo (formulario) — prioridad;
+  // (2) derivado del wearable si el promedio semanal tiene >= 5000 pasos/día;
+  // (3) default conservador (asumido activo).
+  const activeDeclarado = datos?.active;
+  const activeWearable = pasos != null && Number(pasos) >= 5000 ? 1 : 0;
+  setValor(
+    'active',
+    activeDeclarado != null ? (activeDeclarado ? 1 : 0) : pasos != null ? activeWearable : null,
+  );
 
-  // ── Factores de riesgo (formulario opcional) ──────────────
+  // ── Colesterol: declarado (datos) > default (1=normal) ────
+  const chol = datos?.cholesterol_ord;
+  setValor('cholesterol_ord', chol === 1 || chol === 2 || chol === 3 ? chol : null);
+
+  // ── Factores booleanos: declarados (datos) > factores_riesgo_cardiaco ──
   const boolFactor = (v: boolean | null | undefined): number | null =>
     v === null || v === undefined ? null : v ? 1 : 0;
 
-  setValor('diabetes', boolFactor(factores?.diabetes));
-  setValor('smoking', boolFactor(factores?.fumador));
-  setValor('alcohol', boolFactor(factores?.consumo_alcohol));
-
-  // Features que Vito no recolecta → siempre default, reportadas
-  const siempreImputadas: FeatureName[] = ['cholesterol_ord'];
-  for (const name of siempreImputadas) {
-    valores.set(name, DEFAULTS[name]);
-    imputados.push(name);
-  }
+  const diabetes = datos?.diabetes ?? factores?.diabetes;
+  const smoking = datos?.smoking ?? factores?.fumador;
+  const alcohol = datos?.alcohol ?? factores?.consumo_alcohol;
+  setValor('diabetes', boolFactor(diabetes));
+  setValor('smoking', boolFactor(smoking));
+  setValor('alcohol', boolFactor(alcohol));
 
   const vector = FEATURE_ORDER.map(
     (name) => valores.get(name) ?? DEFAULTS[name],

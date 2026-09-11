@@ -244,6 +244,29 @@ export type PromedioSemanalMLInsert = Omit<PromedioSemanalML, 'id' | 'created_at
   created_at?: string;
 };
 
+// ─── TABLA: datos_prediccion_riesgo (HU-91 — features declaradas para ML) ───
+// Una fila por usuario (PK id_usuario). Fuente de verdad para
+// buildPredictionPayload: Vito NO imputa en silencio; si faltan campos,
+// PrediccionRiesgoScreen deriva a DatosPrediccionScreen.
+export interface DatosPrediccionRiesgo {
+  id_usuario: string;
+  peso_kg: number | null;
+  altura_cm: number | null;
+  bp_sistolica: number | null;
+  bp_diastolica: number | null;
+  /** 1=normal, 2=above, 3=well above (mismo ordinal que el entrenamiento). */
+  cholesterol_ord: 1 | 2 | 3 | null;
+  diabetes: boolean | null;
+  smoking: boolean | null;
+  alcohol: boolean | null;
+  /** Actividad física regular (declarada por el usuario en el formulario). */
+  active: boolean | null;
+  updated_at: string | null;
+}
+export type DatosPrediccionRiesgoInsert = Omit<DatosPrediccionRiesgo, 'updated_at'> & {
+  updated_at?: string;
+};
+
 // ─── TABLA: prediccion_riesgo (resultados del modelo ML) ───
 export interface PrediccionRiesgo {
   id: string;

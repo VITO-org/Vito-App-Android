@@ -386,3 +386,59 @@ CREATE UNIQUE INDEX contacto_confianza_un_principal
   WHERE es_principal = true;
 
 COMMENT ON TABLE public.contacto_confianza IS 'Contactos de confianza del usuario (HU-16/HU-54). RLS: solo el dueño (auth.uid()=id_usuario) puede select/insert/update/delete.';
+
+-- ============================================
+-- 16. DATOS_PREDICCION_RIESGO (HU-91 — formulario dedicado para features ML)
+--     Una fila por usuario (PK id_usuario). Almacena las features del contrato
+--     v2 que Vito NO recolecta de forma nativa (peso/altura/BMI declarado,
+--     presión manual, colesterol, diabetes, tabaquismo, alcohol) como fuente
+--     de verdad para buildPredictionPayload. Sexo y edad se toman del perfil.
+--     La app NUNCA imputa en silencio: PrediccionRiesgoScreen valida antes de
+--     llamar a la Edge Function y deriva a DatosPrediccionScreen si faltan campos.
+--     RLS incluido inline (patrón hu16): solo el dueño lee/escribe; service_role
+--     tiene acceso total para pipelines y Edge Functions futuras.
+-- ============================================
+CREATE TABLE datos_prediccion_riesgo (
+  id_usuario UUID PRIMARY KEY REFERENCES public.usuario(id) ON DELETE CASCADE,
+  peso_kg NUMERIC(5,1),
+  altura_cm NUMERIC(5,1),
+  bp_sistolica INTEGER,
+  bp_diastolica INTEGER,
+  cholesterol_ord SMALLINT CHECK (cholesterol_ord IN (1, 2, 3)),
+  diabetes BOOLEAN,
+  smoking BOOLEAN,
+  alcohol BOOLEAN,
+  active BOOLEAN,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE datos_prediccion_riesgo ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "datos_prediccion_riesgo_select_own"
+  ON datos_prediccion_riesgo FOR SELECT
+  TO authenticated
+  USING (auth.uid() = id_usuario);
+
+CREATE POLICY "datos_prediccion_riesgo_insert_own"
+  ON datos_prediccion_riesgo FOR INSERT
+  TO authenticated
+  WITH CHECK (auth.uid() = id_usuario);
+
+CREATE POLICY "datos_prediccion_riesgo_update_own"
+  ON datos_prediccion_riesgo FOR UPDATE
+  TO authenticated
+  USING (auth.uid() = id_usuario)
+  WITH CHECK (auth.uid() = id_usuario);
+
+CREATE POLICY "datos_prediccion_riesgo_delete_own"
+  ON datos_prediccion_riesgo FOR DELETE
+  TO authenticated
+  USING (auth.uid() = id_usuario);
+
+CREATE POLICY "datos_prediccion_riesgo_service_role_all"
+  ON datos_prediccion_riesgo FOR ALL
+  TO service_role
+  USING (true)
+  WITH CHECK (true);
+
+COMMENT ON TABLE public.datos_prediccion_riesgo IS 'Features declaradas para la predicción de riesgo cardiovascular (HU-91). RLS: solo el dueño (auth.uid()=id_usuario) puede select/insert/update/delete.';

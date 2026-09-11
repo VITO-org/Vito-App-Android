@@ -8,11 +8,14 @@ import {useSupabase} from '../context/SupabaseProvider';
 import type {RootStackParamList} from '../navigation/RootNavigator';
 import {
   buildPredictionPayload,
+  camposFaltantesPrediccion,
   mapearRiesgo,
   FEATURE_ORDER,
 } from '../services/prediccionRiesgo';
+import type {FeatureName} from '../services/prediccionRiesgo';
 import {
   callPrediccionRiesgo,
+  getDatosPrediccionRiesgo,
   getFactoresRiesgoCardiaco,
   getPromedioSemanalML,
   getUltimaPrediccionRiesgo,
@@ -62,6 +65,28 @@ const FEATURE_LABEL: Record<(typeof FEATURE_ORDER)[number], string> = {
   active: 'Actividad física',
 };
 
+/**
+ * Clasificación interpretable de la contribución local de cada factor
+ * (delta en puntos porcentuales devuelto por la Edge Function):
+ *
+ * - delta < 0        → "Bueno" (verde): la feature te BAJA el riesgo frente
+ *                      al valor de referencia saludable.
+ * - 0 <= delta < 5   → "Malo" (naranja): la feature te SUBE el riesgo.
+ * - delta >= 5       → "Muy malo" (rojo): te sube el riesgo y está lejos del
+ *                      estándar saludable (ajuste prioritario).
+ */
+const UMBRAL_MUY_MALO = 5;
+
+function estadoFactor(delta: number): {label: string; color: string; bg: string} {
+  if (delta < 0) {
+    return {label: 'Bueno', color: colors.success, bg: colors.successLight};
+  }
+  if (delta >= UMBRAL_MUY_MALO) {
+    return {label: 'Muy malo', color: colors.danger, bg: colors.dangerLight};
+  }
+  return {label: 'Malo', color: colors.warning, bg: colors.warningLight};
+}
+
 export default function PrediccionRiesgoScreen({navigation}: Props) {
   const {profile, session, getUserId} = useSupabase();
 
@@ -70,8 +95,11 @@ export default function PrediccionRiesgoScreen({navigation}: Props) {
   const [error, setError] = useState<string | null>(null);
   const [imputados, setImputados] = useState<string[]>([]);
   const [cargandoDatos, setCargandoDatos] = useState(true);
+  // Campos críticos que faltan para evaluar sin imputar (CA-03). Vacía = ok.
+  const [faltantes, setFaltantes] = useState<FeatureName[]>([]);
 
-  // Cargar en paralelo: factores de riesgo + promedio semanal + última predicción
+  // Cargar en paralelo: factores de riesgo + datos declarados + promedio
+  // semanal + última predicción
   useEffect(() => {
     let cancelled = false;
     async function loadDatos() {
@@ -81,8 +109,9 @@ export default function PrediccionRiesgoScreen({navigation}: Props) {
         return;
       }
       try {
-        const [factores, promedio, ultima] = await Promise.all([
+        const [factores, datos, promedio, ultima] = await Promise.all([
           getFactoresRiesgoCardiaco(userId).catch(() => null),
+          getDatosPrediccionRiesgo(userId).catch(() => null),
           getPromedioSemanalML(userId, {limit: 1}).catch(() => [] as PromedioSemanalML[]),
           getUltimaPrediccionRiesgo(userId).catch(() => null),
         ]);
@@ -98,10 +127,17 @@ export default function PrediccionRiesgoScreen({navigation}: Props) {
               'Evaluación educativa basada en un modelo poblacional. No constituye diagnóstico médico.',
           });
         }
-        // El payload se arma al tocar "Evaluar" con datos frescos; acá solo
-        // precargamos los inputs en estado para mostrar qué feature se usó.
-        void factores;
-        void promedio;
+        // Estado de campos faltantes para el aviso previo a evaluar
+        if (profile) {
+          setFaltantes(
+            camposFaltantesPrediccion({
+              profile,
+              factores,
+              promedio: promedio[0] ?? null,
+              datos,
+            }),
+          );
+        }
       } catch {
         // no bloqueamos la pantalla por fallo de precarga
       } finally {
@@ -112,7 +148,30 @@ export default function PrediccionRiesgoScreen({navigation}: Props) {
     return () => {
       cancelled = true;
     };
-  }, [getUserId]);
+  }, [getUserId, profile]);
+
+  // Al volver del formulario DatosPrediccionScreen: recargar datos declarados
+  // y re-evaluar si aún faltan campos (si el usuario acaba de completarlos,
+  // el aviso desaparece y puede evaluar directo).
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      const userId = getUserId();
+      if (!userId || !profile) return;
+      getDatosPrediccionRiesgo(userId)
+        .then(datos => {
+          setFaltantes(
+            camposFaltantesPrediccion({
+              profile,
+              datos,
+            }),
+          );
+        })
+        .catch(() => {
+          // dejamos el estado anterior
+        });
+    });
+    return unsubscribe;
+  }, [navigation, getUserId, profile]);
 
   const handleEvaluar = useCallback(async () => {
     if (!profile) {
@@ -129,16 +188,31 @@ export default function PrediccionRiesgoScreen({navigation}: Props) {
     setError(null);
     setResultado(null);
     try {
-      // Inputs frescos: factores + último promedio semanal
-      const [factores, promedio] = await Promise.all([
+      // Inputs frescos: factores + datos declarados + último promedio semanal
+      const [factores, datos, promedio] = await Promise.all([
         getFactoresRiesgoCardiaco(userId).catch(() => null),
+        getDatosPrediccionRiesgo(userId).catch(() => null),
         getPromedioSemanalML(userId, {limit: 1}).catch(() => [] as PromedioSemanalML[]),
       ]);
+
+      // CA-03: si faltan campos críticos, NO llamamos a la Edge Function.
+      // Mostramos el aviso con la lista de faltantes en vez de imputar.
+      const faltan = camposFaltantesPrediccion({
+        profile,
+        factores,
+        promedio: promedio[0] ?? null,
+        datos,
+      });
+      setFaltantes(faltan);
+      if (faltan.length > 0) {
+        return;
+      }
 
       const payload = buildPredictionPayload({
         profile,
         factores,
         promedio: promedio[0] ?? null,
+        datos,
       });
       setImputados(payload.imputados.map(f => FEATURE_LABEL[f]));
 
@@ -180,6 +254,27 @@ export default function PrediccionRiesgoScreen({navigation}: Props) {
 
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
+        {faltantes.length > 0 && (
+          <View style={styles.faltantesCard}>
+            <Text style={styles.faltantesTitle}>
+              Faltan datos para una evaluación precisa
+            </Text>
+            <Text style={styles.faltantesText}>
+              Vito no tiene estos datos y no queremos usar valores estándar en silencio.
+              Completalos para obtener un resultado con tus valores reales:
+            </Text>
+            <Text style={styles.faltantesList}>
+              {faltantes.map(f => `• ${FEATURE_LABEL[f] ?? f}`).join('\n')}
+            </Text>
+            <TouchableOpacity
+              style={styles.faltantesButton}
+              onPress={() => navigation.navigate('DatosPrediccion')}
+              activeOpacity={0.8}>
+              <Text style={styles.faltantesButtonText}>Completar mis datos</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         <TouchableOpacity
           style={[styles.ctaButton, loading && styles.ctaDisabled]}
           onPress={handleEvaluar}
@@ -211,14 +306,28 @@ export default function PrediccionRiesgoScreen({navigation}: Props) {
             Object.keys(resultado.factores_mas_influyentes).length > 0 && (
               <Card>
                 <Text style={styles.sectionTitle}>Factores más influyentes</Text>
-                {Object.entries(resultado.factores_mas_influyentes).map(([name, factor]) => (
-                  <View key={name} style={styles.factorRow}>
-                    <Text style={styles.factorName}>
-                      {FEATURE_LABEL[name as (typeof FEATURE_ORDER)[number]] ?? name}
-                    </Text>
-                    <Text style={styles.factorValue}>{factor}</Text>
-                  </View>
-                ))}
+                {Object.entries(resultado.factores_mas_influyentes).map(([name, factor]) => {
+                  const delta = Number(factor);
+                  const estado = estadoFactor(delta);
+                  const deltaStr = `${delta > 0 ? '+' : ''}${delta.toFixed(1)}`;
+                  return (
+                    <View key={name} style={styles.factorRow}>
+                      <Text style={styles.factorName}>
+                        {FEATURE_LABEL[name as (typeof FEATURE_ORDER)[number]] ?? name}
+                      </Text>
+                      <View style={[styles.factorBadge, {backgroundColor: estado.bg}]}>
+                        <Text style={[styles.factorBadgeText, {color: estado.color}]}>
+                          {estado.label} ({deltaStr})
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })}
+                <Text style={styles.factorHint}>
+                  El número muestra cuánto sube (Malo / Muy malo) o baja (Bueno)
+                  la estimación de riesgo frente a los valores de referencia
+                  saludables.
+                </Text>
               </Card>
             )}
 
@@ -305,6 +414,43 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     lineHeight: 18,
   },
+  faltantesCard: {
+    backgroundColor: colors.warningLight,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.warning,
+    padding: 14,
+    marginBottom: 12,
+  },
+  faltantesTitle: {
+    fontSize: fontSize.body,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: 4,
+  },
+  faltantesText: {
+    fontSize: fontSize.caption,
+    color: colors.textSecondary,
+    lineHeight: 18,
+    marginBottom: 6,
+  },
+  faltantesList: {
+    fontSize: fontSize.caption,
+    color: colors.textPrimary,
+    lineHeight: 20,
+    marginBottom: 10,
+  },
+  faltantesButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  faltantesButtonText: {
+    fontSize: fontSize.body,
+    fontWeight: '700',
+    color: '#fff',
+  },
   ctaButton: {
     backgroundColor: colors.primary,
     borderRadius: 14,
@@ -360,10 +506,23 @@ const styles = StyleSheet.create({
   factorName: {
     fontSize: fontSize.body,
     color: colors.textPrimary,
+    flex: 1,
+    marginRight: 8,
   },
-  factorValue: {
-    fontSize: fontSize.body,
+  factorBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  factorBadgeText: {
+    fontSize: fontSize.caption,
+    fontWeight: '700',
+  },
+  factorHint: {
+    marginTop: 10,
+    fontSize: fontSize.caption,
     color: colors.textSecondary,
+    lineHeight: 18,
   },
   imputadosText: {
     fontSize: fontSize.caption,

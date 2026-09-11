@@ -13,6 +13,8 @@ import type {
   FuenteDato,
   FactoresRiesgoCardiaco,
   FactoresRiesgoCardiacoInsert,
+  DatosPrediccionRiesgo,
+  DatosPrediccionRiesgoInsert,
   PromedioSemanalML,
   PrediccionRiesgo,
   Sintoma,
@@ -558,6 +560,41 @@ export async function getFactoresRiesgoCardiaco(
     .maybeSingle();
   if (error) throw error;
   return data as FactoresRiesgoCardiaco | null;
+}
+
+// ═══════════════════════════════════════════
+// DATOS DE PREDICCIÓN DE RIESGO (HU-91)
+// Tabla nueva datos_prediccion_riesgo — features declaradas por el usuario
+// para el modelo ML (peso/altura → BMI, presión manual, colesterol,
+// diabetes, tabaquismo, alcohol). Una fila por usuario (PK id_usuario).
+// ═══════════════════════════════════════════
+
+export async function getDatosPrediccionRiesgo(
+  userId: string,
+): Promise<DatosPrediccionRiesgo | null> {
+  const { data, error } = await supabase
+    .from('datos_prediccion_riesgo')
+    .select('*')
+    .eq('id_usuario', userId)
+    .maybeSingle();
+  if (error) throw error;
+  return data as DatosPrediccionRiesgo | null;
+}
+
+export async function upsertDatosPrediccionRiesgo(
+  datos: DatosPrediccionRiesgoInsert,
+  accessToken?: string | null,
+): Promise<DatosPrediccionRiesgo> {
+  const rows = await rawRestFetch<DatosPrediccionRiesgo[]>('datos_prediccion_riesgo', {
+    method: 'POST',
+    body: datos,
+    prefer: 'resolution=merge-duplicates,return=representation',
+    query: 'on_conflict=id_usuario',
+    accessToken,
+  });
+  const row = rows[0];
+  if (!row) throw new Error('No se pudieron guardar los datos de predicción');
+  return row;
 }
 
 // ═══════════════════════════════════════════
