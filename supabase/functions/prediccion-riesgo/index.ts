@@ -12,6 +12,14 @@
  * onnxruntime-web (WASM pesado de cold-start). El formato trees.json es
  * generado por ml-trainer/src/train.py → exportar_arboles_json().
  *
+ * CALIBRACIÓN (Platt): la probabilidad cruda del RF se mapea a probabilidad
+ * calibrada por interpolación lineal sobre risk_model_calibration.json (grid
+ * 101 puntos, generado por ml-trainer/src/calibrate.py, ECE 0.0122→0.0114).
+ * El score 0-100 y las bandas 33/66 se calculan sobre la prob CALIBRADA. El
+ * risk_model_trees.json NO cambia (hash f0d2f67... verificado). Los
+ * factores (SHAP-univariado) también usan prob calibrada para cuadrar con el
+ * score.
+ *
  * ── Ruta ────────────────────────────────────────────────────────────
  *   POST /functions/v1/prediccion-riesgo
  *   Headers: Authorization: Bearer <JWT>
@@ -67,10 +75,12 @@ const VALORES_REFERENCIA: Record<string, number> = {
 /**
  * Contribución local de cada feature (SHAP-univariado aproximado).
  *
- * Para cada feature i: delta_i = P(real) - P(counterfactual_i) donde
+ * Para cada feature i: delta_i = P_cal(real) - P_cal(counterfactual_i) donde
  * counterfactual_i reemplaza SOLO la feature i por su valor de referencia
- * sano. La diferencia de probabilidad indica cuánto empuja esa feature el
- * riesgo (positivo = sube riesgo, negativo = lo baja), con las demás fijas.
+ * sano. La diferencia de probabilidad CALIBRADA indica cuánto empuja esa
+ * feature el riesgo (positivo = sube riesgo, negativo = lo baja), con las
+ * demás fijas. Los deltas usan prob calibrada (Platt) para cuadrar punto a
+ * punto con el score que ve el usuario y con sus bandas 33/66.
  *
  * Devuelve el top-3 por |delta| como { feature: delta_puntos_porcentuales }.
  * A diferencia de la heurística anterior (importancia_base × valor, que
@@ -80,13 +90,13 @@ const VALORES_REFERENCIA: Record<string, number> = {
 function factoresMasInfluyentes(
   model: ModelJson,
   vector: number[],
-  probReal: number,
+  probReal: number, // probabilidad calibrada del vector real
 ): Record<string, number> {
   const deltas: { name: string; delta: number }[] = FEATURE_ORDER.map((name, i) => {
     const counterfactual = [...vector];
     counterfactual[i] = VALORES_REFERENCIA[name] ?? 0;
-    const probCounter = probRiesgo(model, counterfactual);
-    // Delta en puntos porcentuales con 1 decimal
+    const probCounter = calibrarProb(probRiesgo(model, counterfactual));
+    // Delta en puntos porcentuales con 1 decimal (sobre prob calibrada)
     const delta = Math.round((probReal - probCounter) * 1000) / 10;
     return { name, delta };
   });
@@ -116,6 +126,50 @@ interface ModelJson {
 import MODEL_RAW from './risk_model_trees.json' with { type: 'json' };
 
 const MODEL: ModelJson = MODEL_RAW as unknown as ModelJson;
+
+// Curva de calibración Platt (sigmoid) aprendida OOF (cv=5) sobre el train set
+// (ml-trainer/src/calibrate.py → models/risk_model_calibration.json). El score
+// 0-100 pasa a ser la PROBABILIDAD CALIBRADA: mapeamos prob cruda del RF (0..1)
+// a prob calibrada por interpolación lineal sobre el grid, sin replicar la
+// sigmoide de sklearn. La curva NO forma parte de los árboles: el RF queda
+// byte-idéntico (hash f0d2f67... verificado en calibrate.py).
+// @ts-ignore -- import de módulos JSON (Deno)
+import CALIBRATION_RAW from './risk_model_calibration.json' with { type: 'json' };
+
+interface CalibrationJson {
+  grid: number[];
+  values: number[];
+}
+
+const CALIBRATION: CalibrationJson = CALIBRATION_RAW as unknown as CalibrationJson;
+
+/**
+ * Mapea probabilidad cruda del RF → probabilidad calibrada (Platt).
+ *
+ * Interpolación lineal sobre la curva {grid: prob cruda, values: prob
+ * calibrada}. El grid es monótono creciente y denso (101 puntos 0.00–1.00),
+ * así que la interpolación lineal introduce error < 0.5 punto porcentual.
+ * Clampa fuera de rango a los extremos de la curva.
+ */
+function calibrarProb(probCruda: number): number {
+  const grid = CALIBRATION.grid;
+  const values = CALIBRATION.values;
+  if (grid.length === 0) return probCruda;
+  if (probCruda <= grid[0]) return values[0];
+  if (probCruda >= grid[grid.length - 1]) return values[values.length - 1];
+  // Búsqueda binaria del segmento que contiene probCruda
+  let lo = 0;
+  let hi = grid.length - 1;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (grid[mid] <= probCruda) lo = mid;
+    else hi = mid;
+  }
+  const span = grid[hi] - grid[lo];
+  if (span <= 0) return values[hi];
+  const t = (probCruda - grid[lo]) / span;
+  return values[lo] + t * (values[hi] - values[lo]);
+}
 
 // ── CORS ────────────────────────────────────────────────────────────────
 const corsHeaders = {
@@ -243,7 +297,10 @@ Deno.serve(async (req: Request) => {
     const vector = (body.vector as number[]).map((v) =>
       Number.isFinite(v) ? v : 0,
     );
-    const prob = probRiesgo(MODEL, vector);
+    // Probabilidad calibrada (Platt): el score 0-100 y las bandas 33/66 se
+    // calculan sobre la prob calibrada, no sobre la cruda del RF.
+    const probCruda = probRiesgo(MODEL, vector);
+    const prob = calibrarProb(probCruda);
     const score = Math.round(Math.max(0, Math.min(1, prob)) * 1000) / 10;
     const riesgo: 'bajo' | 'medio' | 'alto' =
       score >= SCORE_UMBRAL_ALTO
@@ -258,7 +315,8 @@ Deno.serve(async (req: Request) => {
         : MODELO_VERSION_DEFAULT;
 
     // Contribución local real (SHAP-univariado): cuánto empuja cada feature
-    // el riesgo vs. su valor de referencia sano. Top-3 por |delta|.
+    // el riesgo vs. su valor de referencia sano, sobre prob CALIBRADA para que
+    // cuadre con el score. Top-3 por |delta|.
     const factores = factoresMasInfluyentes(MODEL, vector, prob);
 
     // ── Persistir (service-role, id_usuario acotado al JWT verificado) ──

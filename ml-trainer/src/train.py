@@ -8,6 +8,12 @@ binario sobre el target `cardio` (Kaggle Cardiovascular, 70k). Exporta:
   models/metadata.json     → features, accuracy, AUROC, version
   models/labels.json       → clases (compat)
 
+Calibración (HU-91, palanca 3): el score 0-100 se calcula sobre la prob
+CALIBRADA (Platt) en la Edge Function. La curva se entrena con
+src/calibrate.py (CalibratedClassifierCV sigmoid, OOF cv=5) y se exporta a
+models/risk_model_calibration.json — este script NO la genera porque el RF
+debe quedar byte-idéntico (hash verificado en calibrate.py).
+
 El TFLite on-device de la HU-91 original queda REPLACEADO por ONNX cloud API.
 La probabilidad positiva → score 0-100 → riesgo bajo/medio/alto con umbrales
 33/66 (espejo de mapearRiesgo en src/services/prediccionRiesgo.ts).

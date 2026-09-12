@@ -21,6 +21,14 @@
   "target": "cardio",
   "test_accuracy": 0.7357,
   "test_roc_auc": 0.8008,
+  "calibracion": {
+    "metodo": "platt_sigmoid_grid",
+    "ece_raw": 0.0122,
+    "ece_cal": 0.0114,
+    "brier_raw": 0.1805,
+    "brier_cal": 0.1804,
+    "nota": "Score 0-100 sobre prob calibrada; trees.json byte-idéntico (hash f0d2f67...). Curva en risk_model_calibration.json (ml-trainer/src/calibrate.py)."
+  },
   "n_train": 54638,
   "n_test": 13660,
   "score_umbral_medio": 33,
