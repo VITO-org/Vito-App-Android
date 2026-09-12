@@ -1,5 +1,13 @@
 import React, {useCallback, useEffect, useState} from 'react';
-import {View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator} from 'react-native';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+  Modal,
+} from 'react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {colors, fontSize, spacing} from '../theme';
 import Card from '../components/Card';
@@ -77,6 +85,38 @@ const FEATURE_LABEL: Record<(typeof FEATURE_ORDER)[number], string> = {
  */
 const UMBRAL_MUY_MALO = 5;
 
+/** Umbrales de riesgo (espejo de mapearRiesgo en services/prediccionRiesgo.ts
+ *  y de la Edge Function: 33/66). */
+const NIVELES_REFERENCIA = [
+  {
+    nivel: 'Bajo' as const,
+    rango: '0 – 33',
+    emoji: '🟢',
+    color: colors.success,
+    bg: colors.successLight,
+    significado:
+      'La probabilidad que estima el modelo de presentar un evento cardiovascular es baja. Mantené los hábitos saludables y seguí con los controles de rutina.',
+  },
+  {
+    nivel: 'Medio' as const,
+    rango: '33 – 66',
+    emoji: '🟠',
+    color: colors.warning,
+    bg: colors.warningLight,
+    significado:
+      'La probabilidad estimada es intermedia. Revisá tus factores modificables (presión, colesterol, tabaco, actividad) y consultá con un profesional de la salud.',
+  },
+  {
+    nivel: 'Alto' as const,
+    rango: '66 – 100',
+    emoji: '🔴',
+    color: colors.danger,
+    bg: colors.dangerLight,
+    significado:
+      'La probabilidad estimada es alta. Te recomendamos consultar a un profesional de la salud lo antes posible para una evaluación completa.',
+  },
+];
+
 function estadoFactor(delta: number): {label: string; color: string; bg: string} {
   if (delta < 0) {
     return {label: 'Bueno', color: colors.success, bg: colors.successLight};
@@ -97,6 +137,8 @@ export default function PrediccionRiesgoScreen({navigation}: Props) {
   const [cargandoDatos, setCargandoDatos] = useState(true);
   // Campos críticos que faltan para evaluar sin imputar (CA-03). Vacía = ok.
   const [faltantes, setFaltantes] = useState<FeatureName[]>([]);
+  // Modal de referencia de niveles de riesgo (botón "¿Qué significa?").
+  const [verNiveles, setVerNiveles] = useState(false);
 
   // Cargar en paralelo: factores de riesgo + datos declarados + promedio
   // semanal + última predicción
@@ -229,6 +271,7 @@ export default function PrediccionRiesgoScreen({navigation}: Props) {
   const riesgoMeta = resultado ? RIESGO_META[mapearRiesgo(resultado.score)] : null;
 
   return (
+    <>
     <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
       {/* Header */}
       <View style={styles.header}>
@@ -300,6 +343,12 @@ export default function PrediccionRiesgoScreen({navigation}: Props) {
             </Text>
             <Text style={styles.resultScore}>{resultado.score.toFixed(1)}/100</Text>
             <Text style={styles.resultDesc}>{riesgoMeta.desc}</Text>
+            <TouchableOpacity
+              style={styles.nivelesButton}
+              onPress={() => setVerNiveles(true)}
+              activeOpacity={0.8}>
+              <Text style={styles.nivelesButtonText}>¿Qué significa este nivel?</Text>
+            </TouchableOpacity>
           </Card>
 
           {resultado.factores_mas_influyentes &&
@@ -344,8 +393,21 @@ export default function PrediccionRiesgoScreen({navigation}: Props) {
           <Card>
             <Text style={styles.sectionTitle}>Modelo</Text>
             <Text style={styles.modelText}>
-              Versión {resultado.modelo_version} · Árboles RandomForest · Exactitud 73.6% ·
-              AUC 0.80 en validación independiente.
+              Versión {resultado.modelo_version} · Random Forest de 80 árboles
+              entrenado sobre 70.000 registros poblacionales (Kaggle-Cardio).
+            </Text>
+            <Text style={styles.modelText}>
+              El modelo evalúa 10 factores: edad, sexo, IMC, presión sistólica y
+              diastólica, colesterol, diabetes, tabaquismo, alcohol y actividad
+              física. Cada árbol vota una probabilidad de riesgo y se promedia:
+              así se obtiene la probabilidad cruda del modelo.
+            </Text>
+            <Text style={styles.modelText}>
+              Esa probabilidad se calibra con el método de Platt (sigmoid): el
+              valor calibrado refleja con mayor precisión la probabilidad real
+              de presentar un evento cardiovascular, y el score 0–100 que ves es
+              esa probabilidad calibrada. Exactitud 73.6% · AUC 0.80 en
+              validación independiente.
             </Text>
             <Text style={styles.disclaimer}>
               ⚠️ {resultado.disclaimer}
@@ -360,6 +422,46 @@ export default function PrediccionRiesgoScreen({navigation}: Props) {
 
       <View style={{height: 24}} />
     </ScrollView>
+
+    {/* Modal: referencia de niveles de riesgo */}
+    <Modal
+      visible={verNiveles}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setVerNiveles(false)}>
+      <View style={styles.modalBackdrop}>
+        <View style={styles.modalCard}>
+          <Text style={styles.modalTitle}>Niveles de riesgo</Text>
+          <Text style={styles.modalSubtitle}>
+            El score va de 0 a 100 y se divide en tres niveles. Es una referencia
+            educativa, no un diagnóstico.
+          </Text>
+          {NIVELES_REFERENCIA.map(item => (
+            <View
+              key={item.nivel}
+              style={[styles.nivelRow, {backgroundColor: item.bg}]}>
+              <Text style={styles.nivelEmoji}>{item.emoji}</Text>
+              <View style={styles.nivelBody}>
+                <View style={styles.nivelHeader}>
+                  <Text style={[styles.nivelName, {color: item.color}]}>
+                    {item.nivel}
+                  </Text>
+                  <Text style={styles.nivelRango}>Score {item.rango}</Text>
+                </View>
+                <Text style={styles.nivelSignificado}>{item.significado}</Text>
+              </View>
+            </View>
+          ))}
+          <TouchableOpacity
+            style={styles.modalCloseButton}
+            onPress={() => setVerNiveles(false)}
+            activeOpacity={0.8}>
+            <Text style={styles.modalCloseText}>Entendido</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+    </>
   );
 }
 
@@ -539,5 +641,90 @@ const styles = StyleSheet.create({
     fontSize: fontSize.caption,
     color: colors.textSecondary,
     lineHeight: 18,
+  },
+  nivelesButton: {
+    marginTop: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.75)',
+    borderWidth: 1,
+    borderColor: colors.textSecondary,
+    alignSelf: 'center',
+  },
+  nivelesButtonText: {
+    fontSize: fontSize.caption,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.screenPaddingHorizontal,
+  },
+  modalCard: {
+    backgroundColor: colors.background,
+    borderRadius: 18,
+    padding: 20,
+    maxHeight: '85%',
+  },
+  modalTitle: {
+    fontSize: fontSize.title,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    marginBottom: 4,
+  },
+  modalSubtitle: {
+    fontSize: fontSize.caption,
+    color: colors.textSecondary,
+    lineHeight: 18,
+    marginBottom: 14,
+  },
+  nivelRow: {
+    flexDirection: 'row',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 10,
+    alignItems: 'center',
+  },
+  nivelEmoji: {
+    fontSize: 26,
+    marginRight: 12,
+  },
+  nivelBody: {
+    flex: 1,
+  },
+  nivelHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  nivelName: {
+    fontSize: fontSize.body,
+    fontWeight: '800',
+  },
+  nivelRango: {
+    fontSize: fontSize.caption,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  nivelSignificado: {
+    fontSize: fontSize.caption,
+    color: colors.textPrimary,
+    lineHeight: 17,
+  },
+  modalCloseButton: {
+    marginTop: 6,
+    backgroundColor: colors.primary,
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  modalCloseText: {
+    fontSize: fontSize.body,
+    fontWeight: '700',
+    color: '#fff',
   },
 });
