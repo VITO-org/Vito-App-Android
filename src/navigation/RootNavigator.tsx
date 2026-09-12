@@ -1,6 +1,7 @@
-import React from 'react';
+import React, {useEffect} from 'react';
 import {View, Text, ActivityIndicator, StyleSheet} from 'react-native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
+import {useNavigation} from '@react-navigation/native';
 import BottomTabNavigator from './BottomTabNavigator';
 import DetalleSignoScreen from '../screens/DetalleSignoScreen';
 import LoginScreen from '../screens/LoginScreen';
@@ -13,6 +14,7 @@ import RegistrarSintomaScreen from '../screens/RegistrarSintomaScreen';
 import HistorialSintomasScreen from '../screens/HistorialSintomasScreen';
 import ContactosConfianzaScreen from '../screens/ContactosConfianzaScreen';
 import {useSupabase} from '../context/SupabaseProvider';
+import {setNavigationRef} from '../context/NotificationsProvider';
 
 export type RootStackParamList = {
   MainTabs: undefined;
@@ -21,6 +23,9 @@ export type RootStackParamList = {
     label: string;
     unit: string;
     icon: string;
+    alertId?: string;
+    alertType?: string;
+    severity?: 'INFO' | 'advertencia' | 'critica';
   };
   TodosLosSignos: undefined;
   Login: undefined;
@@ -37,6 +42,11 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 function RootNavigatorContent() {
   const {session, isLoading, needsProfile} = useSupabase();
+  const navigation = useNavigation();
+
+  useEffect(() => {
+    setNavigationRef(navigation);
+  }, [navigation]);
 
   console.log(`[DIAG-NAV] isLoading=${isLoading}, session=${session ? 'ACTIVE' : 'NULL'}, needsProfile=${needsProfile}`);
 

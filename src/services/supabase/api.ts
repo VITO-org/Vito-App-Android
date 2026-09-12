@@ -30,6 +30,8 @@ import type {
   PreferenciaNotificacionInsert,
   ContactoConfianza,
   ContactoConfianzaInsert,
+  NotificacionEntrega,
+  NotificacionEntregaInsert,
 } from './models';
 
 // ═══════════════════════════════════════════
@@ -1022,6 +1024,116 @@ export async function marcarPrincipal(
     body: {es_principal: true, updated_at: now},
     prefer: 'return=minimal',
     query: `id=eq.${contactoId}`,
+    accessToken,
+  });
+}
+
+// ═══════════════════════════════════════════
+// NOTIFICACION_ENTREGA (delivery log — merge scrum-95: CA-06)
+// ═══════════════════════════════════════════
+
+/**
+ * Register a notification delivery (enviada) when sending.
+ */
+export async function registrarEntregaNotificacion(
+  entrega: NotificacionEntregaInsert,
+  accessToken?: string | null,
+): Promise<NotificacionEntrega> {
+  const rows = await rawRestFetch<NotificacionEntrega[]>('notificacion_entrega', {
+    method: 'POST',
+    body: entrega,
+    prefer: 'return=representation',
+    accessToken,
+  });
+  const row = rows[0];
+  if (!row) throw new Error('No se pudo registrar el envío de notificación');
+  return row;
+}
+
+/**
+ * Mark a notification as received (recibida) on device.
+ */
+export async function marcarRecibidaNotificacion(
+  entregaId: string,
+  accessToken?: string | null,
+): Promise<void> {
+  await rawRestFetch<null>('notificacion_entrega', {
+    method: 'PATCH',
+    body: { estado: 'recibida', recibida_en: new Date().toISOString() },
+    prefer: 'return=minimal',
+    query: `id=eq.${entregaId}`,
+    accessToken,
+  });
+}
+
+/**
+ * Mark a notification as read (leida) when user opens it.
+ */
+export async function marcarLeidaNotificacion(
+  entregaId: string,
+  accessToken?: string | null,
+): Promise<void> {
+  await rawRestFetch<null>('notificacion_entrega', {
+    method: 'PATCH',
+    body: { estado: 'leida', leida_en: new Date().toISOString() },
+    prefer: 'return=minimal',
+    query: `id=eq.${entregaId}`,
+    accessToken,
+  });
+}
+
+/**
+ * Get all deliveries for a user (for admin panel/history).
+ */
+export async function getEntregasUsuario(
+  userId: string,
+  accessToken?: string | null,
+): Promise<NotificacionEntrega[]> {
+  const rows = await rawRestFetch<NotificacionEntrega[]>('notificacion_entrega', {
+    query: `id_usuario=eq.${userId}&order=created_at.desc`,
+    accessToken,
+  });
+  return rows ?? [];
+}
+
+/**
+ * Mark the latest 'enviada' delivery for an alert as received (CA-06).
+ * Best-effort: no-op when no pending delivery exists.
+ */
+export async function marcarRecibidaPorAlerta(
+  alertaId: string,
+  accessToken?: string | null,
+): Promise<void> {
+  await rawRestFetch<null>('notificacion_entrega', {
+    method: 'PATCH',
+    body: { estado: 'recibida', recibida_en: new Date().toISOString() },
+    prefer: 'return=minimal',
+    query: `id_alerta=eq.${alertaId}&estado=eq.enviada&order=created_at.desc&limit=1`,
+    accessToken,
+  });
+}
+
+/**
+ * Mark the latest delivery for an alert as read (CA-06).
+ * Matches 'enviada' first, then 'recibida'.
+ */
+export async function marcarLeidaPorAlerta(
+  alertaId: string,
+  accessToken?: string | null,
+): Promise<void> {
+  const ahora = new Date().toISOString();
+  await rawRestFetch<null>('notificacion_entrega', {
+    method: 'PATCH',
+    body: { estado: 'leida', leida_en: ahora },
+    prefer: 'return=minimal',
+    query: `id_alerta=eq.${alertaId}&estado=eq.recibida&order=created_at.desc&limit=1`,
+    accessToken,
+  });
+  await rawRestFetch<null>('notificacion_entrega', {
+    method: 'PATCH',
+    body: { estado: 'leida', leida_en: ahora },
+    prefer: 'return=minimal',
+    query: `id_alerta=eq.${alertaId}&estado=eq.enviada&order=created_at.desc&limit=1`,
     accessToken,
   });
 }

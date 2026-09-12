@@ -334,21 +334,33 @@ export interface PreferenciaNotificacion {
   push_habilitado: boolean | null;
   alertas_criticas: boolean | null;
   alertas_info: boolean | null;
+  horario_silencioso_inicio: string | null; // TIME stored as string 'HH:MM:SS'
+  horario_silencioso_fin: string | null;    // TIME stored as string 'HH:MM:SS'
   updated_at: string | null;
 }
 export type PreferenciaNotificacionInsert = Omit<PreferenciaNotificacion, 'updated_at'> & { updated_at?: string };
 
-// ─── TABLA: notificacion_entrega (Fase 2 — registro de entregas push) ───
+// ─── TABLA: notificacion_entrega (registro de entregas push) ───
+// 'fallida' la escribe la Edge Function evaluar-evento server-side
+// (token revocado / error Expo / excepción de red). La app local sólo
+// usa 'enviada' | 'recibida' | 'leida'.
+export type EstadoNotificacion = 'enviada' | 'recibida' | 'leida' | 'fallida';
+
 export interface NotificacionEntrega {
   id: string;
   id_alerta: string | null;
   id_dispositivo: string | null;
-  estado: string;
+  id_usuario: string | null;
+  estado: EstadoNotificacion;
   enviado_en: string | null;
+  recibida_en: string | null;
+  leida_en: string | null;
   error_mensaje: string | null;
   created_at: string | null;
 }
-export type NotificacionEntregaInsert = Omit<NotificacionEntrega, 'id' | 'created_at'> & { id?: string; created_at?: string };
+export type NotificacionEntregaInsert = Omit<NotificacionEntrega, 'id' | 'created_at'> & {
+  estado?: EstadoNotificacion;
+};
 
 // ─── TABLA: contacto_confianza (HU-16 / HU-54 — registro de contactos de confianza) ───
 export type RelacionContacto = 'familiar' | 'medico' | 'otro';

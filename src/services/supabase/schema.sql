@@ -278,14 +278,20 @@ CREATE TABLE notificacion_entrega (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     id_alerta uuid REFERENCES alerta(id),
     id_dispositivo uuid REFERENCES dispositivo_usuario(id),
-    estado varchar(20) NOT NULL,
+    id_usuario uuid REFERENCES usuario(id),
+    estado varchar(20) NOT NULL DEFAULT 'enviada', -- 'enviada', 'recibida', 'leida'
     enviado_en timestamptz,
+    recibida_en timestamptz,
+    leida_en timestamptz,
     error_mensaje text,
     created_at timestamptz DEFAULT now()
 );
 
 CREATE INDEX idx_notificacion_entrega_alerta
   ON notificacion_entrega(id_alerta);
+
+CREATE INDEX idx_notificacion_entrega_usuario
+  ON notificacion_entrega(id_usuario);
 
 -- ============================================
 -- 14. BASELINE_PERSONALIZADO (HU-98 — baseline personalizado por paciente)
