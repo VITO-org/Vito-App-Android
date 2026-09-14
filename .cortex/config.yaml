@@ -27,3 +27,19 @@ integrations:
     base_url: "https://vitoproyecto-1775921969007.atlassian.net"
     email_env: JIRA_EMAIL
     token_env: JIRA_API_TOKEN
+    # Convención persistente de títulos BUG / QA (acordada 2026-09-14)
+    #  - Key SCRUM-X la genera Jira, inmutable, NUNCA va dentro del Summary.
+    #  - Summary (campo editable en Jira) SIN key propia.
+    #  - Vault title (compatibilidad actual) = "SCRUM-<propio>: <Summary>".
+    title_convention:
+      scope: "solo issues tipo BUG y QA; stories funcionales no se tocan"
+      summary_format_bug: "BUG HU-<n> <descripcion corta> (extraída de SCRUM-<id>)"
+      summary_format_qa: "QA HU-<n> <nombre historia> (extraída de SCRUM-<id>)"
+      summary_regex: "^(QA|BUG) HU-[0-9]+ .+ \\(extraída de SCRUM-[0-9]+\\)$"
+      vault_format: "SCRUM-<propio>: <Summary>"
+      script: "scripts/jira-titulo-convencion.sh"
+      examples:
+        - summary: "QA HU-51 Notificaciones push de app móvil (extraída de SCRUM-95)"
+          vault: "SCRUM-190: QA HU-51 Notificaciones push de app móvil (extraída de SCRUM-95)"
+        - summary: "BUG HU-51 Push no se dispara server-side (extraída de SCRUM-95)"
+          vault: "SCRUM-189: BUG HU-51 Push no se dispara server-side (extraída de SCRUM-95)"
