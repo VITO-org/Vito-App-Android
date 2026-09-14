@@ -23,6 +23,9 @@ type RootStackParamList = {
     label: string;
     unit: string;
     icon: string;
+    alertId?: string;
+    alertType?: string;
+    severity?: 'INFO' | 'advertencia' | 'critica';
   };
 };
 
