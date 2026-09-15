@@ -111,6 +111,8 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          log-accepted-android-sdk-licenses: false
 
       - name: Fix gradlew line endings
         run: sed -i 's/\r$//' android/gradlew
