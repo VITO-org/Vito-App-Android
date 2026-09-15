@@ -110,7 +110,16 @@ jobs:
           java-version: '17'
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          # Evitar default 'tools platform-tools': 'tools' está obsoleto y
+          # sdkmanager falla con 'Failed to find package tools' (v3 y v4).
+          packages: ''
+          log-accepted-android-sdk-licenses: false
+
+      - name: Install required SDK packages
+        run: |
+          sdkmanager --install "platform-tools" "platforms;android-36" "build-tools;35.0.0"
 
       - name: Fix gradlew line endings
         run: sed -i 's/\r$//' android/gradlew
