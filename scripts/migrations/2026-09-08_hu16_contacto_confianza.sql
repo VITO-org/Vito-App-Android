@@ -9,7 +9,7 @@
 -- ============================================
 
 -- 1. TABLA contacto_confianza
-CREATE TABLE contacto_confianza (
+CREATE TABLE IF NOT EXISTS contacto_confianza (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   id_usuario uuid NOT NULL REFERENCES public.usuario(id) ON DELETE CASCADE,
   nombre varchar(120) NOT NULL,
@@ -23,7 +23,7 @@ CREATE TABLE contacto_confianza (
 );
 
 -- 2. Índice por usuario: lookup de la lista de la pantalla + soporte del filtro id_usuario
-CREATE INDEX idx_contacto_confianza_usuario
+CREATE INDEX IF NOT EXISTS idx_contacto_confianza_usuario
   ON contacto_confianza(id_usuario);
 
 -- 3. RLS: el dueño solo ve/escribe sus contactos (CA-04)

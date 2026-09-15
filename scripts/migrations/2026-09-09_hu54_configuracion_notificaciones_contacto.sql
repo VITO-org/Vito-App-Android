@@ -10,21 +10,21 @@
 
 -- 1. Columnas nuevas
 ALTER TABLE contacto_confianza
-  ADD COLUMN tipos_evento jsonb NOT NULL DEFAULT '["fisiologico"]';
+  ADD COLUMN IF NOT EXISTS tipos_evento jsonb NOT NULL DEFAULT '["fisiologico"]';
 
 ALTER TABLE contacto_confianza
-  ADD COLUMN canal varchar(20) NOT NULL DEFAULT 'app_interna'
+  ADD COLUMN IF NOT EXISTS canal varchar(20) NOT NULL DEFAULT 'app_interna'
   CHECK (canal IN ('app_interna', 'whatsapp'));
 
 ALTER TABLE contacto_confianza
-  ADD COLUMN estado_opt_in varchar(20) NOT NULL DEFAULT 'pendiente'
+  ADD COLUMN IF NOT EXISTS estado_opt_in varchar(20) NOT NULL DEFAULT 'pendiente'
   CHECK (estado_opt_in IN ('pendiente', 'confirmado', 'rechazado', 'vencido'));
 
 ALTER TABLE contacto_confianza
-  ADD COLUMN es_principal boolean NOT NULL DEFAULT false;
+  ADD COLUMN IF NOT EXISTS es_principal boolean NOT NULL DEFAULT false;
 
 -- 2. Constraint parcial UNIQUE: un solo contacto principal por usuario
-CREATE UNIQUE INDEX contacto_confianza_un_principal
+CREATE UNIQUE INDEX IF NOT EXISTS contacto_confianza_un_principal
   ON contacto_confianza(id_usuario)
   WHERE es_principal = true;
 

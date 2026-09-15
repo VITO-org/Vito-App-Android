@@ -9,19 +9,22 @@ Cada PR futuro agrega su entrada bajo `Unreleased`. Ver DoD de releases:
 ### Agregado
 - (Tus cambios acá: `### Agregado/Cambiado/Corregido/Quitado` por PR)
 
-## [1.0.0] — 2026-09-11 (base inicial, entradas históricas a completar)
+## [1.0.0] — 2026-09-15
 
-### Agregado
-- Alertas de salud: hipoxia SpO2 (HU-41/SCRUM-90), frecuencia cardíaca (HU-42/SCRUM-91),
-  presión arterial (HU-43/SCRUM-92) con AlertEngine local.
-- Notificaciones push HU-51/SCRUM-95: deep link al detalle, horario silencioso,
-  log de entrega; push server-side vía Edge Function + trigger versionados + panel-admin QA.
-- Sincronización de datos de salud HU-25/SCRUM-79; registro de síntomas HU-23;
-  reportes de signos vitales HU-32; sugerencias Vittito HU-34 (fase A).
-- Integración Supabase (auth, perfil, raw REST en RN), Health Connect, FCM
-  (`google-services.json`, proyecto vito-39dda).
-- CI: lint + type-check + Jest en PRs, builds Android en CI, sync Jira.
+### Historias de Usuario (Release 1)
+- **HU-11 (SCRUM-66)**: Acceso a la cuenta.
+- **HU-12 (SCRUM-67)**: Registro básico de cuenta.
+- **HU-14 (SCRUM-69)**: Registro de contactos de confianza.
+- **HU-15 (SCRUM-70)**: Configuración de perfil personal.
+- **HU-22 (SCRUM-71)**: Actualización manual de signos vitales.
+- **HU-23 (SCRUM-78)**: Registro de síntomas.
+- **HU-24 (SCRUM-83)**: Integración con Health Connect.
+- **HU-26 (SCRUM-77)**: Validación y normalización de datos de signos vitales.
+- **HU-32 (SCRUM-73)**: Visualizar reportes de signos vitales diario, semanal y mensual.
+- **HU-36 (SCRUM-88)**: Menú de navegación principal.
+- **HU-93 (SCRUM-76)**: Selección de tecnologías de Machine Learning.
 
-### Notas
-- Las entradas anteriores a este archivo se reconstruyen de a poco desde el
-  historial de git (`git log --oneline`) en siguientes iteraciones.
+### Infraestructura y Calidad
+- Definición de DoD y pipeline de releases automáticos (APK de release + GitHub Release).
+- SAST con GitHub CodeQL y verificación de idempotencia de migraciones SQL (`dod:check`).
+- Integración continua en PRs a dev con validación de tests Android y reporte de cobertura Jest.
