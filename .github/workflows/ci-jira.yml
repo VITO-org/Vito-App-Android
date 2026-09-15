@@ -1,9 +1,10 @@
-name: CI - Jira Sync (Push)
+name: CI - Jira Sync (PR)
 
 on:
-  push:
+  pull_request:
+    types: [opened]
     branches:
-      - 'scrum-*'
+      - 'dev'
 
 jobs:
   jira-sync:
@@ -22,29 +23,19 @@ jobs:
       - name: Extract Jira issue key
         id: extract
         run: |
-          BRANCH="${GITHUB_REF_NAME}"
+          BRANCH="${{ github.head_ref }}"
           if [[ "$BRANCH" =~ scrum-([0-9]+) ]]; then
             ISSUE_NUM="${BASH_REMATCH[1]}"
             echo "issue_key=SCRUM-${ISSUE_NUM}" >> "$GITHUB_OUTPUT"
-            echo "✅ Extracted issue key: SCRUM-${ISSUE_NUM}"
+            echo "Extracted issue key: SCRUM-${ISSUE_NUM}"
           else
-            echo "⚠️ Branch '$BRANCH' does not match scrum-{number}. Skipping."
+            echo "Branch '$BRANCH' does not match scrum-{number}. Skipping."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Transition to In Progress
         if: steps.extract.outputs.skip != 'true'
         run: ./scripts/jira-transition.sh "${{ steps.extract.outputs.issue_key }}" "In Progress"
-
-      - name: Transition to Bugs (any job failed)
-        if: steps.extract.outputs.skip != 'true' && (needs.js-lint-test.result == 'failure' || needs.android-build.result == 'failure')
-        run: |
-          echo "❌ Tests or build failed → Bugs"
-          ./scripts/jira-transition.sh "${{ steps.extract.outputs.issue_key }}" "Bugs"
-
-      - name: Fail workflow if any job failed
-        if: needs.js-lint-test.result == 'failure' || needs.android-build.result == 'failure'
-        run: exit 1
 
   js-lint-test:
     runs-on: ubuntu-latest
@@ -76,7 +67,6 @@ jobs:
 
   android-build:
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' || contains(github.event.head_commit.modified, 'android/') || contains(github.event.head_commit.added, 'android/') || contains(github.event.head_commit.removed, 'android/')
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -117,7 +107,7 @@ jobs:
   discord-notify:
     needs: [jira-sync, js-lint-test, android-build]
     runs-on: ubuntu-latest
-    if: always() && github.event.head_commit != null
+    if: always()
     env:
       DISCORD_WEBHOOK: ${{ secrets.DISCORD_FEATURES_WEBHOOK }}
     steps:
@@ -147,25 +137,27 @@ jobs:
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_FEATURES_WEBHOOK }}
         run: |
-          COMMIT_MSG=$(echo "${{ github.event.head_commit.message }}" | head -1)
+          BRANCH="${{ github.head_ref }}"
+          PR_NUM="${{ github.event.pull_request.number }}"
+          PR_URL="${{ github.event.pull_request.html_url }}"
           FIELDS=$(jq -n \
             --arg author "${{ github.actor }}" \
-            --arg branch "${{ github.ref_name }}" \
-            --arg commit "$COMMIT_MSG" \
-            --arg link "${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}" \
+            --arg branch "$BRANCH" \
+            --arg pr "#${PR_NUM}" \
+            --arg link "$PR_URL" \
             --arg build "${{ steps.status.outputs.emoji }} ${{ steps.status.outputs.build_status }}" \
             --arg jira "${{ steps.status.outputs.jira_status }}" \
             '[
               {name: "👤 Autor", value: $author, inline: true},
               {name: "🌿 Rama", value: $branch, inline: true},
-              {name: "💬 Commit", value: $commit, inline: false},
+              {name: "📋 PR", value: $pr, inline: true},
               {name: "🔗 Link", value: $link, inline: false},
               {name: "🔨 Build", value: $build, inline: true},
               {name: "📋 Jira", value: $jira, inline: true}
             ]')
           ./scripts/discord-notify.sh \
             "$DISCORD_WEBHOOK" \
-            "${{ steps.status.outputs.emoji }} Push a rama ${{ github.ref_name }}" \
+            "${{ steps.status.outputs.emoji }} PR ${{ github.event.pull_request.number }} a dev" \
             "" \
             "${{ steps.status.outputs.color }}" \
             "$FIELDS"
