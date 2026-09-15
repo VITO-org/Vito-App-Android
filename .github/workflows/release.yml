@@ -1,0 +1,195 @@
+name: Release
+
+# DoD DESPLIEGUE-2 + DESPLIEGUE-3 — Pipeline de release automático
+# Trigger: push de tag vX.Y.Z (semver)
+# Flujo: dod:check → Build APK → GitHub Release → Upload APK → Discord notify
+#
+# USO (ejecutar después de scripts/tag-release.sh o manualmente):
+#   git tag -a v1.2.0 -m 'Release 1.2.0 — ver CHANGELOG.md'
+#   git push origin v1.2.0
+#   → Este workflow se dispara automáticamente
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+jobs:
+  # Job 1: Verificación DoD previa al release
+  dod-check:
+    name: DoD Pre-release Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.11.0'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run DoD check (paridad versiones + CHANGELOG + migraciones)
+        run: |
+          chmod +x scripts/migrations/verify-migrations.sh
+          npm run dod:check
+        # Si falla, el pipeline completo se cancela — no se crea una release rota
+
+      - name: Verify tag matches package.json version
+        run: |
+          TAG="${GITHUB_REF_NAME}"             # ej: v1.2.0
+          PKG_VER="v$(node -p "require('./package.json').version")"  # ej: v1.2.0
+          if [ "$TAG" != "$PKG_VER" ]; then
+            echo "❌ El tag '$TAG' no coincide con package.json '$PKG_VER'. Actualizar versión antes de taggear."
+            exit 1
+          fi
+          echo "✅ Tag '$TAG' coincide con package.json"
+
+  # Job 2: Build del APK de release
+  build-release-apk:
+    name: Build Release APK
+    runs-on: ubuntu-latest
+    needs: dod-check
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.11.0'
+          cache: 'npm'
+
+      - name: Setup Java JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-release-${{ runner.os }}-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-release-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Fix gradlew line endings
+        run: sed -i 's/\r$//' android/gradlew
+
+      - name: Build Release APK
+        run: cd android && ./gradlew assembleRelease --no-daemon --parallel --build-cache
+
+      - name: Upload APK artifact (para el job de release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: VitoHealth-Release-${{ github.ref_name }}
+          path: android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 90
+
+  # Job 3: Crear GitHub Release con notas y APK adjunto
+  create-github-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: build-release-apk
+    permissions:
+      contents: write  # Necesario para crear releases
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download APK artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: VitoHealth-Release-${{ github.ref_name }}
+          path: ./release-artifacts
+
+      - name: Extract release notes from CHANGELOG.md
+        id: changelog
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"  # Quita la 'v' del tag → ej: 1.2.0
+          # Extrae la sección del CHANGELOG para esta versión
+          NOTES=$(awk "/^## \[$VERSION\]/,/^## \[/" CHANGELOG.md | head -n -1 | tail -n +2)
+          if [ -z "$NOTES" ]; then
+            NOTES="Ver CHANGELOG.md para los cambios de esta versión."
+          fi
+          # Guardar como variable de entorno multi-línea
+          {
+            echo "notes<<RELEASE_NOTES_EOF"
+            echo "$NOTES"
+            echo "RELEASE_NOTES_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Vito App ${{ github.ref_name }}"
+          body: |
+            ## Vito Health Connect ${{ github.ref_name }}
+
+            ${{ steps.changelog.outputs.notes }}
+
+            ---
+            **APK adjunto**: instalar directamente en el dispositivo físico de prueba.
+            **Rollback**: ver `.cortex/vault/runbooks/RB-dod-de-releases-checklist-canonico-estado-de-brechas.md` → OPERACIONES-3.
+          files: ./release-artifacts/app-release.apk
+          draft: false
+          prerelease: false
+
+  # Job 4: Notificar Discord
+  notify-discord:
+    name: Notify Discord
+    runs-on: ubuntu-latest
+    needs: create-github-release
+    if: always()
+    env:
+      DISCORD_WEBHOOK: ${{ secrets.DISCORD_PR_WEBHOOK }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Make discord-notify.sh executable
+        run: chmod +x scripts/discord-notify.sh
+
+      - name: Determine status
+        id: status
+        run: |
+          if [[ "${{ needs.create-github-release.result }}" == "success" ]]; then
+            echo "emoji=🚀" >> "$GITHUB_OUTPUT"
+            echo "color=3066993" >> "$GITHUB_OUTPUT"
+            echo "msg=Release exitosa" >> "$GITHUB_OUTPUT"
+          else
+            echo "emoji=❌" >> "$GITHUB_OUTPUT"
+            echo "color=15158332" >> "$GITHUB_OUTPUT"
+            echo "msg=Release fallida — revisar pipeline" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Notify Discord
+        if: env.DISCORD_WEBHOOK != ''
+        run: |
+          FIELDS=$(jq -n \
+            --arg version "${{ github.ref_name }}" \
+            --arg status "${{ steps.status.outputs.emoji }} ${{ steps.status.outputs.msg }}" \
+            --arg link "${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }}" \
+            '[
+              {name: "🏷️ Versión", value: $version, inline: true},
+              {name: "📦 Estado", value: $status, inline: true},
+              {name: "🔗 GitHub Release", value: $link, inline: false}
+            ]')
+          ./scripts/discord-notify.sh \
+            "$DISCORD_WEBHOOK" \
+            "${{ steps.status.outputs.emoji }} Vito App ${{ github.ref_name }} — Release" \
+            "" \
+            "${{ steps.status.outputs.color }}" \
+            "$FIELDS"
+        continue-on-error: true
