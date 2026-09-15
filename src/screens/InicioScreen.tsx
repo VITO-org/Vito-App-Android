@@ -13,6 +13,7 @@ import StatusIndicator from '../components/StatusIndicator';
 import ActiveAlertsBanner from '../components/ActiveAlertsBanner';
 import {colors, spacing, fontSize, shadows} from '../theme';
 import {buildSignosFromSummary, getMetricasBienestar} from '../utils/signosVitales';
+import type {Alerta} from '../services/supabase/models';
 
 type RootStackParamList = {
   MainTabs: undefined;
@@ -25,6 +26,29 @@ type RootStackParamList = {
   RegistrarSintoma: undefined;
   HistorialSintomas: undefined;
 };
+
+/**
+ * FIX SCRUM-191 (BUG HU-37): mapea tipo de alerta → params de DetalleSigno
+ * para que el tap en el banner abra el detalle del evento que la generó (CA-03).
+ */
+function destinoPorTipoAlerta(alertType: Alerta['tipo']): {
+  tipoSigno: string;
+  label: string;
+  unit: string;
+  icon: string;
+} {
+  switch (alertType) {
+    case 'hipoxia':
+      return {tipoSigno: 'saturacion_oxigeno', label: 'Saturación de oxígeno', unit: '%', icon: '🩸'};
+    case 'hipertension':
+    case 'hipotension':
+      return {tipoSigno: 'presion_sistolica', label: 'Presión arterial', unit: 'mmHg', icon: '❤️'};
+    case 'taquicardia':
+    case 'bradicardia':
+    default:
+      return {tipoSigno: 'frecuencia_cardiaca', label: 'Frecuencia cardíaca', unit: 'lpm', icon: '💓'};
+  }
+}
 
 /**
  * Dashboard principal — pantalla de inicio de VITO.
@@ -60,6 +84,16 @@ const InicioScreen: React.FC = () => {
       setRefreshing(false);
     }
   }, [refreshData]);
+
+  // FIX SCRUM-191 (BUG HU-37): el banner quedaba deshabilitado porque no se
+  // pasaba onAlertPress. Ahora el tap navega al detalle del evento (CA-03).
+  const handleAlertPress = useCallback(
+    (alert: Alerta) => {
+      const destino = destinoPorTipoAlerta(alert.tipo);
+      navigation.navigate('DetalleSigno', destino);
+    },
+    [navigation],
+  );
 
   const userName = profile?.nombre
     ? profile.nombre
@@ -146,6 +180,7 @@ const InicioScreen: React.FC = () => {
       {/* ── Alertas activas (HU-37) ── */}
       <ActiveAlertsBanner
         alerts={activeAlerts}
+        onAlertPress={handleAlertPress}
         onDismiss={confirmAlert}
         onSeeAll={() => navigation.navigate('Alertas' as any)}
       />
