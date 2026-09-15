@@ -8,6 +8,7 @@ on:
 jobs:
   jira-sync:
     runs-on: ubuntu-latest
+    if: github.event.deleted != true
     env:
       JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
       JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
