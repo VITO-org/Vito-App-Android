@@ -9,6 +9,46 @@ Cada PR futuro agrega su entrada bajo `Unreleased`. Ver DoD de releases:
 ### Agregado
 - (Tus cambios acá: `### Agregado/Cambiado/Corregido/Quitado` por PR)
 
+## [1.1.0] — 2026-09-15
+
+### Sobre esta release
+
+**Release 2 - Automatización y Alertas**. Esta versión agrega el sistema
+completo de alertas clínicas automáticas (hipoxemia, frecuencia cardíaca y
+presión arterial fuera de rango), captura y almacenamiento estructurado de
+datos de salud, validación de calidad de datos ingresados, generación de
+históricos para análisis ML, y una vista mejorada de gráficos de reporte.
+
+### Historias de Usuario (Release 2)
+
+| HU | SCRUM | Descripción | Estado |
+|----|-------|-------------|--------|
+| HU-21 | SCRUM-84 | Registro de baseline de salud | ✅ Done |
+| HU-25 | SCRUM-79 | Sincronización de datos de salud (Health Connect) | ✅ Done |
+| HU-31 | SCRUM-72 | Visualizar signos vitales en el dashboard | ✅ Done |
+| HU-38 | SCRUM-116 | Vista de los gráficos de reporte | ✅ Done |
+| HU-41 | SCRUM-90 | Alerta por hipoxia (SpO₂ baja) | ✅ Done |
+| HU-42 | SCRUM-91 | Alerta por frecuencia cardíaca fuera de rango | ✅ Done |
+| HU-43 | SCRUM-92 | Alerta por presión arterial fuera de rango | ✅ Done |
+| HU-94 | SCRUM-110 | Captura y almacenamiento estructurado de datos de salud | ✅ Done |
+| HU-95 | SCRUM-111 | Generación y disponibilidad de históricos de datos del paciente | ✅ Done |
+| HU-96 | SCRUM-112 | Validación de calidad de datos ingresados | ✅ Done |
+
+### Funcionalidades nuevas
+
+- **Alertas clínicas automáticas**: monitoreo continuo de SpO₂, frecuencia cardíaca y presión arterial con notificaciones cuando los valores están fuera de rango.
+- **Baseline de salud**: registro de valores de referencia personalizados para cada paciente.
+- **Captura estructurada de datos**: almacenamiento optimizado de datos de salud con esquema orientado a ML.
+- **Validación de calidad de datos**: verificación automática de integridad y registro de intentos fallidos.
+- **Generación de históricos**: exportación de datos de paciente en formato estructurado para análisis de Machine Learning.
+- **Gráficos de reporte mejorados**: vista optimizada de reportes con visualización interactiva.
+
+### Infraestructura
+
+- Migraciones de base de datos para tablas de alertas, baseline y datos estructurados.
+- Triggers de evaluación automática de eventos de salud.
+- Schema Supabase extendido para soportaralertas y datos clínicos.
+
 ## [1.0.0] — 2026-09-15
 
 ### Sobre esta release
