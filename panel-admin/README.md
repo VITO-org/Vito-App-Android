@@ -58,6 +58,16 @@ CREATE POLICY "anon_select_alertas"
 | 80-90 | 50-60 | Hipotensión leve |
 | <80 | <50 | Hipotensión crítica |
 
+## Simulador Vittito (HU-34 Fase A)
+
+La sección **Simulador Vittito** es un espejo JS del motor `src/services/suggestions/rulesEngine.ts` con los mismos umbrales (FC >100/<60, PA ≥130/85, SpO₂ <95, temp >37.5/<36.0, pasos <5000, sueño <360 min) y el mismo orden (Alta > Media > Baja, fuera de rango primero).
+
+> ⚠️ Importante: en Fase A Vittito lee el `HealthSummary` de **Health Connect** (dispositivo), NO de `datos_reloj`. Por eso el panel **no puede provocarla** insertando datos como con las alertas: el simulador solo muestra qué sugerencias generaría con esos valores. En Fase B, cuando Vittito lea de Supabase, se podrá disparar vía `datos_reloj` (ahí sí sumaremos temperatura/pasos/sueño al formulario de alertas).
+
+Presets incluidos: **Todo normal** (lista vacía → “Todo en orden, seguí así”) y **Caso crítico** (FC 112 + SpO₂ 93 + pasos 1200 + sueño 300 → 4 sugerencias ordenadas).
+
+Si cambian los umbrales en `rulesEngine.ts`, actualizar `VIT_UMBRALES` en `app.js`.
+
 ## Funcionalidades
 
 - **Generar alertas de prueba**: Inserta datos en `datos_reloj` que la app lee al sincronizar

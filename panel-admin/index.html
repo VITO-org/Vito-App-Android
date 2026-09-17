@@ -164,6 +164,80 @@
       </section>
     </div>
 
+    <!-- Simulador Vittito (HU-34 Fase A) -->
+    <div class="grid" style="margin-top: 24px;">
+      <!-- Entrada: valores a evaluar -->
+      <section class="panel">
+        <h2>Simulador Vittito (Fase A)</h2>
+        <p class="subtitle">Espejo del motor local <code>src/services/suggestions/rulesEngine.ts</code>. No toca Supabase: muestra qué sugerencias generaría Vittito con estos valores.</p>
+
+        <form id="vittitoForm" class="form">
+          <div class="filters">
+            <div class="filter-group">
+              <label for="vitFc">FC prom. (lpm)</label>
+              <input type="number" id="vitFc" step="1" placeholder="Ej: 112">
+              <small>Umbral: &gt;100 / &lt;60</small>
+            </div>
+            <div class="filter-group">
+              <label for="vitSpo2">SpO₂ (%)</label>
+              <input type="number" id="vitSpo2" min="0" max="100" step="1" placeholder="Ej: 93">
+              <small>Umbral: &lt;95</small>
+            </div>
+          </div>
+          <div class="filters">
+            <div class="filter-group">
+              <label for="vitSis">PA sistólica</label>
+              <input type="number" id="vitSis" step="1" placeholder="Ej: 135">
+              <small>Umbral: ≥130</small>
+            </div>
+            <div class="filter-group">
+              <label for="vitDia">PA diastólica</label>
+              <input type="number" id="vitDia" step="1" placeholder="Ej: 88">
+              <small>Umbral: ≥85</small>
+            </div>
+          </div>
+          <div class="filters">
+            <div class="filter-group">
+              <label for="vitTemp">Temp (°C)</label>
+              <input type="number" id="vitTemp" step="0.1" placeholder="Ej: 38.2">
+              <small>Umbral: &gt;37.5 / &lt;36.0</small>
+            </div>
+            <div class="filter-group">
+              <label for="vitPasos">Pasos</label>
+              <input type="number" id="vitPasos" step="100" placeholder="Ej: 1200">
+              <small>Meta: ≥5000</small>
+            </div>
+            <div class="filter-group">
+              <label for="vitSueno">Sueño (min)</label>
+              <input type="number" id="vitSueno" step="10" placeholder="Ej: 300">
+              <small>Recomendado: ≥360 (6h)</small>
+            </div>
+          </div>
+
+          <div class="qh-presets">
+            <button type="button" class="btn btn-secondary" id="vitPresetNormal">Todo normal</button>
+            <button type="button" class="btn btn-secondary" id="vitPresetCritico">Caso crítico</button>
+          </div>
+
+          <button type="submit" class="btn btn-primary" id="vitSubmitBtn" style="margin-top: 12px;">
+            Simular sugerencias
+          </button>
+        </form>
+      </section>
+
+      <!-- Salida: sugerencias esperadas -->
+      <section class="panel">
+        <h2>Sugerencias esperadas</h2>
+        <div class="alerts-list" id="vittitoList">
+          <div class="empty-state">
+            <div class="empty-state-icon">💚</div>
+            <p>Ingresá valores y tocá “Simular sugerencias”</p>
+          </div>
+        </div>
+        <small>Orden: Alta &gt; Media &gt; Baja; a igual prioridad, primero fuera de rango. Si la lista queda vacía, la app muestra “Todo en orden, seguí así”.</small>
+      </section>
+    </div>
+
     <!-- Delivery Log + Quiet-Hours (HU-BUG-PUSH-SERVER-01) -->
     <div class="grid" style="margin-top: 24px;">
       <!-- Delivery Log -->

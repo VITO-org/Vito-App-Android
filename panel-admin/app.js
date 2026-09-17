@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadAlerts();
   initDeliveryLog();
   initQuietHours();
+  initVittito();
 });
 
 // ============================================
@@ -526,6 +527,142 @@ function renderDeliveries(rows) {
       </div>
     `;
   }).join('');
+}
+
+// ============================================
+// Simulador Vittito (HU-34 Fase A)
+// Espejo JS del motor src/services/suggestions/rulesEngine.ts.
+// Umbrales idénticos; si cambian en la app, actualizar acá también.
+// NO inserta en Supabase: Fase A lee HealthSummary de Health Connect,
+// así que el panel no puede provocarla directo (recién en Fase B,
+// cuando lea de Supabase, se podrá disparar vía datos_reloj).
+// ============================================
+
+const VIT_UMBRALES = {
+  fcAlta: 100, fcBaja: 60,
+  paSistolicaAlta: 130, paDiastolicaAlta: 85,
+  spo2Baja: 95,
+  tempAlta: 37.5, tempBaja: 36.0,
+  pasosBajos: 5000,
+  suenoBajoMin: 360,
+};
+
+const VIT_RANK = { Alta: 0, Media: 1, Baja: 2 };
+
+function vittitoSimular(v) {
+  const U = VIT_UMBRALES;
+  const out = [];
+  const num = (x) => (x === null || x === undefined || x === '' || isNaN(Number(x)) ? null : Number(x));
+
+  const fc = num(v.fc), spo2 = num(v.spo2), sis = num(v.sis), dia = num(v.dia);
+  const temp = num(v.temp), pasos = num(v.pasos), sueno = num(v.sueno);
+
+  if (fc !== null && fc > U.fcAlta) out.push({
+    id: 'fc-alta', icon: '💓', titulo: 'Frecuencia cardíaca elevada', prioridad: 'Alta',
+    motivo: `Promedio ${Math.round(fc)} lpm (umbral > ${U.fcAlta} lpm)`, fueraDeRango: true,
+  });
+  if (fc !== null && fc < U.fcBaja) out.push({
+    id: 'fc-baja', icon: '💓', titulo: 'Frecuencia cardíaca baja', prioridad: 'Alta',
+    motivo: `Promedio ${Math.round(fc)} lpm (umbral < ${U.fcBaja} lpm)`, fueraDeRango: true,
+  });
+  if ((sis !== null && sis >= U.paSistolicaAlta) || (dia !== null && dia >= U.paDiastolicaAlta)) out.push({
+    id: 'pa-alta', icon: '❤️', titulo: 'Presión arterial elevada', prioridad: 'Alta',
+    motivo: `Registro ${sis !== null ? Math.round(sis) : '--'}/${dia !== null ? Math.round(dia) : '--'} mmHg (umbral ≥ ${U.paSistolicaAlta}/${U.paDiastolicaAlta})`, fueraDeRango: true,
+  });
+  if (spo2 !== null && spo2 < U.spo2Baja) out.push({
+    id: 'spo2-baja', icon: '🩸', titulo: 'Oxigenación baja', prioridad: 'Alta',
+    motivo: `SpO₂ ${Math.round(spo2)}% (umbral < ${U.spo2Baja}%)`, fueraDeRango: true,
+  });
+  if (temp !== null && temp > U.tempAlta) out.push({
+    id: 'temp-alta', icon: '🌡️', titulo: 'Temperatura elevada', prioridad: 'Media',
+    motivo: `${temp.toFixed(1)}°C (umbral > ${U.tempAlta}°C)`, fueraDeRango: true,
+  });
+  else if (temp !== null && temp < U.tempBaja) out.push({
+    id: 'temp-baja', icon: '🌡️', titulo: 'Temperatura baja', prioridad: 'Media',
+    motivo: `${temp.toFixed(1)}°C (umbral < ${U.tempBaja}°C)`, fueraDeRango: true,
+  });
+  if (pasos !== null && pasos < U.pasosBajos) out.push({
+    id: 'pasos-bajos', icon: '👣', titulo: 'Movete un poco más', prioridad: 'Baja',
+    motivo: `${Math.round(pasos).toLocaleString('es-ES')} pasos (meta ≥ ${U.pasosBajos.toLocaleString('es-ES')})`, fueraDeRango: false,
+  });
+  if (sueno !== null && sueno < U.suenoBajoMin) out.push({
+    id: 'sueno-corto', icon: '😴', titulo: 'Dormiste poco', prioridad: 'Media',
+    motivo: `${(sueno / 60).toFixed(1)} h de sueño (recomendado ≥ 6 h)`, fueraDeRango: false,
+  });
+
+  out.sort((a, b) => {
+    const byPrio = VIT_RANK[a.prioridad] - VIT_RANK[b.prioridad];
+    if (byPrio !== 0) return byPrio;
+    if (a.fueraDeRango !== b.fueraDeRango) return a.fueraDeRango ? -1 : 1;
+    return a.id.localeCompare(b.id);
+  });
+  return out;
+}
+
+function vittitoRender(list) {
+  const listEl = document.getElementById('vittitoList');
+  if (!listEl) return;
+  if (list.length === 0) {
+    listEl.innerHTML = `<div class="empty-state">
+      <div class="empty-state-icon">💚</div>
+      <p>Todo en orden, seguí así</p>
+      <p style="font-size: 12px; margin-top: 8px;">Sin sugerencias activas (CA-07)</p>
+    </div>`;
+    return;
+  }
+  listEl.innerHTML = list.map(s => `
+    <div class="alert-item unread">
+      <div class="alert-icon ${s.prioridad}">${s.icon}</div>
+      <div class="alert-content">
+        <div class="alert-title">${s.titulo}</div>
+        <div class="alert-message">${s.motivo}</div>
+        <div class="alert-meta">
+          <span class="alert-badge ${s.prioridad}">${s.prioridad}</span>
+          <span>${s.id}</span>
+          <span>${s.fueraDeRango ? 'fuera de rango' : 'hábito'}</span>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function initVittito() {
+  const form = document.getElementById('vittitoForm');
+  if (!form) return;
+
+  document.getElementById('vitPresetNormal').addEventListener('click', () => {
+    document.getElementById('vitFc').value = 72;
+    document.getElementById('vitSpo2').value = 98;
+    document.getElementById('vitSis').value = 118;
+    document.getElementById('vitDia').value = 76;
+    document.getElementById('vitTemp').value = 36.6;
+    document.getElementById('vitPasos').value = 8000;
+    document.getElementById('vitSueno').value = 480;
+  });
+
+  document.getElementById('vitPresetCritico').addEventListener('click', () => {
+    document.getElementById('vitFc').value = 112;
+    document.getElementById('vitSpo2').value = 93;
+    document.getElementById('vitSis').value = '';
+    document.getElementById('vitDia').value = '';
+    document.getElementById('vitTemp').value = '';
+    document.getElementById('vitPasos').value = 1200;
+    document.getElementById('vitSueno').value = 300;
+  });
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const vals = {
+      fc: document.getElementById('vitFc').value,
+      spo2: document.getElementById('vitSpo2').value,
+      sis: document.getElementById('vitSis').value,
+      dia: document.getElementById('vitDia').value,
+      temp: document.getElementById('vitTemp').value,
+      pasos: document.getElementById('vitPasos').value,
+      sueno: document.getElementById('vitSueno').value,
+    };
+    vittitoRender(vittitoSimular(vals));
+  });
 }
 
 // ============================================
