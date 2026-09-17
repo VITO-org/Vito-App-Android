@@ -1,4 +1,4 @@
-import React, {useEffect, useCallback, useState} from 'react';
+import React, {useEffect, useCallback, useState, useMemo} from 'react';
 import {View, Text, FlatList, StyleSheet, TouchableOpacity, Dimensions} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
@@ -6,6 +6,8 @@ import {useHealth} from '../context/HealthProvider';
 import {useSupabase} from '../context/SupabaseProvider';
 import Card from '../components/Card';
 import VitalSignCard from '../components/VitalSignCard';
+import SuggestionCard from '../components/SuggestionCard';
+import SuggestionDetailModal from '../components/SuggestionDetailModal';
 import PrimaryButton from '../components/PrimaryButton';
 import AppIcon, {type AppIconName} from '../components/AppIcon';
 import VitoAvatar from '../components/VitoAvatar';
@@ -14,6 +16,17 @@ import ActiveAlertsBanner from '../components/ActiveAlertsBanner';
 import {colors, spacing, fontSize, shadows} from '../theme';
 import {buildSignosFromSummary, getMetricasBienestar} from '../utils/signosVitales';
 import type {Alerta} from '../services/supabase/models';
+import {RulesSuggestionProvider} from '../services/suggestions/rulesEngine';
+import type {Suggestion} from '../services/suggestions/types';
+import {
+  getSeenIds,
+  getDoneIds,
+  markSeen as persistSeen,
+  markDone as persistDone,
+  getLastGenerated,
+  setLastGenerated,
+  shouldRefreshGeneration,
+} from '../services/suggestions/storage';
 
 
 type RootStackParamList = {
@@ -77,6 +90,48 @@ const InicioScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const [refreshing, setRefreshing] = useState(false);
+
+  // ── HU-34 Fase A: sugerencias de Vittito ──
+  const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
+  const [doneIds, setDoneIds] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState<Suggestion | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const [seen, done, last] = await Promise.all([getSeenIds(), getDoneIds(), getLastGenerated()]);
+      setSeenIds(seen);
+      setDoneIds(done);
+      if (shouldRefreshGeneration(last)) {
+        await setLastGenerated(new Date());
+      }
+    })();
+  }, []);
+
+  const suggestionsProvider = useMemo(() => new RulesSuggestionProvider(), []);
+  const allSuggestions = useMemo(
+    () => suggestionsProvider.getSuggestions({summary}),
+    [suggestionsProvider, summary],
+  );
+  const activeSuggestions = useMemo(
+    () => allSuggestions.filter(s => !doneIds.has(s.id)),
+    [allSuggestions, doneIds],
+  );
+
+  const handleSuggestionPress = useCallback((s: Suggestion) => {
+    setSelected(s);
+    setModalVisible(true);
+  }, []);
+
+  const handleMarkSeen = useCallback(async (id: string) => {
+    await persistSeen(id);
+    setSeenIds(prev => new Set(prev).add(id));
+  }, []);
+
+  const handleMarkDone = useCallback(async (id: string) => {
+    await persistDone(id);
+    setDoneIds(prev => new Set(prev).add(id));
+  }, []);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -322,6 +377,32 @@ const InicioScreen: React.FC = () => {
           />
         ))}
       </View>
+
+      {/* ── HU-34 Fase A: Sugerencias de Vittito ── */}
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Sugerencias de Vittito</Text>
+      </View>
+      {activeSuggestions.length === 0 ? (
+        <Card>
+          <Text style={styles.suggestionEmpty}>Todo en orden, seguí así 💚</Text>
+        </Card>
+      ) : (
+        activeSuggestions.map(s => (
+          <SuggestionCard
+            key={s.id}
+            suggestion={s}
+            seen={seenIds.has(s.id)}
+            onPress={() => handleSuggestionPress(s)}
+          />
+        ))
+      )}
+      <SuggestionDetailModal
+        visible={modalVisible}
+        suggestion={selected}
+        onClose={() => setModalVisible(false)}
+        onMarkSeen={handleMarkSeen}
+        onMarkDone={handleMarkDone}
+      />
 
       {!permissionsGranted && hcStatus === 'available' && !loading && !error && (
         <Card>
@@ -618,6 +699,13 @@ const styles = StyleSheet.create({
     fontSize: fontSize.caption,
     color: colors.textSecondary,
     marginVertical: 1,
+  },
+  suggestionEmpty: {
+    fontSize: fontSize.body,
+    fontWeight: '600',
+    color: colors.success,
+    textAlign: 'center',
+    paddingVertical: 8,
   },
 
   // ── Registrar Síntoma ──
