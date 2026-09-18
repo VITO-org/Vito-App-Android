@@ -18,6 +18,8 @@ import {buildSignosFromSummary, getMetricasBienestar} from '../utils/signosVital
 import type {Alerta} from '../services/supabase/models';
 import {RulesSuggestionProvider} from '../services/suggestions/rulesEngine';
 import type {Suggestion} from '../services/suggestions/types';
+import {loadSuggestionSummaryFromSupabase} from '../services/suggestions/supabaseSource';
+import type {HealthSummary} from '../types/health';
 import {
   getSeenIds,
   getDoneIds,
@@ -86,16 +88,36 @@ const InicioScreen: React.FC = () => {
     confirmAlert,
     refreshAlerts,
   } = useHealth();
-  const {session, profile} = useSupabase();
+  const {session, profile, getUserId} = useSupabase();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const [refreshing, setRefreshing] = useState(false);
 
   // ── HU-34 Fase A: sugerencias de Vittito ──
+  // Fuente primaria: Supabase (datos_reloj 24h, incluye panel-admin y
+  // cargas manuales). Fallback: Health Connect (offline o sin filas).
   const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
   const [doneIds, setDoneIds] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Suggestion | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [remoteSummary, setRemoteSummary] = useState<HealthSummary | null>(null);
+
+  const loadRemoteSummary = useCallback(async () => {
+    const uid = getUserId();
+    if (!uid) {
+      setRemoteSummary(null);
+      return;
+    }
+    try {
+      setRemoteSummary(await loadSuggestionSummaryFromSupabase(uid));
+    } catch {
+      setRemoteSummary(null);
+    }
+  }, [getUserId]);
+
+  useEffect(() => {
+    loadRemoteSummary();
+  }, [loadRemoteSummary]);
 
   useEffect(() => {
     (async () => {
@@ -109,9 +131,10 @@ const InicioScreen: React.FC = () => {
   }, []);
 
   const suggestionsProvider = useMemo(() => new RulesSuggestionProvider(), []);
+  const effectiveSummary = remoteSummary ?? summary;
   const allSuggestions = useMemo(
-    () => suggestionsProvider.getSuggestions({summary}),
-    [suggestionsProvider, summary],
+    () => suggestionsProvider.getSuggestions({summary: effectiveSummary}),
+    [suggestionsProvider, effectiveSummary],
   );
   const activeSuggestions = useMemo(
     () => allSuggestions.filter(s => !doneIds.has(s.id)),
@@ -136,11 +159,11 @@ const InicioScreen: React.FC = () => {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await refreshData();
+      await Promise.all([refreshData(), loadRemoteSummary()]);
     } finally {
       setRefreshing(false);
     }
-  }, [refreshData]);
+  }, [refreshData, loadRemoteSummary]);
 
   // FIX SCRUM-191 (BUG HU-37): el banner quedaba deshabilitado porque no se
   // pasaba onAlertPress. Ahora el tap navega al detalle del evento (CA-03).
