@@ -17,6 +17,8 @@ export interface HealthSummary {
   spo2Percent: number | null;
   /** Temperatura corporal en °C (opcional). */
   bodyTemperatureCelsius: number | null;
+  /** SCRUM-202: fecha/hora del dato más reciente (ISO string, opcional). */
+  recordedAt?: string;
 }
 
 /**

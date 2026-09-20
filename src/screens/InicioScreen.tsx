@@ -149,7 +149,7 @@ const InicioScreen: React.FC = () => {
   const suggestionsProvider = useMemo(() => new RulesSuggestionProvider(), []);
   const effectiveSummary = remoteSummary ?? summary;
   const allSuggestions = useMemo(
-    () => suggestionsProvider.getSuggestions({summary: effectiveSummary, tendencias, alertasActivas: alertTypes}),
+    () => suggestionsProvider.getSuggestions({summary: effectiveSummary, tendencias, alertasActivas: alertTypes, recordedAt: effectiveSummary?.recordedAt}),
     [suggestionsProvider, effectiveSummary, tendencias, alertTypes],
   );
   const activeSuggestions = useMemo(

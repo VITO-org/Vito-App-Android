@@ -93,17 +93,27 @@ export function datosRelojToSummary(rows: DatosReloj[]): HealthSummary | null {
     fcCount > 0 || sis !== null || dia !== null || spo2 !== null || temp !== null || hasSteps || sleepMin !== null;
   if (!hasAnySignal) return null;
 
+  // SCRUM-202: timestamp del dato más reciente
+  let latestRecordedAt = '';
+  for (const r of valid) {
+    const t = timeOf(r);
+    if (t > 0 && r.recorded_at && (!latestRecordedAt || r.recorded_at > latestRecordedAt)) {
+      latestRecordedAt = r.recorded_at;
+    }
+  }
+
   return {
     steps: hasSteps ? Math.round(steps) : 0,
     distanceMeters: 0,
     caloriesKcal: 0,
-    sleepMinutes: sleepMin !== null ? Math.round(sleepMin) : 0,
+    sleepMinutes: sleepMin !== null ? Math.round(sleepMin) : -1,
     averageBpm: fcCount > 0 ? fcSum / fcCount : null,
     exerciseSessions: 0,
     bloodPressureSystolic: sis,
     bloodPressureDiastolic: dia,
     spo2Percent: spo2,
     bodyTemperatureCelsius: temp,
+    recordedAt: latestRecordedAt || undefined,
   };
 }
 

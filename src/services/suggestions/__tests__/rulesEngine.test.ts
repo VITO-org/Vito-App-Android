@@ -274,4 +274,21 @@ describe('rulesEngine SCRUM-202: recuperación', () => {
     });
     expect(s.map(x => x.id)).not.toContain('recuperacion-post-alerta');
   });
+
+  it('sleepMinutes=-1 (sin datos) NO dispara sueno-corto', () => {
+    const s = getSuggestions({summary: baseSummary({sleepMinutes: -1})});
+    expect(s.map(x => x.id)).not.toContain('sueno-corto');
+  });
+
+  it('recordedAt se propaga a cada sugerencia', () => {
+    const ts = '2026-09-20T22:00:00.000Z';
+    const s = getSuggestions({
+      summary: baseSummary({averageBpm: 112}),
+      recordedAt: ts,
+    });
+    expect(s.length).toBeGreaterThan(0);
+    for (const sug of s) {
+      expect(sug.recordedAt).toBe(ts);
+    }
+  });
 });

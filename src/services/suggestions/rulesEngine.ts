@@ -77,6 +77,7 @@ export function getSuggestions(input: SuggestionInput): Suggestion[] {
   const summary: HealthSummary | null = input?.summary ?? null;
   const tendencias: TendenciasSalud | null = input?.tendencias ?? null;
   const alertasActivas: AlertType[] = input?.alertasActivas ?? [];
+  const recordedAt: string | undefined = input?.recordedAt;
   if (!summary) return [];
 
   const out: Suggestion[] = [];
@@ -214,7 +215,7 @@ export function getSuggestions(input: SuggestionInput): Suggestion[] {
   }
 
   // ── Sueño corto (umbral absoluto, fallback sin tendencias) ──
-  if (summary.sleepMinutes != null && summary.sleepMinutes < U.suenoBajoMin) {
+  if (summary.sleepMinutes != null && summary.sleepMinutes > 0 && summary.sleepMinutes < U.suenoBajoMin) {
     const hs = (summary.sleepMinutes / 60).toFixed(1);
     out.push({
       id: 'sueno-corto',
@@ -342,6 +343,13 @@ export function getSuggestions(input: SuggestionInput): Suggestion[] {
     if (a.fueraDeRango !== b.fueraDeRango) return a.fueraDeRango ? -1 : 1;
     return a.id.localeCompare(b.id);
   });
+
+  // SCRUM-202: propagar recordedAt a cada sugerencia
+  if (recordedAt) {
+    for (const s of out) {
+      s.recordedAt = recordedAt;
+    }
+  }
 
   return out;
 }

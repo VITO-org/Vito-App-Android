@@ -21,6 +21,9 @@ function badgeStyle(prioridad: Suggestion['prioridad']) {
 
 const SuggestionCard: React.FC<Props> = ({suggestion, seen, onPress}) => {
   const badge = badgeStyle(suggestion.prioridad);
+  const timestamp = suggestion.recordedAt
+    ? new Date(suggestion.recordedAt).toLocaleString('es-AR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'})
+    : null;
   return (
     <Pressable onPress={onPress} style={[styles.card, seen && styles.seen]} accessibilityRole="button">
       <View style={styles.iconCircle}>
@@ -30,8 +33,11 @@ const SuggestionCard: React.FC<Props> = ({suggestion, seen, onPress}) => {
         <Text style={styles.title} numberOfLines={2}>
           {suggestion.titulo}
         </Text>
-        <View style={[styles.badge, {backgroundColor: badge.bg}]}>
-          <Text style={[styles.badgeText, {color: badge.fg}]}>{suggestion.prioridad}</Text>
+        <View style={styles.badgeRow}>
+          <View style={[styles.badge, {backgroundColor: badge.bg}]}>
+            <Text style={[styles.badgeText, {color: badge.fg}]}>{suggestion.prioridad}</Text>
+          </View>
+          {timestamp && <Text style={styles.timestamp}>{timestamp}</Text>}
         </View>
       </View>
       <Text style={styles.arrow}>›</Text>
@@ -80,6 +86,16 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: spacing.badgeBorderRadius,
     marginTop: 6,
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 6,
+  },
+  timestamp: {
+    fontSize: fontSize.badge,
+    color: colors.textSecondary,
   },
   badgeText: {
     fontSize: fontSize.badge,

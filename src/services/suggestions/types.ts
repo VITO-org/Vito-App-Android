@@ -29,6 +29,8 @@ export interface Suggestion {
   acciones: string[];
   /** True si está asociada a un signo vital fuera de rango (desempate R2). */
   fueraDeRango: boolean;
+  /** SCRUM-202: fecha/hora del dato que disparó la sugerencia (ISO string). */
+  recordedAt?: string;
 }
 
 /** Input del motor — wrapper sobre HealthSummary (puede ser null sin datos). */
@@ -38,6 +40,8 @@ export interface SuggestionInput {
   tendencias?: TendenciasSalud | null;
   /** SCRUM-202: tipos de alerta activa para suprimir sugerencias duplicadas. */
   alertasActivas?: AlertType[];
+  /** SCRUM-202: fecha/hora del dato más reciente (ISO string). Se propaga a cada sugerencia. */
+  recordedAt?: string;
 }
 
 /**
