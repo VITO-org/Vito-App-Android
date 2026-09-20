@@ -5,6 +5,8 @@
  * Fase C (futura): LlmSuggestionProvider reutiliza esta interfaz sin tocar UI.
  */
 import type {HealthSummary} from '../../types/health';
+import type {TendenciasSalud} from './supabaseMapper';
+import type {AlertType} from '../alerts/types';
 
 /** Prioridad de sugerencia — orden Alta > Media > Baja. */
 export type PrioridadSugerencia = 'Alta' | 'Media' | 'Baja';
@@ -32,6 +34,10 @@ export interface Suggestion {
 /** Input del motor — wrapper sobre HealthSummary (puede ser null sin datos). */
 export interface SuggestionInput {
   summary: HealthSummary | null;
+  /** SCRUM-202: tendencias 14d para reglas de bienestar (opcional, sin trends = solo reglas base). */
+  tendencias?: TendenciasSalud | null;
+  /** SCRUM-202: tipos de alerta activa para suprimir sugerencias duplicadas. */
+  alertasActivas?: AlertType[];
 }
 
 /**

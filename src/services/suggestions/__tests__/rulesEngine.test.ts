@@ -1,8 +1,10 @@
 /**
- * HU-34 Fase A — Tests del motor de reglas (función pura, sin mocks nativos).
+ * HU-34 Fase A + SCRUM-202 — Tests del motor de reglas (función pura, sin mocks nativos).
  */
 import {getSuggestions, RulesSuggestionProvider} from '../rulesEngine';
 import type {HealthSummary} from '../../../types/health';
+import type {TendenciasSalud} from '../supabaseMapper';
+import type {AlertType} from '../../alerts/types';
 
 function baseSummary(over: Partial<HealthSummary> = {}): HealthSummary {
   return {
@@ -19,6 +21,24 @@ function baseSummary(over: Partial<HealthSummary> = {}): HealthSummary {
     ...over,
   };
 }
+
+function baseTendencias(over: Partial<TendenciasSalud> = {}): TendenciasSalud {
+  return {
+    avgPasos14d: 8000,
+    avgPasos3d: 8000,
+    avgSueno14dMin: 480,
+    avgSueno3dMin: 480,
+    avgFc14d: 72,
+    avgSpo214d: 98,
+    deudaSuenoMin: 0,
+    tendenciaPasos: 1.0,
+    ...over,
+  };
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Tests base (sin cambios, compatibles con Fase A)
+// ══════════════════════════════════════════════════════════════════
 
 describe('rulesEngine HU-34 Fase A', () => {
   it('caso normal: sin anomalías no genera sugerencias', () => {
@@ -110,5 +130,148 @@ describe('rulesEngine HU-34 Fase A', () => {
     const viaProvider = p.getSuggestions({summary: baseSummary({averageBpm: 120})});
     const directa = getSuggestions({summary: baseSummary({averageBpm: 120})});
     expect(viaProvider).toEqual(directa);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════
+// Tests SCRUM-202: supresión por alerta activa
+// ══════════════════════════════════════════════════════════════════
+
+describe('rulesEngine SCRUM-202: supresión por alerta', () => {
+  it('fc-alta suprimida si alerta taquicardia activa', () => {
+    const s = getSuggestions({
+      summary: baseSummary({averageBpm: 112}),
+      alertasActivas: ['taquicardia'],
+    });
+    expect(s.map(x => x.id)).not.toContain('fc-alta');
+  });
+
+  it('fc-baja suprimida si alerta bradicardia activa', () => {
+    const s = getSuggestions({
+      summary: baseSummary({averageBpm: 50}),
+      alertasActivas: ['bradicardia'],
+    });
+    expect(s.map(x => x.id)).not.toContain('fc-baja');
+  });
+
+  it('pa-alta suprimida si alerta hipertensión activa', () => {
+    const s = getSuggestions({
+      summary: baseSummary({bloodPressureSystolic: 140}),
+      alertasActivas: ['hipertension'],
+    });
+    expect(s.map(x => x.id)).not.toContain('pa-alta');
+  });
+
+  it('spo2-baja suprimida si alerta hipoxia activa', () => {
+    const s = getSuggestions({
+      summary: baseSummary({spo2Percent: 88}),
+      alertasActivas: ['hipoxia'],
+    });
+    expect(s.map(x => x.id)).not.toContain('spo2-baja');
+  });
+
+  it('sin alertas activas, sugerencias vitales siguen presentes', () => {
+    const s = getSuggestions({
+      summary: baseSummary({averageBpm: 112, spo2Percent: 93}),
+      alertasActivas: [],
+    });
+    expect(s.map(x => x.id)).toContain('fc-alta');
+    expect(s.map(x => x.id)).toContain('spo2-baja');
+  });
+
+  it('temp-alta NO se suprime (no tiene alerta dedicada)', () => {
+    const s = getSuggestions({
+      summary: baseSummary({bodyTemperatureCelsius: 38.5}),
+      alertasActivas: ['hipoxia'],
+    });
+    expect(s.map(x => x.id)).toContain('temp-alta');
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════
+// Tests SCRUM-202: reglas de bienestar (tendencias 14d)
+// ══════════════════════════════════════════════════════════════════
+
+describe('rulesEngine SCRUM-202: bienestar', () => {
+  it('pasos en caída vs media 14d genera sugerencia (por tendencia)', () => {
+    // steps 6000 > umbral absoluto 5000 → NO dispara la regla base
+    // pero tendencia 0.5 < 0.7 → dispara la regla de bienestar
+    const s = getSuggestions({
+      summary: baseSummary({steps: 6000}),
+      tendencias: baseTendencias({avgPasos14d: 12000, avgPasos3d: 6000, tendenciaPasos: 0.5}),
+    });
+    expect(s.map(x => x.id)).toContain('pasos-bajos');
+    expect(s.find(x => x.id === 'pasos-bajos')?.titulo).toContain('bajando');
+  });
+
+  it('sin tendencias, usa umbral absoluto de pasos', () => {
+    const s = getSuggestions({
+      summary: baseSummary({steps: 2000}),
+    });
+    expect(s.map(x => x.id)).toContain('pasos-bajos');
+    expect(s.find(x => x.id === 'pasos-bajos')?.titulo).toContain('Movete');
+  });
+
+  it('deuda de sueño genera sugerencia', () => {
+    const s = getSuggestions({
+      summary: baseSummary({sleepMinutes: 300}),
+      tendencias: baseTendencias({
+        avgSueno14dMin: 480,
+        avgSueno3dMin: 300,
+        deudaSuenoMin: 180, // 3h de deuda
+      }),
+    });
+    expect(s.map(x => x.id)).toContain('sueno-corto');
+  });
+
+  it('sin tendencias, usa umbral absoluto de sueño', () => {
+    const s = getSuggestions({
+      summary: baseSummary({sleepMinutes: 300}),
+    });
+    expect(s.map(x => x.id)).toContain('sueno-corto');
+    expect(s.find(x => x.id === 'sueno-corto')?.titulo).toContain('Dormiste poco');
+  });
+
+  it('pasos con tendencia normal NO genera sugerencia de tendencia', () => {
+    // steps 6000 > umbral absoluto 5000, tendencia 0.94 > 0.7 → ninguna sugerencia
+    const s = getSuggestions({
+      summary: baseSummary({steps: 6000}),
+      tendencias: baseTendencias({avgPasos14d: 8000, avgPasos3d: 7500, tendenciaPasos: 0.94}),
+    });
+    expect(s.map(x => x.id)).not.toContain('pasos-bajos');
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════
+// Tests SCRUM-202: recuperación post-alerta
+// ══════════════════════════════════════════════════════════════════
+
+describe('rulesEngine SCRUM-202: recuperación', () => {
+  it('recuperación post-alerta aparece cuando hay alerta activa + FC normal + tendencias', () => {
+    const s = getSuggestions({
+      summary: baseSummary({averageBpm: 72}),
+      tendencias: baseTendencias({avgFc14d: 72}),
+      alertasActivas: ['taquicardia'],
+    });
+    expect(s.map(x => x.id)).toContain('recuperacion-post-alerta');
+    expect(s.find(x => x.id === 'recuperacion-post-alerta')?.prioridad).toBe('Alta');
+  });
+
+  it('recuperación NO aparece sin alertas activas', () => {
+    const s = getSuggestions({
+      summary: baseSummary({averageBpm: 72}),
+      tendencias: baseTendencias({avgFc14d: 72}),
+      alertasActivas: [],
+    });
+    expect(s.map(x => x.id)).not.toContain('recuperacion-post-alerta');
+  });
+
+  it('recuperación NO aparece sin tendencias', () => {
+    const s = getSuggestions({
+      summary: baseSummary({averageBpm: 72}),
+      tendencias: null,
+      alertasActivas: ['taquicardia'],
+    });
+    expect(s.map(x => x.id)).not.toContain('recuperacion-post-alerta');
   });
 });

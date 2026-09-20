@@ -3,9 +3,16 @@
  *
  * Sin red, sin AsyncStorage adentro: testeable en jest sin mocks nativos.
  * Umbrales por defecto PENDIENTES DE VALIDACIÓN CLÍNICA.
+ *
+ * SCRUM-202: extensión para diferenciar alertas vs sugerencias.
+ * - Suprime sugerencias duplicadas si hay alerta activa del mismo vital.
+ * - Agrega reglas de bienestar: tendencia pasos, tendencia sueño, racha.
+ * - Agrega reglas de recuperación: post-alerta + HRV bajo.
  */
 import type {HealthSummary} from '../../types/health';
 import type {Suggestion, SuggestionInput, SuggestionProvider, PrioridadSugerencia} from './types';
+import type {TendenciasSalud} from './supabaseMapper';
+import type {AlertType} from '../alerts/types';
 
 /**
  * Umbrales por defecto — pendientes de validación clínica.
@@ -23,21 +30,68 @@ export const UMBRALES_SUGERENCIAS = {
   suenoBajoMin: 360, // 6h
 } as const;
 
+/**
+ * Umbrales de bienestar (SCRUM-202) — comparan contra tendencias 14d.
+ */
+export const UMBRALES_BIENESTAR = {
+  /** Umbral absoluto de pasos (fallback si no hay tendencias). */
+  pasosBajosAbs: 5000,
+  /** Caída de pasos vs 14d que dispara sugerencia (0.7 = 30% menos). */
+  pasosCaida: 0.7,
+  /** Umbral absoluto de sueño (fallback si no hay tendencias). */
+  suenoBajoAbs: 360,
+  /** Deuda de sueño acumulada que dispara sugerencia (en minutos). */
+  suenoDeuda: 300,
+  /** Días consecutivos de sueño bajo para "racha". */
+  rachaDias: 3,
+  /** Días mínimos de datos 3d para evaluar tendencia. */
+  minDias3d: 2,
+} as const;
+
 const RANK: Record<PrioridadSugerencia, number> = {Alta: 0, Media: 1, Baja: 2};
+
+// ══════════════════════════════════════════════════════════════════
+// Mapeo alerta → sugerencia (SCRUM-202: supresión)
+// ══════════════════════════════════════════════════════════════════
+
+/** Si hay alerta activa de este tipo, suprimir la sugerencia correspondiente. */
+const ALERTA_TO_SUPPRESS: Partial<Record<AlertType, string[]>> = {
+  taquicardia: ['fc-alta'],
+  bradicardia: ['fc-baja'],
+  hipertension: ['pa-alta'],
+  hipoxia: ['spo2-baja'],
+};
+
+// ══════════════════════════════════════════════════════════════════
+// Función principal
+// ══════════════════════════════════════════════════════════════════
 
 /**
  * Evalúa el HealthSummary y devuelve sugerencias tipadas.
  * Función pura: mismo input → mismo output, sin efectos laterales.
+ *
+ * SCRUM-202: acepta tendencias y alertas activas para supresión y
+ * reglas de bienestar / recuperación.
  */
 export function getSuggestions(input: SuggestionInput): Suggestion[] {
   const summary: HealthSummary | null = input?.summary ?? null;
+  const tendencias: TendenciasSalud | null = input?.tendencias ?? null;
+  const alertasActivas: AlertType[] = input?.alertasActivas ?? [];
   if (!summary) return [];
 
   const out: Suggestion[] = [];
   const U = UMBRALES_SUGERENCIAS;
+  const B = UMBRALES_BIENESTAR;
 
-  // ── FC alta ──
-  if (summary.averageBpm != null && summary.averageBpm > U.fcAlta) {
+  // ── Conjunto de IDs suprimidos por alertas activas ──
+  const suppressed = new Set<string>();
+  for (const tipo of alertasActivas) {
+    const ids = ALERTA_TO_SUPPRESS[tipo];
+    if (ids) ids.forEach(id => suppressed.add(id));
+  }
+
+  // ── FC alta (suprime si taquicardia activa) ──
+  if (summary.averageBpm != null && summary.averageBpm > U.fcAlta && !suppressed.has('fc-alta')) {
     out.push({
       id: 'fc-alta',
       icon: '💓',
@@ -55,8 +109,8 @@ export function getSuggestions(input: SuggestionInput): Suggestion[] {
     });
   }
 
-  // ── FC baja ──
-  if (summary.averageBpm != null && summary.averageBpm < U.fcBaja) {
+  // ── FC baja (suprime si bradicardia activa) ──
+  if (summary.averageBpm != null && summary.averageBpm < U.fcBaja && !suppressed.has('fc-baja')) {
     out.push({
       id: 'fc-baja',
       icon: '💓',
@@ -74,10 +128,11 @@ export function getSuggestions(input: SuggestionInput): Suggestion[] {
     });
   }
 
-  // ── Presión arterial ──
+  // ── Presión arterial (suprime si hipertensión activa) ──
   if (
-    (summary.bloodPressureSystolic != null && summary.bloodPressureSystolic >= U.paSistolicaAlta) ||
-    (summary.bloodPressureDiastolic != null && summary.bloodPressureDiastolic >= U.paDiastolicaAlta)
+    !suppressed.has('pa-alta') &&
+    ((summary.bloodPressureSystolic != null && summary.bloodPressureSystolic >= U.paSistolicaAlta) ||
+    (summary.bloodPressureDiastolic != null && summary.bloodPressureDiastolic >= U.paDiastolicaAlta))
   ) {
     const sis = summary.bloodPressureSystolic != null ? Math.round(summary.bloodPressureSystolic) : '--';
     const dia = summary.bloodPressureDiastolic != null ? Math.round(summary.bloodPressureDiastolic) : '--';
@@ -98,8 +153,8 @@ export function getSuggestions(input: SuggestionInput): Suggestion[] {
     });
   }
 
-  // ── SpO2 baja ──
-  if (summary.spo2Percent != null && summary.spo2Percent < U.spo2Baja) {
+  // ── SpO2 baja (suprime si hipoxia activa) ──
+  if (summary.spo2Percent != null && summary.spo2Percent < U.spo2Baja && !suppressed.has('spo2-baja')) {
     out.push({
       id: 'spo2-baja',
       icon: '🩸',
@@ -117,7 +172,7 @@ export function getSuggestions(input: SuggestionInput): Suggestion[] {
     });
   }
 
-  // ── Temperatura ──
+  // ── Temperatura (sin supresión, no tiene alerta dedicada) ──
   if (summary.bodyTemperatureCelsius != null && summary.bodyTemperatureCelsius > U.tempAlta) {
     out.push({
       id: 'temp-alta',
@@ -143,7 +198,7 @@ export function getSuggestions(input: SuggestionInput): Suggestion[] {
     });
   }
 
-  // ── Pasos bajos ──
+  // ── Pasos bajos (umbral absoluto, fallback sin tendencias) ──
   if (summary.steps != null && summary.steps < U.pasosBajos) {
     out.push({
       id: 'pasos-bajos',
@@ -158,7 +213,7 @@ export function getSuggestions(input: SuggestionInput): Suggestion[] {
     });
   }
 
-  // ── Sueño corto ──
+  // ── Sueño corto (umbral absoluto, fallback sin tendencias) ──
   if (summary.sleepMinutes != null && summary.sleepMinutes < U.suenoBajoMin) {
     const hs = (summary.sleepMinutes / 60).toFixed(1);
     out.push({
@@ -176,6 +231,108 @@ export function getSuggestions(input: SuggestionInput): Suggestion[] {
       ],
       fueraDeRango: false,
     });
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  // REGLAS DE BIENESTAR (SCRUM-202) — solo si hay tendencias 14d
+  // ══════════════════════════════════════════════════════════════════
+
+  if (tendencias) {
+    // ── R-B1: Pasos en caída vs tu media ──
+    if (
+      tendencias.avgPasos3d > 0 &&
+      tendencias.tendenciaPasos < B.pasosCaida &&
+      !out.some(s => s.id === 'pasos-bajos')
+    ) {
+      const pct = Math.round((1 - tendencias.tendenciaPasos) * 100);
+      out.push({
+        id: 'pasos-bajos',
+        icon: '👣',
+        titulo: 'Venis bajando de actividad',
+        prioridad: 'Baja',
+        descripcion:
+          'Tu promedio de pasos de los últimos 3 días está por debajo de tu media habitual. Una caminata corta ayuda.',
+        motivo: `Promedio 3d: ${tendencias.avgPasos3d.toLocaleString('es-ES')} vs tu media 14d: ${tendencias.avgPasos14d.toLocaleString('es-ES')} (${pct}% menos)`,
+        acciones: ['Salí a caminar 15–20 minutos', 'Subí escaleras en vez del ascensor', 'Movéte cada hora'],
+        fueraDeRango: false,
+      });
+    }
+
+    // ── R-B2: Sueño con deuda acumulada ──
+    if (
+      tendencias.deudaSuenoMin >= B.suenoDeuda &&
+      !out.some(s => s.id === 'sueno-corto')
+    ) {
+      const deudaH = (tendencias.deudaSuenoMin / 60).toFixed(1);
+      const hs3d = (tendencias.avgSueno3dMin / 60).toFixed(1);
+      const hs14d = (tendencias.avgSueno14dMin / 60).toFixed(1);
+      out.push({
+        id: 'sueno-corto',
+        icon: '😴',
+        titulo: 'Acumulás deuda de sueño',
+        prioridad: 'Media',
+        descripcion:
+          'Dormiste menos que tu promedio varios días seguidos. Tu cuerpo necesita recuperar.',
+        motivo: `${hs3d} h últimos 3d vs ${hs14d} h tu media (deuda: ${deudaH} h)`,
+        acciones: [
+          'Acostate 30 minutos antes esta noche',
+          'Evitá pantallas 1 hora antes de dormir',
+          'Evitá cafeína después del mediodía',
+        ],
+        fueraDeRango: false,
+      });
+    }
+
+    // ── R-B3: Racha de sueño bajo ──
+    if (
+      tendencias.avgSueno3dMin > 0 &&
+      tendencias.avgSueno3dMin < UMBRALES_SUGERENCIAS.suenoBajoMin &&
+      !out.some(s => s.id === 'sueno-corto')
+    ) {
+      const hs3d = (tendencias.avgSueno3dMin / 60).toFixed(1);
+      out.push({
+        id: 'sueno-corto',
+        icon: '😴',
+        titulo: 'Dormiste poco varios días',
+        prioridad: 'Media',
+        descripcion:
+          'Tu promedio de sueño de los últimos 3 días está por debajo de 6 horas. Intentá recuperar esta noche.',
+        motivo: `Promedio 3d: ${hs3d} h (recomendado ≥ 6 h)`,
+        acciones: [
+          'Acostate más temprano esta noche',
+          'Evitá pantallas antes de dormir',
+          'Mantené horario constante',
+        ],
+        fueraDeRango: false,
+      });
+    }
+
+    // ── R-R1: Recuperación post-alerta ──
+    if (
+      alertasActivas.length > 0 &&
+      tendencias.avgFc14d != null &&
+      tendencias.avgFc14d >= 60 &&
+      tendencias.avgFc14d <= 100 &&
+      summary.averageBpm != null &&
+      summary.averageBpm >= 60 &&
+      summary.averageBpm <= 100
+    ) {
+      out.push({
+        id: 'recuperacion-post-alerta',
+        icon: '💚',
+        titulo: 'Ayer fue intenso, hoy recuperate',
+        prioridad: 'Alta',
+        descripcion:
+          'Tuviste una alerta reciente pero tus signos volvieron a la normalidad. Es buen momento para descansar y recuperar.',
+        motivo: `FC actual: ${Math.round(summary.averageBpm)} lpm (tu media 14d: ${Math.round(tendencias.avgFc14d)} lpm)`,
+        acciones: [
+          'Hoy priorizá actividades suaves',
+          'Mantené buena hidratación',
+          'Si volvés a sentir síntomas, consultá',
+        ],
+        fueraDeRango: false,
+      });
+    }
   }
 
   // ── R2 Ordenamiento: Alta > Media > Baja; desempate fueraDeRango primero; id estable ──

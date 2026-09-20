@@ -18,7 +18,9 @@ import {buildSignosFromSummary, getMetricasBienestar} from '../utils/signosVital
 import type {Alerta} from '../services/supabase/models';
 import {RulesSuggestionProvider} from '../services/suggestions/rulesEngine';
 import type {Suggestion} from '../services/suggestions/types';
-import {loadSuggestionSummaryFromSupabase} from '../services/suggestions/supabaseSource';
+import {loadSuggestionSummaryFromSupabase, loadTendenciasFromSupabase, loadActiveAlertTypes} from '../services/suggestions/supabaseSource';
+import type {TendenciasSalud} from '../services/suggestions/supabaseMapper';
+import type {AlertType} from '../services/alerts/types';
 import type {HealthSummary} from '../types/health';
 import {
   getSeenIds,
@@ -96,28 +98,42 @@ const InicioScreen: React.FC = () => {
   // ── HU-34 Fase A: sugerencias de Vittito ──
   // Fuente primaria: Supabase (datos_reloj 24h, incluye panel-admin y
   // cargas manuales). Fallback: Health Connect (offline o sin filas).
+  // SCRUM-202: tendencias 14d + alertas activas para supresión y bienestar.
   const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
   const [doneIds, setDoneIds] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Suggestion | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [remoteSummary, setRemoteSummary] = useState<HealthSummary | null>(null);
+  const [tendencias, setTendencias] = useState<TendenciasSalud | null>(null);
+  const [alertTypes, setAlertTypes] = useState<AlertType[]>([]);
 
-  const loadRemoteSummary = useCallback(async () => {
+  const loadRemoteData = useCallback(async () => {
     const uid = getUserId();
     if (!uid) {
       setRemoteSummary(null);
+      setTendencias(null);
+      setAlertTypes([]);
       return;
     }
     try {
-      setRemoteSummary(await loadSuggestionSummaryFromSupabase(uid));
+      const [summary, tend, alerts] = await Promise.all([
+        loadSuggestionSummaryFromSupabase(uid),
+        loadTendenciasFromSupabase(uid).catch(() => null),
+        loadActiveAlertTypes(uid).catch(() => []),
+      ]);
+      setRemoteSummary(summary);
+      setTendencias(tend);
+      setAlertTypes(alerts);
     } catch {
       setRemoteSummary(null);
+      setTendencias(null);
+      setAlertTypes([]);
     }
   }, [getUserId]);
 
   useEffect(() => {
-    loadRemoteSummary();
-  }, [loadRemoteSummary]);
+    loadRemoteData();
+  }, [loadRemoteData]);
 
   useEffect(() => {
     (async () => {
@@ -133,8 +149,8 @@ const InicioScreen: React.FC = () => {
   const suggestionsProvider = useMemo(() => new RulesSuggestionProvider(), []);
   const effectiveSummary = remoteSummary ?? summary;
   const allSuggestions = useMemo(
-    () => suggestionsProvider.getSuggestions({summary: effectiveSummary}),
-    [suggestionsProvider, effectiveSummary],
+    () => suggestionsProvider.getSuggestions({summary: effectiveSummary, tendencias, alertasActivas: alertTypes}),
+    [suggestionsProvider, effectiveSummary, tendencias, alertTypes],
   );
   const activeSuggestions = useMemo(
     () => allSuggestions.filter(s => !doneIds.has(s.id)),
@@ -159,11 +175,11 @@ const InicioScreen: React.FC = () => {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await Promise.all([refreshData(), loadRemoteSummary()]);
+      await Promise.all([refreshData(), loadRemoteData()]);
     } finally {
       setRefreshing(false);
     }
-  }, [refreshData, loadRemoteSummary]);
+  }, [refreshData, loadRemoteData]);
 
   // FIX SCRUM-191 (BUG HU-37): el banner quedaba deshabilitado porque no se
   // pasaba onAlertPress. Ahora el tap navega al detalle del evento (CA-03).

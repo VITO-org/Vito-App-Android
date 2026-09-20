@@ -1,8 +1,9 @@
 /**
  * HU-34 Fase A (extensión) — Tests del condensador Supabase → HealthSummary.
  * Función pura: filas literales, sin mocks.
+ * SCRUM-202: tests de datosRelojToTrends.
  */
-import {datosRelojToSummary} from '../supabaseMapper';
+import {datosRelojToSummary, datosRelojToTrends} from '../supabaseMapper';
 import type {DatosReloj} from '../../supabase/models';
 
 function row(over: Partial<DatosReloj> = {}): DatosReloj {
@@ -22,6 +23,10 @@ function row(over: Partial<DatosReloj> = {}): DatosReloj {
     ...over,
   };
 }
+
+// ══════════════════════════════════════════════════════════════════
+// Tests base: datosRelojToSummary
+// ══════════════════════════════════════════════════════════════════
 
 describe('supabaseSource HU-34', () => {
   it('vacío o todo reemplazado: devuelve null', () => {
@@ -82,5 +87,115 @@ describe('supabaseSource HU-34', () => {
     expect(s?.averageBpm).toBe(112);
     expect(s?.spo2Percent).toBe(93);
     expect(s?.steps).toBe(1200);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════
+// Tests SCRUM-202: datosRelojToTrends (tendencias 14d)
+// Usa fechas fijas para no depender de la timezone del runner.
+// ══════════════════════════════════════════════════════════════════
+
+describe('datosRelojToTrends SCRUM-202', () => {
+  // Fechas fijas — siempre dentro de las 24h o 14d desde "ahora" del runner
+  // como el mapper usa Date.now() internamente, usamos fechas relativas
+  // calculadas una sola vez al inicio del bloque.
+  const now = new Date('2026-09-18T12:00:00.000Z').getTime();
+  const H = 3600 * 1000;
+  const D = 24 * H;
+  const t = (offsetMs: number) => new Date(now - offsetMs).toISOString();
+  const trends = (rows: DatosReloj[]) => datosRelojToTrends(rows, now);
+
+  it('vacío o todo reemplazado: devuelve null', () => {
+    expect(trends([])).toBeNull();
+    expect(
+      trends([row({reemplazado_por: 'otro', actividad_pasos: 5000})]),
+    ).toBeNull();
+  });
+
+  it('un solo día de datos: calcula avg sin error', () => {
+    const r = trends([
+      row({actividad_pasos: 8000, horas_sueno: 7, frec_cardiaca_bpm: 72, recorded_at: t(6 * H)}),
+    ]);
+    expect(r).not.toBeNull();
+    expect(r?.avgPasos14d).toBe(8000);
+    expect(r?.avgSueno14dMin).toBe(420);
+    expect(r?.deudaSuenoMin).toBe(0);
+  });
+
+  it('promedia pasos por día y luego promedia días', () => {
+    const r = trends([
+      // Día 1 (ayer): 6000 + 2000 = 8000
+      row({actividad_pasos: 6000, recorded_at: t(30 * H)}),
+      row({actividad_pasos: 2000, recorded_at: t(18 * H)}),
+      // Día 2 (hace 2d): 10000
+      row({actividad_pasos: 10000, recorded_at: t(42 * H)}),
+    ]);
+    expect(r).not.toBeNull();
+    // Día1: 8000, Día2: 10000 → avg 14d = 9000
+    expect(r?.avgPasos14d).toBe(9000);
+  });
+
+  it('sueño usa el máximo de horas por día (no suma)', () => {
+    const r = trends([
+      row({horas_sueno: 5, recorded_at: t(6 * H)}),
+      row({horas_sueno: 3, recorded_at: t(2 * H)}),
+    ]);
+    expect(r).not.toBeNull();
+    // Misma día: max(5, 3) = 5h = 300min
+    expect(r?.avgSueno14dMin).toBe(300);
+  });
+
+  it('deuda de sueño: recientes con menos sueño que lejanos', () => {
+    const r = trends([
+      // Días lejanos: sueño normal (7h = 420min)
+      row({horas_sueno: 7, recorded_at: t(8 * D)}),
+      row({horas_sueno: 7, recorded_at: t(10 * D)}),
+      // 3 días recientes: sueño bajo (5h = 300min)
+      row({horas_sueno: 5, recorded_at: t(6 * H)}),
+      row({horas_sueno: 5, recorded_at: t(1 * D + 6 * H)}),
+      row({horas_sueno: 5, recorded_at: t(2 * D + 6 * H)}),
+    ]);
+    expect(r).not.toBeNull();
+    // avg14d = (420 + 420 + 300 + 300 + 300) / 5 = 348
+    expect(r?.avgSueno14dMin).toBe(348);
+    // avg3d = (300 + 300 + 300) / 3 = 300
+    expect(r?.avgSueno3dMin).toBe(300);
+    // deuda = 348 - 300 = 48
+    expect(r?.deudaSuenoMin).toBe(48);
+  });
+
+  it('tendencia pasos: ratio 3d vs 14d', () => {
+    const r = trends([
+      // 14d: pasos altos (10000/día, días lejanos)
+      row({actividad_pasos: 10000, recorded_at: t(6 * D)}),
+      row({actividad_pasos: 10000, recorded_at: t(8 * D)}),
+      // 3d: pasos bajos (5000/día)
+      row({actividad_pasos: 5000, recorded_at: t(6 * H)}),
+      row({actividad_pasos: 5000, recorded_at: t(1 * D + 6 * H)}),
+    ]);
+    expect(r).not.toBeNull();
+    // avg3d = 5000, avg14d = (10000+10000+5000+5000)/4 = 7500
+    // tendencia = 5000/7500 ≈ 0.67
+    expect(r?.tendenciaPasos).toBeCloseTo(0.67, 2);
+  });
+
+  it('filas reemplazadas se excluyen', () => {
+    const r = trends([
+      row({actividad_pasos: 10000, reemplazado_por: 'otro', recorded_at: t(1 * D)}),
+      row({actividad_pasos: 5000, recorded_at: t(2 * D)}),
+    ]);
+    expect(r).not.toBeNull();
+    // Solo la fila válida (5000) se cuenta
+    expect(r?.avgPasos14d).toBe(5000);
+  });
+
+  it('FC y SpO2 promediados correctamente', () => {
+    const r = trends([
+      row({frec_cardiaca_bpm: 70, spo2_pct: 97, recorded_at: t(1 * D)}),
+      row({frec_cardiaca_bpm: 80, spo2_pct: 99, recorded_at: t(2 * D)}),
+    ]);
+    expect(r).not.toBeNull();
+    expect(r?.avgFc14d).toBe(75);
+    expect(r?.avgSpo214d).toBe(98);
   });
 });

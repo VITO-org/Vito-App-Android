@@ -530,12 +530,10 @@ function renderDeliveries(rows) {
 }
 
 // ============================================
-// Simulador Vittito (HU-34 Fase A)
+// Simulador Vittito (HU-34 Fase A + SCRUM-202)
 // Espejo JS del motor src/services/suggestions/rulesEngine.ts.
 // Umbrales idénticos; si cambian en la app, actualizar acá también.
-// NO inserta en Supabase: Fase A lee HealthSummary de Health Connect,
-// así que el panel no puede provocarla directo (recién en Fase B,
-// cuando lea de Supabase, se podrá disparar vía datos_reloj).
+// SCRUM-202: soporta supresión por alerta activa + reglas bienestar.
 // ============================================
 
 const VIT_UMBRALES = {
@@ -547,29 +545,51 @@ const VIT_UMBRALES = {
   suenoBajoMin: 360,
 };
 
+const VIT_BIENESTAR = {
+  pasosCaida: 0.7,
+  suenoDeuda: 300,
+  suenoBajoMin: 360,
+};
+
 const VIT_RANK = { Alta: 0, Media: 1, Baja: 2 };
 
-function vittitoSimular(v) {
+const VIT_ALERTA_SUPPRESS = {
+  taquicardia: ['fc-alta'],
+  bradicardia: ['fc-baja'],
+  hipertension: ['pa-alta'],
+  hipoxia: ['spo2-baja'],
+};
+
+function vittitoSimular(v, alertasActivas = [], tendencias = null) {
   const U = VIT_UMBRALES;
+  const B = VIT_BIENESTAR;
   const out = [];
   const num = (x) => (x === null || x === undefined || x === '' || isNaN(Number(x)) ? null : Number(x));
 
   const fc = num(v.fc), spo2 = num(v.spo2), sis = num(v.sis), dia = num(v.dia);
   const temp = num(v.temp), pasos = num(v.pasos), sueno = num(v.sueno);
 
-  if (fc !== null && fc > U.fcAlta) out.push({
+  // Suprimidos por alertas activas
+  const suppressed = new Set();
+  for (const tipo of alertasActivas) {
+    const ids = VIT_ALERTA_SUPPRESS[tipo];
+    if (ids) ids.forEach(id => suppressed.add(id));
+  }
+
+  // Vitales (con supresión)
+  if (fc !== null && fc > U.fcAlta && !suppressed.has('fc-alta')) out.push({
     id: 'fc-alta', icon: '💓', titulo: 'Frecuencia cardíaca elevada', prioridad: 'Alta',
     motivo: `Promedio ${Math.round(fc)} lpm (umbral > ${U.fcAlta} lpm)`, fueraDeRango: true,
   });
-  if (fc !== null && fc < U.fcBaja) out.push({
+  if (fc !== null && fc < U.fcBaja && !suppressed.has('fc-baja')) out.push({
     id: 'fc-baja', icon: '💓', titulo: 'Frecuencia cardíaca baja', prioridad: 'Alta',
     motivo: `Promedio ${Math.round(fc)} lpm (umbral < ${U.fcBaja} lpm)`, fueraDeRango: true,
   });
-  if ((sis !== null && sis >= U.paSistolicaAlta) || (dia !== null && dia >= U.paDiastolicaAlta)) out.push({
+  if (!suppressed.has('pa-alta') && ((sis !== null && sis >= U.paSistolicaAlta) || (dia !== null && dia >= U.paDiastolicaAlta))) out.push({
     id: 'pa-alta', icon: '❤️', titulo: 'Presión arterial elevada', prioridad: 'Alta',
     motivo: `Registro ${sis !== null ? Math.round(sis) : '--'}/${dia !== null ? Math.round(dia) : '--'} mmHg (umbral ≥ ${U.paSistolicaAlta}/${U.paDiastolicaAlta})`, fueraDeRango: true,
   });
-  if (spo2 !== null && spo2 < U.spo2Baja) out.push({
+  if (spo2 !== null && spo2 < U.spo2Baja && !suppressed.has('spo2-baja')) out.push({
     id: 'spo2-baja', icon: '🩸', titulo: 'Oxigenación baja', prioridad: 'Alta',
     motivo: `SpO₂ ${Math.round(spo2)}% (umbral < ${U.spo2Baja}%)`, fueraDeRango: true,
   });
@@ -581,14 +601,42 @@ function vittitoSimular(v) {
     id: 'temp-baja', icon: '🌡️', titulo: 'Temperatura baja', prioridad: 'Media',
     motivo: `${temp.toFixed(1)}°C (umbral < ${U.tempBaja}°C)`, fueraDeRango: true,
   });
-  if (pasos !== null && pasos < U.pasosBajos) out.push({
+
+  // Pasos (umbral absoluto, fallback)
+  if (pasos !== null && pasos < U.pasosBajos && !out.some(s => s.id === 'pasos-bajos')) out.push({
     id: 'pasos-bajos', icon: '👣', titulo: 'Movete un poco más', prioridad: 'Baja',
     motivo: `${Math.round(pasos).toLocaleString('es-ES')} pasos (meta ≥ ${U.pasosBajos.toLocaleString('es-ES')})`, fueraDeRango: false,
   });
-  if (sueno !== null && sueno < U.suenoBajoMin) out.push({
+
+  // Sueño (umbral absoluto, fallback)
+  if (sueno !== null && sueno < U.suenoBajoMin && !out.some(s => s.id === 'sueno-corto')) out.push({
     id: 'sueno-corto', icon: '😴', titulo: 'Dormiste poco', prioridad: 'Media',
     motivo: `${(sueno / 60).toFixed(1)} h de sueño (recomendado ≥ 6 h)`, fueraDeRango: false,
   });
+
+  // Reglas bienestar (solo si hay tendencias)
+  if (tendencias) {
+    if (tendencias.avgPasos3d > 0 && tendencias.tendenciaPasos < B.pasosCaida && !out.some(s => s.id === 'pasos-bajos')) {
+      const pct = Math.round((1 - tendencias.tendenciaPasos) * 100);
+      out.push({
+        id: 'pasos-bajos', icon: '👣', titulo: 'Venis bajando de actividad', prioridad: 'Baja',
+        motivo: `Promedio 3d: ${tendencias.avgPasos3d.toLocaleString()} vs tu media 14d: ${tendencias.avgPasos14d.toLocaleString()} (${pct}% menos)`, fueraDeRango: false,
+      });
+    }
+    if (tendencias.deudaSuenoMin >= B.suenoDeuda && !out.some(s => s.id === 'sueno-corto')) {
+      const deudaH = (tendencias.deudaSuenoMin / 60).toFixed(1);
+      out.push({
+        id: 'sueno-corto', icon: '😴', titulo: 'Acumulás deuda de sueño', prioridad: 'Media',
+        motivo: `Deuda: ${deudaH} h en últimos días`, fueraDeRango: false,
+      });
+    }
+    if (alertasActivas.length > 0 && tendencias.avgFc14d != null && tendencias.avgFc14d >= 60 && tendencias.avgFc14d <= 100 && fc !== null && fc >= 60 && fc <= 100) {
+      out.push({
+        id: 'recuperacion-post-alerta', icon: '💚', titulo: 'Ayer fue intenso, hoy recuperate', prioridad: 'Alta',
+        motivo: `FC actual: ${Math.round(fc)} lpm (tu media 14d: ${Math.round(tendencias.avgFc14d)} lpm)`, fueraDeRango: false,
+      });
+    }
+  }
 
   out.sort((a, b) => {
     const byPrio = VIT_RANK[a.prioridad] - VIT_RANK[b.prioridad];
@@ -661,6 +709,7 @@ function initVittito() {
       pasos: document.getElementById('vitPasos').value,
       sueno: document.getElementById('vitSueno').value,
     };
+    // SCRUM-202: simulator accepts optional alertasActivas and tendencias
     vittitoRender(vittitoSimular(vals));
   });
 }
