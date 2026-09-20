@@ -405,3 +405,23 @@ export interface HealthSummaryForSync {
   averageBpm: number | null;
   exerciseSessions: number;
 }
+
+// ─── TABLA: suggestion (SCRUM-202 — Persistencia de sugerencias) ───
+export type PrioridadSugerencia = 'Alta' | 'Media' | 'Baja';
+
+export interface SuggestionRecord {
+  id: string;
+  id_usuario: string;
+  tipo: string;
+  prioridad: PrioridadSugerencia;
+  titulo: string;
+  descripcion: string;
+  motivo: string | null;
+  acciones: string[] | null;
+  icon: string | null;
+  datos: Record<string, unknown> | null;
+  leida_en: string | null;
+  hecha_en: string | null;
+  created_at: string;
+}
+export type SuggestionInsert = Omit<SuggestionRecord, 'id' | 'created_at'> & { id?: string; created_at?: string };

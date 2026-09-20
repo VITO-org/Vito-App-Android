@@ -22,6 +22,8 @@ import {loadSuggestionSummaryFromSupabase, loadTendenciasFromSupabase, loadActiv
 import type {TendenciasSalud} from '../services/suggestions/supabaseMapper';
 import type {AlertType} from '../services/alerts/types';
 import type {HealthSummary} from '../types/health';
+import {syncSuggestions, markSuggestionRead, markSuggestionDone} from '../services/suggestions/suggestionSync';
+import type {SuggestionRecord} from '../services/supabase/models';
 import {
   getSeenIds,
   getDoneIds,
@@ -99,13 +101,12 @@ const InicioScreen: React.FC = () => {
   // Fuente primaria: Supabase (datos_reloj 24h, incluye panel-admin y
   // cargas manuales). Fallback: Health Connect (offline o sin filas).
   // SCRUM-202: tendencias 14d + alertas activas para supresión y bienestar.
-  const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
-  const [doneIds, setDoneIds] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Suggestion | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [remoteSummary, setRemoteSummary] = useState<HealthSummary | null>(null);
   const [tendencias, setTendencias] = useState<TendenciasSalud | null>(null);
   const [alertTypes, setAlertTypes] = useState<AlertType[]>([]);
+  const [dbSuggestions, setDbSuggestions] = useState<SuggestionRecord[]>([]);
 
   const loadRemoteData = useCallback(async () => {
     const uid = getUserId();
@@ -135,27 +136,31 @@ const InicioScreen: React.FC = () => {
     loadRemoteData();
   }, [loadRemoteData]);
 
-  useEffect(() => {
-    (async () => {
-      const [seen, done, last] = await Promise.all([getSeenIds(), getDoneIds(), getLastGenerated()]);
-      setSeenIds(seen);
-      setDoneIds(done);
-      if (shouldRefreshGeneration(last)) {
-        await setLastGenerated(new Date());
-      }
-    })();
-  }, []);
-
   const suggestionsProvider = useMemo(() => new RulesSuggestionProvider(), []);
   const effectiveSummary = remoteSummary ?? summary;
   const allSuggestions = useMemo(
     () => suggestionsProvider.getSuggestions({summary: effectiveSummary, tendencias, alertasActivas: alertTypes, recordedAt: effectiveSummary?.recordedAt}),
     [suggestionsProvider, effectiveSummary, tendencias, alertTypes],
   );
-  const activeSuggestions = useMemo(
-    () => allSuggestions.filter(s => !doneIds.has(s.id)),
-    [allSuggestions, doneIds],
+
+  // SCRUM-202: sync sugerencias generadas a Supabase + filtrar hechas
+  const doneSet = useMemo(
+    () => new Set(dbSuggestions.filter(s => s.hecha_en).map(s => s.tipo)),
+    [dbSuggestions],
   );
+  const activeSuggestions = useMemo(
+    () => allSuggestions.filter(s => !doneSet.has(s.id)),
+    [allSuggestions, doneSet],
+  );
+
+  // Sync a Supabase cuando cambian las sugerencias generadas
+  useEffect(() => {
+    const uid = getUserId();
+    if (!uid || allSuggestions.length === 0) return;
+    syncSuggestions(uid, allSuggestions).then(records => {
+      setDbSuggestions(records);
+    }).catch(() => {});
+  }, [allSuggestions, getUserId]);
 
   const handleSuggestionPress = useCallback((s: Suggestion) => {
     setSelected(s);
@@ -163,14 +168,22 @@ const InicioScreen: React.FC = () => {
   }, []);
 
   const handleMarkSeen = useCallback(async (id: string) => {
-    await persistSeen(id);
-    setSeenIds(prev => new Set(prev).add(id));
-  }, []);
+    // SCRUM-202: marcar en Supabase
+    const record = dbSuggestions.find(s => s.tipo === id);
+    if (record) {
+      await markSuggestionRead(record.id);
+      setDbSuggestions(prev => prev.map(s => s.id === record.id ? {...s, leida_en: new Date().toISOString()} : s));
+    }
+  }, [dbSuggestions]);
 
   const handleMarkDone = useCallback(async (id: string) => {
-    await persistDone(id);
-    setDoneIds(prev => new Set(prev).add(id));
-  }, []);
+    // SCRUM-202: marcar en Supabase
+    const record = dbSuggestions.find(s => s.tipo === id);
+    if (record) {
+      await markSuggestionDone(record.id);
+      setDbSuggestions(prev => prev.map(s => s.id === record.id ? {...s, hecha_en: new Date().toISOString()} : s));
+    }
+  }, [dbSuggestions]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -430,7 +443,7 @@ const InicioScreen: React.FC = () => {
           <SuggestionCard
             key={s.id}
             suggestion={s}
-            seen={seenIds.has(s.id)}
+            seen={dbSuggestions.some(r => r.tipo === s.id && r.leida_en)}
             onPress={() => handleSuggestionPress(s)}
           />
         ))

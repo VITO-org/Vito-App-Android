@@ -24,6 +24,8 @@ import type {
   Alerta,
   AlertaInsert,
   AlertaDatos,
+  SuggestionRecord,
+  SuggestionInsert,
   DispositivoUsuario,
   DispositivoUsuarioInsert,
   PreferenciaNotificacion,
@@ -851,6 +853,96 @@ export async function countAlertasActivas(
     if (match) return parseInt(match[1], 10);
   }
   return 0;
+}
+
+// ═══════════════════════════════════════════
+// SUGGESTION (SCRUM-202 — Persistencia de sugerencias)
+// ═══════════════════════════════════════════
+
+/**
+ * Insert or upsert a suggestion. Uses tipo+id_usuario to avoid duplicates per day.
+ */
+export async function upsertSuggestion(
+  suggestion: SuggestionInsert,
+  accessToken?: string | null,
+): Promise<SuggestionRecord> {
+  const token = await resolveAccessToken(accessToken);
+  const { data, error } = await supabase
+    .from('suggestion')
+    .upsert(suggestion, { onConflict: 'id' })
+    .select()
+    .single();
+  if (error) throw error;
+  return data as SuggestionRecord;
+}
+
+/**
+ * Get suggestions for a user, optionally filtered.
+ */
+export async function getSuggestions(
+  userId: string,
+  options?: { soloNoLeidas?: boolean; tipo?: string },
+  accessToken?: string | null,
+): Promise<SuggestionRecord[]> {
+  const token = await resolveAccessToken(accessToken);
+  let query = `${REST_BASE}/suggestion?select=*&id_usuario=eq.${userId}&order=created_at.desc`;
+  if (options?.soloNoLeidas) query += '&leida_en=is.null';
+  if (options?.tipo) query += `&tipo=eq.${options.tipo}`;
+
+  const res = await fetch(query, {
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data as SuggestionRecord[]) ?? [];
+}
+
+/**
+ * Mark a suggestion as read.
+ */
+export async function marcarSuggestionLeida(
+  suggestionId: string,
+  accessToken?: string | null,
+): Promise<void> {
+  const token = await resolveAccessToken(accessToken);
+  await supabase
+    .from('suggestion')
+    .update({ leida_en: new Date().toISOString() })
+    .eq('id', suggestionId);
+}
+
+/**
+ * Mark a suggestion as done.
+ */
+export async function marcarSuggestionHecha(
+  suggestionId: string,
+  accessToken?: string | null,
+): Promise<void> {
+  const token = await resolveAccessToken(accessToken);
+  await supabase
+    .from('suggestion')
+    .update({ hecha_en: new Date().toISOString() })
+    .eq('id', suggestionId);
+}
+
+/**
+ * Delete old suggestions (cleanup, older than N days).
+ */
+export async function cleanOldSuggestions(
+  userId: string,
+  daysOld: number = 30,
+  accessToken?: string | null,
+): Promise<void> {
+  const token = await resolveAccessToken(accessToken);
+  const cutoff = new Date(Date.now() - daysOld * 24 * 3600 * 1000).toISOString();
+  await supabase
+    .from('suggestion')
+    .delete()
+    .eq('id_usuario', userId)
+    .lt('created_at', cutoff);
 }
 
 // ═══════════════════════════════════════════
