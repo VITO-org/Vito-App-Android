@@ -94,17 +94,16 @@ const AlertasScreen: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [suggestions, setSuggestions] = useState<SuggestionRecord[]>([]);
   const {activeAlerts, refreshAlerts, confirmAlert} = useHealth();
-  const {session} = useSupabase();
-
-  const uid = session?.user?.id;
+  const supabaseCtx = useSupabase();
+  const uid = supabaseCtx?.session?.user?.id ?? null;
 
   const loadSuggestions = useCallback(async () => {
     if (!uid) return;
     try {
       const data = await getSuggestions(uid);
       setSuggestions(data);
-    } catch {
-      // Silenciar errores
+    } catch (e) {
+      console.log('[AlertasScreen] Error loading suggestions:', e);
     }
   }, [uid]);
 

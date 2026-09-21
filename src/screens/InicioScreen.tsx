@@ -158,8 +158,11 @@ const InicioScreen: React.FC = () => {
     const uid = getUserId();
     if (!uid || allSuggestions.length === 0) return;
     syncSuggestions(uid, allSuggestions).then(records => {
+      console.log('[InicioScreen] Synced suggestions:', records.length, 'from DB');
       setDbSuggestions(records);
-    }).catch(() => {});
+    }).catch(e => {
+      console.log('[InicioScreen] Error syncing suggestions:', e);
+    });
   }, [allSuggestions, getUserId]);
 
   const handleSuggestionPress = useCallback((s: Suggestion) => {

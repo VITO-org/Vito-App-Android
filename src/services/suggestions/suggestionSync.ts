@@ -45,30 +45,35 @@ export async function syncSuggestions(
   uid: string,
   generated: Suggestion[],
 ): Promise<SuggestionRecord[]> {
-  // Traer las sugerencias existentes de hoy
-  const existing = await getSuggestions(uid);
-  const today = new Date().toISOString().slice(0, 10);
+  try {
+    // Traer las sugerencias existentes de hoy
+    const existing = await getSuggestions(uid);
+    const today = new Date().toISOString().slice(0, 10);
 
-  // Filtrar solo las de hoy para evitar duplicados
-  const existingToday = new Set(
-    existing
-      .filter(e => e.created_at.slice(0, 10) === today)
-      .map(e => e.tipo),
-  );
+    // Filtrar solo las de hoy para evitar duplicados
+    const existingToday = new Set(
+      existing
+        .filter(e => e.created_at.slice(0, 10) === today)
+        .map(e => e.tipo),
+    );
 
-  // Insertar las que no existen hoy
-  for (const s of generated) {
-    if (!existingToday.has(s.id)) {
-      try {
-        await upsertSuggestion(toInsert(uid, s));
-      } catch {
-        // Silenciar errores de inserción (RLS, etc.)
+    // Insertar las que no existen hoy
+    for (const s of generated) {
+      if (!existingToday.has(s.id)) {
+        try {
+          await upsertSuggestion(toInsert(uid, s));
+        } catch (e) {
+          console.log('[suggestionSync] Error inserting suggestion:', s.id, e);
+        }
       }
     }
-  }
 
-  // Devolver todas las sugerencias actualizadas
-  return getSuggestions(uid);
+    // Devolver todas las sugerencias actualizadas
+    return getSuggestions(uid);
+  } catch (e) {
+    console.log('[suggestionSync] Error in syncSuggestions:', e);
+    return [];
+  }
 }
 
 /**
