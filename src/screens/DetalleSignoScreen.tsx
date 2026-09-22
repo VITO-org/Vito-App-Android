@@ -182,12 +182,17 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
 
         let registros: {label: string; value: number; isAbnormal: boolean}[];
 
-        if (vista === 'daily') {
+        if (vista === 'daily' || vista === 'weekly') {
+          // Diario y Semanal pintan CADA medición (no agrupan): semanal necesita
+          // el día en la etiqueta porque 6 mediciones pueden caer en 1-2 días y
+          // agruparPorDia colapsa a 1 punto (GiftedCharts no dibuja línea con ≤1).
           registros = datos.map(d => {
             const val = extraerValor(d, t) ?? 0;
             const fecha = new Date(d.recorded_at!);
             return {
-              label: `${String(fecha.getHours()).padStart(2, '0')}:${String(fecha.getMinutes()).padStart(2, '0')}`,
+              label: vista === 'weekly'
+                ? `${String(fecha.getDate()).padStart(2, '0')}/${String(fecha.getMonth() + 1).padStart(2, '0')} ${String(fecha.getHours()).padStart(2, '0')}:${String(fecha.getMinutes()).padStart(2, '0')}`
+                : `${String(fecha.getHours()).padStart(2, '0')}:${String(fecha.getMinutes()).padStart(2, '0')}`,
               value: val,
               isAbnormal: val < normalMin || val > normalMax,
             };
@@ -197,15 +202,18 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
             return timeA.localeCompare(timeB);
           });
         } else {
+          // Mensual: agrupar por día (muchos registros, evita superposición de etiquetas)
           registros = agruparPorDia(datos, t, normalMin, normalMax);
         }
 
-        // Transformar a formato gifted-charts
-        const giftedData = registros.map(r => ({
-          value: r.value,
-          label: r.label,
-          dataPointText: '',
-        }));
+        // Transformar a formato gifted-charts (descarta valores no numéricos)
+        const giftedData = registros
+          .filter(r => Number.isFinite(r.value))
+          .map(r => ({
+            value: r.value,
+            label: r.label,
+            dataPointText: '',
+          }));
 
         if (!cancelled) {
           setChartData(giftedData);
@@ -281,45 +289,46 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
       {/* Gráfico gifted-charts */}
       {chartData.length > 0 && (
         <Card style={styles.chartCard}>
-          <LineChart
-            data={chartData}
-            width={spacing.screenPaddingHorizontal * 2 + 200}
-            height={220}
-            spacing={vista === 'daily' ? 40 : 60}
-            color={colors.primary}
-            thickness={2}
-            curved
-            areaChart
-            startFillColor={colors.primary}
-            endFillColor={colors.backgroundLight}
-            startOpacity={0.3}
-            endOpacity={0.0}
-            dataPointsColor={colors.primary}
-            dataPointsRadius={4}
-            textColor={colors.textSecondary}
-            textFontSize={10}
-            yAxisColor={colors.border}
-            xAxisColor={colors.border}
-            yAxisTextStyle={{color: colors.textSecondary, fontSize: 10}}
-            xAxisLabelTextStyle={{color: colors.textSecondary, fontSize: 9}}
-            noOfSections={5}
-            yAxisOffset={0}
-            formatYLabel={formatYLabel}
-            referenceLine1Config={{
-              color: colors.primarySoft,
-              thickness: 1.5,
-              dashWidth: 6,
-              dashGap: 4,
-              labelText: `Normal: ${normalMin}–${normalMax}`,
-              labelTextStyle: styles.refLabel,
-            }}
-            referenceLine1Position={refLineValue}
-            hideRules={false}
-            rulesColor={colors.border}
-            rulesType="dashed"
-            animateOnDataChange
-            animationDuration={800}
-          />
+          <ChartErrorBoundary>
+            <LineChart
+              key={vista}
+              data={chartData}
+              width={spacing.screenPaddingHorizontal * 2 + 200}
+              height={220}
+              spacing={vista === 'daily' ? 40 : 60}
+              color={colors.primary}
+              thickness={2}
+              curved={chartData.length > 1}
+              areaChart={chartData.length > 1}
+              startFillColor={colors.primary}
+              endFillColor={colors.backgroundLight}
+              startOpacity={0.3}
+              endOpacity={0.0}
+              dataPointsColor={colors.primary}
+              dataPointsRadius={4}
+              textColor={colors.textSecondary}
+              textFontSize={10}
+              yAxisColor={colors.border}
+              xAxisColor={colors.border}
+              yAxisTextStyle={{color: colors.textSecondary, fontSize: 10}}
+              xAxisLabelTextStyle={{color: colors.textSecondary, fontSize: 9}}
+              noOfSections={5}
+              yAxisOffset={0}
+              formatYLabel={formatYLabel}
+              referenceLine1Config={{
+                color: colors.primarySoft,
+                thickness: 1.5,
+                dashWidth: 6,
+                dashGap: 4,
+                labelText: `Normal: ${normalMin}–${normalMax}`,
+                labelTextStyle: styles.refLabel,
+              }}
+              referenceLine1Position={refLineValue}
+              hideRules={false}
+              rulesColor={colors.border}
+              rulesType="dashed"
+            />
+          </ChartErrorBoundary>
         </Card>
       )}
 
@@ -346,6 +355,38 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
 }
 
 // ─── Helpers ───
+
+/**
+ * Error boundary para el gráfico. Si react-native-gifted-charts o
+ * react-native-svg lanzan un error de render (p. ej. con datasets
+ * degenerados), en lugar de tumbar la app se muestra un mensaje
+ * recuperable.
+ */
+class ChartErrorBoundary extends React.Component<
+  {children: React.ReactNode},
+  {hasError: boolean}
+> {
+  state = {hasError: false};
+
+  static getDerivedStateFromError() {
+    return {hasError: true};
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.warn('[DetalleSigno] Error de render en el grafico:', error.message, info.componentStack);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <Text style={styles.chartErrorText}>
+          No se pudo dibujar el gráfico para este período. Intenta con otro filtro.
+        </Text>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 /** Obtiene el rango normal desde el baseline del paciente */
 function getBaselineRange(baseline: BaselineClinico, tipo: TipoSignoVital): {min: number; max: number} | null {
@@ -508,6 +549,14 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     paddingVertical: 24,
+    lineHeight: 22,
+  },
+  chartErrorText: {
+    fontSize: fontSize.body,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    paddingVertical: 32,
+    paddingHorizontal: 16,
     lineHeight: 22,
   },
 });
