@@ -49,9 +49,12 @@ function calcularResumen(datos: DatosReloj[]): Resumen {
     diast: [] as number[],
     spo2: [] as number[],
     temp: [] as number[],
-    pasos: [] as number[],
     sueno: [] as number[],
   };
+  // SCRUM-207: actividad_pasos es total acumulado del día al momento de la
+  // lectura (HC COUNT_TOTAL), no incremental. Se agrupa por día y se toma el
+  // MÁXIMO por día; el total del período es la suma de máximos diarios.
+  const pasosPorDia = new Map<string, number>();
 
   for (const d of datos) {
     if (d.frec_cardiaca_bpm != null) acc.fc.push(d.frec_cardiaca_bpm);
@@ -59,9 +62,15 @@ function calcularResumen(datos: DatosReloj[]): Resumen {
     if (d.bp_diastolica != null) acc.diast.push(d.bp_diastolica);
     if (d.spo2_pct != null) acc.spo2.push(d.spo2_pct);
     if (d.temperatura != null) acc.temp.push(d.temperatura);
-    if (d.actividad_pasos != null) acc.pasos.push(d.actividad_pasos);
+    if (d.actividad_pasos != null) {
+      const dayKey = d.recorded_at ? d.recorded_at.slice(0, 10) : 'unknown';
+      const prev = pasosPorDia.get(dayKey) ?? 0;
+      pasosPorDia.set(dayKey, Math.max(prev, d.actividad_pasos));
+    }
     if (d.horas_sueno != null) acc.sueno.push(d.horas_sueno);
   }
+
+  const pasosDiarios = Array.from(pasosPorDia.values()).filter(v => v > 0);
 
   const avg = (arr: number[]) =>
     arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
@@ -98,9 +107,9 @@ function calcularResumen(datos: DatosReloj[]): Resumen {
       count: acc.temp.length,
     },
     pasos: {
-      avg: avg(acc.pasos),
-      total: acc.pasos.reduce((a, b) => a + b, 0),
-      count: acc.pasos.length,
+      avg: avg(pasosDiarios),
+      total: pasosDiarios.reduce((a, b) => a + b, 0),
+      count: pasosDiarios.length,
     },
     sueno: {
       avg: avg(acc.sueno),

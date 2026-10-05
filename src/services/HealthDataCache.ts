@@ -143,7 +143,9 @@ export function computeDailyAverages(
   };
 
   return {
-    steps: Math.round(sum('steps') / n),
+    // SCRUM-207: cada snapshot ya trae el total del día (COUNT_TOTAL).
+    // Promediarlos subestima/infla según el momento; se toma el MÁXIMO.
+    steps: Math.max(...snapshots.map(s => s.steps ?? 0)),
     caloriesKcal: sum('caloriesKcal') / n,
     distanceMeters: sum('distanceMeters') / n,
     sleepMinutes: sum('sleepMinutes') / n,
