@@ -23,6 +23,43 @@ import java.time.ZoneId
 import java.time.ZonedDateTime
 
 /**
+ * SCRUM-207: fusiona intervalos de sueño solapados o casi-adyacentes.
+ *
+ * Health Connect puede devolver la misma noche dos veces (reloj + teléfono,
+ * o la app del reloj escribiendo duplicado). Sumar sin fusionar duplica el
+ * total (observado: 9.1h vs 4.54h reales, ratio 2x).
+ *
+ * Función pura (solo java.time) para poder testearla en JVM sin Android.
+ *
+ * @param sessions pares (inicio, fin) de cada sesión.
+ * @param gapTolerance huecos menores o iguales a esto también se fusionan.
+ * @return intervalos fusionados, ordenados por inicio.
+ */
+fun mergeSleepIntervals(
+    sessions: List<Pair<Instant, Instant>>,
+    gapTolerance: Duration = Duration.ZERO,
+): List<Pair<Instant, Instant>> {
+    val valid = sessions.filter { (start, end) -> end.isAfter(start) }
+    if (valid.isEmpty()) return emptyList()
+    val sorted = valid.sortedBy { it.first }
+    val merged = mutableListOf<Pair<Instant, Instant>>()
+    var curStart = sorted[0].first
+    var curEnd = sorted[0].second
+    for (i in 1 until sorted.size) {
+        val (start, end) = sorted[i]
+        if (!start.isAfter(curEnd.plus(gapTolerance))) {
+            if (end.isAfter(curEnd)) curEnd = end
+        } else {
+            merged.add(curStart to curEnd)
+            curStart = start
+            curEnd = end
+        }
+    }
+    merged.add(curStart to curEnd)
+    return merged
+}
+
+/**
  * Encapsula toda la lógica de comunicación con Google Health Connect.
  * Extraída y refactorizada desde MainActivity.kt original para ser usada
  * desde el React Native Native Module (VitoHealthModule) y también desde
@@ -245,12 +282,22 @@ class HealthDataProvider(
             caloriesKcal = 0.0
         }
 
+        // SCRUM-207: fusionar sesiones solapadas antes de sumar.
+        // Sin fusión, reloj+teléfono registrando la misma noche duplican el
+        // total (observado 9.1h vs 4.54h reales).
+        val mergedSleep = mergeSleepIntervals(
+            sleepSessions.map { it.startTime to it.endTime },
+        )
+        if (mergedSleep.size != sleepSessions.size) {
+            Log.d(TAG, "Sueño fusionado: ${sleepSessions.size} sesiones -> ${mergedSleep.size}")
+        }
+
         return HealthSummary(
             steps = steps,
             distanceMeters = distanceMeters,
             caloriesKcal = caloriesKcal,
-            sleepMinutes = sleepSessions.sumOf { session ->
-                Duration.between(session.startTime, session.endTime).toMinutes()
+            sleepMinutes = mergedSleep.sumOf { (start, end) ->
+                Duration.between(start, end).toMinutes()
             },
             averageBpm = averageBpm,
             exerciseSessions = exercises.size,

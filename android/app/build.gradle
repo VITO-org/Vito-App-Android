@@ -62,4 +62,7 @@ dependencies {
     implementation("androidx.health.connect:connect-client:1.1.0-alpha11")
     implementation("androidx.activity:activity-ktx:1.9.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.0")
+
+    // SCRUM-207: unit tests JVM para lógica pura (fusión de sesiones de sueño)
+    testImplementation("junit:junit:4.13.2")
 }
