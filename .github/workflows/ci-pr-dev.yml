@@ -71,12 +71,10 @@ jobs:
 
       - name: Type-check
         run: npx tsc --noEmit
-        continue-on-error: true
 
       - name: Unit tests (Jest)
         id: jest
         run: npx jest --passWithNoTests
-        continue-on-error: true
 
   android-build:
     runs-on: ubuntu-latest
