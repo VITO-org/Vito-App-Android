@@ -27,7 +27,12 @@ import java.time.ZonedDateTime
  *
  * Health Connect puede devolver la misma noche dos veces (reloj + teléfono,
  * o la app del reloj escribiendo duplicado). Sumar sin fusionar duplica el
- * total (observado: 9.1h vs 4.54h reales, ratio 2x).
+ * total (observado: 9.1h vs 4.54h reales, ratio 2x; luego 8.7h vs 4h27).
+ *
+ * Segundo hallazgo (2026-10-09): SleepSessionRecord trae `stages`
+ * (AWAKE / SLEEPING / LIGHT / DEEP / REM / OUT_OF_BED...). Sumar
+ * startTime->endTime mide "tiempo en cama", no sueño real. El reloj muestra
+ * solo etapas dormidas, por eso daba ~2x aunque el merge existiera.
  *
  * Función pura (solo java.time) para poder testearla en JVM sin Android.
  *
@@ -37,7 +42,7 @@ import java.time.ZonedDateTime
  */
 fun mergeSleepIntervals(
     sessions: List<Pair<Instant, Instant>>,
-    gapTolerance: Duration = Duration.ZERO,
+    gapTolerance: Duration = Duration.ofMinutes(5),
 ): List<Pair<Instant, Instant>> {
     val valid = sessions.filter { (start, end) -> end.isAfter(start) }
     if (valid.isEmpty()) return emptyList()
@@ -57,6 +62,28 @@ fun mergeSleepIntervals(
     }
     merged.add(curStart to curEnd)
     return merged
+}
+
+/**
+ * SCRUM-207 (2026-10-09): ¿qué cuenta como "dormido"?
+ * STAGE_TYPE_SLEEPING=2, LIGHT=4, DEEP=5, REM=6.
+ * Se excluyen UNKNOWN=0, AWAKE=1, OUT_OF_BED=3, AWAKE_IN_BED=7.
+ * Pura (ints) para test JVM sin el SDK de Health Connect.
+ */
+fun isSleepStage(stage: Int): Boolean {
+    return stage == 2 || stage == 4 || stage == 5 || stage == 6
+}
+
+/**
+ * Filtra etapas a solo-sueño y las devuelve como intervalos.
+ * Pura para test JVM.
+ */
+fun sleepOnlyIntervals(
+    stages: List<Triple<Instant, Instant, Int>>,
+): List<Pair<Instant, Instant>> {
+    return stages
+        .filter { (start, end, stage) -> end.isAfter(start) && isSleepStage(stage) }
+        .map { (start, end, _) -> start to end }
 }
 
 /**
@@ -282,23 +309,44 @@ class HealthDataProvider(
             caloriesKcal = 0.0
         }
 
-        // SCRUM-207: fusionar sesiones solapadas antes de sumar.
-        // Sin fusión, reloj+teléfono registrando la misma noche duplican el
-        // total (observado 9.1h vs 4.54h reales).
-        val mergedSleep = mergeSleepIntervals(
-            sleepSessions.map { it.startTime to it.endTime },
-        )
-        if (mergedSleep.size != sleepSessions.size) {
-            Log.d(TAG, "Sueño fusionado: ${sleepSessions.size} sesiones -> ${mergedSleep.size}")
+        // SCRUM-207: fusionar sesiones solapadas antes de sumar + contar solo
+        // etapas dormidas (no tiempo en cama). Sin esto: 9.1h vs 4.54h, 8.7h vs 4h27.
+        // Si el record trae stages, se suman solo SLEEPING/LIGHT/DEEP/REM;
+        // si viene sin stages (reloj viejo), fallback al intervalo completo.
+        val rawIntervalMinutes = sleepSessions.sumOf { s ->
+            Duration.between(s.startTime, s.endTime).toMinutes()
         }
+        val sleepStageIntervals = sleepSessions.flatMap { s ->
+            if (s.stages.isNotEmpty()) {
+                sleepOnlyIntervals(
+                    s.stages.map { st -> Triple(st.startTime, st.endTime, st.stage) },
+                )
+            } else {
+                listOf(s.startTime to s.endTime)
+            }
+        }
+        val sessionsWithoutStages = sleepSessions.count { it.stages.isEmpty() }
+        val mergedSleep = mergeSleepIntervals(sleepStageIntervals)
+        val sleepMinutesFinal = mergedSleep.sumOf { (start, end) ->
+            Duration.between(start, end).toMinutes()
+        }
+        Log.d(TAG, "Sueño raw: ${sleepSessions.size} sesiones, ${rawIntervalMinutes}min intervalo total, ${sleepStageIntervals.size} intervalos dormidos pre-merge, $sessionsWithoutStages sin stages")
+        for (s in sleepSessions) {
+            val stageSleepMin = if (s.stages.isNotEmpty()) {
+                sleepOnlyIntervals(s.stages.map { st -> Triple(st.startTime, st.endTime, st.stage) })
+                    .sumOf { (a, b) -> Duration.between(a, b).toMinutes() }
+            } else {
+                Duration.between(s.startTime, s.endTime).toMinutes()
+            }
+            Log.d(TAG, "Sueño sesion ${s.startTime} -> ${s.endTime} (${Duration.between(s.startTime, s.endTime).toMinutes()}min cama, ${stageSleepMin}min dormido, ${s.stages.size} stages, pkg=${s.metadata.dataOrigin.packageName})")
+        }
+        Log.d(TAG, "Sueño fusionado: ${sleepStageIntervals.size} intervalos -> ${mergedSleep.size}, total=${sleepMinutesFinal}min")
 
         return HealthSummary(
             steps = steps,
             distanceMeters = distanceMeters,
             caloriesKcal = caloriesKcal,
-            sleepMinutes = mergedSleep.sumOf { (start, end) ->
-                Duration.between(start, end).toMinutes()
-            },
+            sleepMinutes = sleepMinutesFinal,
             averageBpm = averageBpm,
             exerciseSessions = exercises.size,
             bloodPressureSystolic = bloodPressureSystolic,
