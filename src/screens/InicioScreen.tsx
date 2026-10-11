@@ -10,7 +10,7 @@ import PrimaryButton from '../components/PrimaryButton';
 import AppIcon, {type AppIconName} from '../components/AppIcon';
 import VitoAvatar from '../components/VitoAvatar';
 import StatusIndicator from '../components/StatusIndicator';
-import ActiveAlertsBanner from '../components/ActiveAlertsBanner';
+import EstadoGeneralCard from '../components/EstadoGeneralCard';
 import {colors, spacing, fontSize, shadows} from '../theme';
 import {buildSignosFromSummary, getMetricasBienestar} from '../utils/signosVitales';
 import type {Alerta} from '../services/supabase/models';
@@ -125,6 +125,10 @@ const InicioScreen: React.FC = () => {
   // Construir vitals desde la fuente única de datos
   const allSignos = buildSignosFromSummary(summary, lastSync);
 
+  // Estado general dinámico (Fase 2): solo activas (leida_en === null).
+  const alertasActivas = (activeAlerts ?? []).filter(a => a.leida_en === null);
+  const unreadCount = alertasActivas.length;
+
   // InicioScreen: solo signos vitales (excluye bienestar),
   // combina sistólica+diastólica en un solo card "Presión arterial"
   const bienestarIds = new Set(['pasos', 'calorias', 'distancia', 'sueno']);
@@ -179,34 +183,36 @@ const InicioScreen: React.FC = () => {
           <VitoAvatar size={40} />
           <View style={styles.headerText}>
             <Text style={styles.greeting}>¡Hola, {userName}!</Text>
-            <Text style={styles.subtitle}>Todo está bajo control</Text>
+            <Text style={styles.subtitle}>Tu bienestar, monitoreado</Text>
           </View>
         </View>
-        <TouchableOpacity style={styles.notifButton}>
+        <TouchableOpacity
+          style={styles.notifButton}
+          onPress={() => navigation.navigate('Alertas' as any)}
+          accessibilityLabel="Ver alertas">
           <AppIcon name="alertas" size={20} />
+          {unreadCount > 0 && (
+            <View style={styles.notifBadge}>
+              <Text style={styles.notifBadgeText}>
+                {unreadCount > 9 ? '9+' : `${unreadCount}`}
+              </Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
 
-      {/* ── Alertas activas (HU-37) ── */}
-      <ActiveAlertsBanner
-        alerts={activeAlerts}
+      {/* ── Card Estado General (siempre visible, dinámico según los 4 estados) ── */}
+      <EstadoGeneralCard
+        alerts={alertasActivas}
+        summary={summary}
+        lastSync={lastSync}
         onAlertPress={handleAlertPress}
-        onDismiss={confirmAlert}
-        onSeeAll={() => navigation.navigate('Alertas' as any)}
+        onReview={() =>
+          navigation.navigate(
+            (alertasActivas.length > 0 ? 'Alertas' : 'TodosLosSignos') as any,
+          )
+        }
       />
-
-      {/* ── Card Estado General ── */}
-      <Card>
-        <View style={styles.statusRow}>
-          <View style={styles.statusInfo}>
-            <Text style={styles.statusTitle}>Estado general</Text>
-            <Text style={styles.statusText}>Tus signos vitales están estables</Text>
-          </View>
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>Bien</Text>
-          </View>
-        </View>
-      </Card>
 
       {/* ── Estado Health Connect ── */}
       {hcStatus === 'unavailable' && (
@@ -470,12 +476,12 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
 
-  // ── Header ──
+  // ── Header (compacto mockup) ──
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 16,
   },
   headerLeft: {
     flexDirection: 'row',
@@ -502,37 +508,22 @@ const styles = StyleSheet.create({
   notifIcon: {
     fontSize: 20,
   },
-
-  // ── Estado General ──
-  statusRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  notifBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: colors.critical,
+    justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 4,
   },
-  statusInfo: {
-    flex: 1,
-    marginRight: 12,
-  },
-  statusTitle: {
-    fontSize: fontSize.body,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-  statusText: {
-    fontSize: fontSize.caption,
-    color: colors.textSecondary,
-    marginTop: 4,
-  },
-  badge: {
-    backgroundColor: colors.successLight,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: spacing.badgeBorderRadius,
-  },
-  badgeText: {
-    fontSize: fontSize.caption,
-    fontWeight: '600',
-    color: colors.success,
+  notifBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.surface,
   },
 
   // ── Signos Vitales ──

@@ -2,7 +2,7 @@ import React, {useState, useEffect, useCallback} from 'react';
 import {View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl} from 'react-native';
 import Card from '../components/Card';
 import {colors, spacing, fontSize} from '../theme';
-import {severityToColorKey, severityLabel, alertIcon, formatAlertTime, SEVERITY_COLORS} from '../utils/alertas';
+import {severityToColorKey, severityLabel, alertIcon, formatAlertTime, SEVERITY_COLORS, cleanAlertTitle} from '../utils/alertas';
 import {useHealth} from '../context/HealthProvider';
 import type {Alerta} from '../services/supabase/models';
 
@@ -119,7 +119,7 @@ const AlertasScreen: React.FC = () => {
                   <Text style={styles.alertEmoji}>{alertIcon(alert.tipo)}</Text>
                 </View>
                 <View style={styles.alertBody}>
-                  <Text style={styles.alertTitle}>{alert.titulo}</Text>
+                  <Text style={styles.alertTitle}>{cleanAlertTitle(alert.titulo)}</Text>
                   <Text style={styles.alertTime}>{formatAlertTime(alert.created_at)}</Text>
                   <Text style={styles.alertDesc}>{alertDescription(alert)}</Text>
                   {alert.datos && typeof alert.datos === 'object' && (alert.datos as Record<string, unknown>).escalada === true && (

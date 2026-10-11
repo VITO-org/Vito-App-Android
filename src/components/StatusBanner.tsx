@@ -29,7 +29,7 @@ export const StatusBanner: React.FC<StatusBannerProps> = ({
   const textColor = isError
     ? '#DC2626'
     : isWarning
-      ? '#D97706'
+      ? colors.warningStrong
       : colors.textSecondary;
 
   return (
