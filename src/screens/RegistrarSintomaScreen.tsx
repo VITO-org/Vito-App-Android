@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   FlatList,
   Modal,
   TextInput,
@@ -362,8 +363,16 @@ const RegistrarSintomaScreen: React.FC = () => {
       </ScrollView>
 
       {/* ── Modal Catálogo ── */}
-      <Modal visible={showCatalogo} animationType="slide" transparent>
+      <Modal
+        visible={showCatalogo}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowCatalogo(false)}>
         <View style={styles.modalOverlay}>
+          {/* Toque en el fondo oscuro cierra el catálogo */}
+          <TouchableWithoutFeedback onPress={() => setShowCatalogo(false)}>
+            <View style={styles.modalBackdrop} />
+          </TouchableWithoutFeedback>
           <View style={styles.modalContent}>
             {/* Header del modal */}
             <View style={styles.modalHeader}>
@@ -632,6 +641,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    flex: 1,
   },
   modalContent: {
     backgroundColor: colors.surface,

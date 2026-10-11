@@ -268,31 +268,33 @@ const InicioScreen: React.FC = () => {
         ))}
       </View>
 
-      {/* ── Registrar Síntoma ── */}
-      <TouchableOpacity
-        style={styles.sintomaBtn}
-        onPress={() => navigation.navigate('RegistrarSintoma')}
-        activeOpacity={0.8}>
-        <Text style={styles.sintomaBtnIcon}>🩺</Text>
-        <View style={styles.sintomaBtnInfo}>
-          <Text style={styles.sintomaBtnTitle}>Registrar Síntoma</Text>
-          <Text style={styles.sintomaBtnSubtitle}>¿Sentís algo? Registralo acá</Text>
-        </View>
-        <Text style={styles.sintomaBtnArrow}>›</Text>
-      </TouchableOpacity>
-
-      {/* ── Consultar Síntomas ── */}
-      <TouchableOpacity
-        style={styles.sintomaBtn}
-        onPress={() => navigation.navigate('HistorialSintomas')}
-        activeOpacity={0.8}>
-        <Text style={styles.sintomaBtnIcon}>📋</Text>
-        <View style={styles.sintomaBtnInfo}>
-          <Text style={styles.sintomaBtnTitle}>Consultar Síntomas</Text>
-          <Text style={styles.sintomaBtnSubtitle}>Historial para mostrar a tu médico</Text>
-        </View>
-        <Text style={styles.sintomaBtnArrow}>›</Text>
-      </TouchableOpacity>
+      {/* ── Síntomas: registrar + consultar en la misma sección ── */}
+      <Text style={styles.sectionTitle}>Síntomas</Text>
+      <View style={styles.sintomasSection}>
+        <TouchableOpacity
+          style={[styles.sintomaBtn, styles.sintomaRow]}
+          onPress={() => navigation.navigate('RegistrarSintoma')}
+          activeOpacity={0.8}>
+          <Text style={styles.sintomaBtnIcon}>🩺</Text>
+          <View style={styles.sintomaBtnInfo}>
+            <Text style={styles.sintomaBtnTitle}>Registrar Síntoma</Text>
+            <Text style={styles.sintomaBtnSubtitle}>¿Sentís algo? Registralo acá</Text>
+          </View>
+          <Text style={styles.sintomaBtnArrow}>›</Text>
+        </TouchableOpacity>
+        <View style={styles.sintomaDivider} />
+        <TouchableOpacity
+          style={[styles.sintomaBtn, styles.sintomaRow]}
+          onPress={() => navigation.navigate('HistorialSintomas')}
+          activeOpacity={0.8}>
+          <Text style={styles.sintomaBtnIcon}>📋</Text>
+          <View style={styles.sintomaBtnInfo}>
+            <Text style={styles.sintomaBtnTitle}>Consultar Síntomas</Text>
+            <Text style={styles.sintomaBtnSubtitle}>Historial para mostrar a tu médico</Text>
+          </View>
+          <Text style={styles.sintomaBtnArrow}>›</Text>
+        </TouchableOpacity>
+      </View>
 
       {/* ── Signos Vitales ── */}
       <View style={styles.sectionHeader}>
@@ -639,7 +641,21 @@ const styles = StyleSheet.create({
     marginVertical: 1,
   },
 
-  // ── Registrar Síntoma ──
+  // ── Síntomas (sección única) ──
+  sintomasSection: {
+    backgroundColor: colors.surface,
+    borderRadius: spacing.cardBorderRadius,
+    padding: spacing.cardPadding,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.card,
+  },
+  sintomaDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
+    marginVertical: 8,
+  },
   sintomaBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -650,6 +666,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     ...shadows.card,
+  },
+  // Fila dentro de la sección: sin caja ni sombra propia
+  // (anula ...shadows.card heredado de sintomaBtn).
+  sintomaRow: {
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    marginBottom: 0,
+    paddingVertical: 8,
+    paddingHorizontal: 0,
+    elevation: 0,
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: {width: 0, height: 0},
   },
   sintomaBtnIcon: {
     fontSize: 28,
