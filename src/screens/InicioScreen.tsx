@@ -387,7 +387,10 @@ const InicioScreen: React.FC = () => {
             items.push({
               iconName: 'distancia',
               title: 'Distancia recorrida',
-              detail: `${(summary.distanceMeters / 1000).toFixed(2)} km`,
+              detail:
+                summary.distanceMeters >= 1000
+                  ? `${(summary.distanceMeters / 1000).toFixed(2)} km`
+                  : `${summary.distanceMeters.toFixed(0)} m`,
             });
           }
           if (summary.sleepMinutes > 0) {

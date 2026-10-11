@@ -58,14 +58,11 @@ const VitalSignCard: React.FC<VitalSignCardProps> = ({
         )}
       </View>
 
-      {/* Valor */}
+      {/* Valor + unidad en la misma línea: nunca número pelado (distancia 35 sin km) */}
       {hasNoData ? (
         <Text style={styles.noData}>{noDataMessage}</Text>
       ) : (
-        <>
-          <Text style={styles.value}>{value}</Text>
-          {unit && <Text style={styles.unit}>{unit}</Text>}
-        </>
+        <Text style={styles.value}>{unit ? `${value} ${unit}` : value}</Text>
       )}
 
       {/* Label */}

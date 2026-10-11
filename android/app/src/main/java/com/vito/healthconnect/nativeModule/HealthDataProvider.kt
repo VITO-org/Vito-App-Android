@@ -301,12 +301,52 @@ class HealthDataProvider(
         // Usamos ActiveCaloriesBurnedRecord (solo actividad) en vez de
         // TotalCaloriesBurnedRecord (que incluye metabolismo basal ~1000+ kcal).
         val steps = aggregate[StepsRecord.COUNT_TOTAL] ?: 0L
-        val distanceMeters = aggregate[DistanceRecord.DISTANCE_TOTAL]?.inMeters ?: 0.0
+        var distanceMeters = aggregate[DistanceRecord.DISTANCE_TOTAL]?.inMeters ?: 0.0
         var caloriesKcal = aggregate[ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL]?.inKilocalories ?: 0.0
 
         if (steps == 0L && distanceMeters == 0.0 && caloriesKcal > 0.0) {
             Log.w(TAG, "Calories=$caloriesKcal con steps=0 y distance=0, forzando a 0.0")
             caloriesKcal = 0.0
+        }
+
+        // Fix distancia imposible (spec 2026-10-09): DISTANCE_TOTAL agrega todas
+        // las fuentes (reloj+teléfono), mismo patrón que pasos/sueño. Se lee el
+        // detalle por origen para diagnosticar y se aplican dos controles con log:
+        // 1) huérfana (steps=0 pero distance>0: ej. viaje en auto) -> 0;
+        // 2) inconsistencia con pasos (>2m/paso es imposible caminando) -> clamp.
+        // No se toca pasos/sueño/calorías.
+        var distanceDetailTotal = 0.0
+        try {
+            val distanceRecords = healthConnectClient.readRecords(
+                ReadRecordsRequest(
+                    recordType = DistanceRecord::class,
+                    timeRangeFilter = timeRange,
+                ),
+            ).records
+            val byOrigin = distanceRecords.groupBy { it.metadata.dataOrigin.packageName }
+            for ((pkg, recs) in byOrigin) {
+                val tot = recs.sumOf { it.distance.inMeters }
+                Log.d(TAG, "Distancia origen $pkg: ${recs.size} records, ${"%.1f".format(tot)}m")
+            }
+            distanceDetailTotal = distanceRecords.sumOf { it.distance.inMeters }
+            Log.d(TAG, "Distancia aggregate=${"%.1f".format(distanceMeters)}m, records=${distanceRecords.size}")
+        } catch (e: Exception) {
+            Log.w(TAG, "Error leyendo detalle de distancia, continuando con aggregate...", e)
+        }
+        // Aggregate DISTANCE_TOTAL en 0 con detalle >0: bug del provider HC en
+        // algunos OEM (visto en Xiaomi: 26 records/337.3m con aggregate 0.0).
+        // El detalle por readRecords es la fuente de verdad -> se adopta.
+        if (distanceMeters == 0.0 && distanceDetailTotal > 0.0) {
+            Log.w(TAG, "Aggregate=0 pero detalle suma ${"%.1f".format(distanceDetailTotal)}m, usando detalle")
+            distanceMeters = distanceDetailTotal
+        }
+        if (steps == 0L && distanceMeters > 0.0) {
+            Log.w(TAG, "Distance=${distanceMeters}m con steps=0 (huérfana, ej. vehículo), forzando a 0.0")
+            distanceMeters = 0.0
+        } else if (steps > 0L && distanceMeters / steps > 2.0) {
+            val capped = steps * 0.8
+            Log.w(TAG, "Distance=${distanceMeters}m inconsistente con steps=$steps (>2m/paso), clamp a ${capped}m")
+            distanceMeters = capped
         }
 
         // SCRUM-207: fusionar sesiones solapadas antes de sumar + contar solo

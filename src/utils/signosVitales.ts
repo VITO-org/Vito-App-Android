@@ -194,7 +194,7 @@ export function buildSignosFromSummary(
         ? `${(dist / 1000).toFixed(2)}`
         : `${dist.toFixed(0)}`
       : '--',
-    unit: dist != null && dist >= 1000 ? 'km' : 'm',
+    unit: dist != null && dist > 0 ? (dist >= 1000 ? 'km' : 'm') : '',
     icon: '📏',
     iconName: 'distancia',
     iconSize: 36,
