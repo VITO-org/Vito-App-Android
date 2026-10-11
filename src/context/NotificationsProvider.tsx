@@ -4,6 +4,7 @@ import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { useSupabase } from './SupabaseProvider';
+import { useHealth } from './HealthProvider';
 
 // EAS projectId (app.json extra.eas.projectId). Obligatorio en APK
 // standalone: getExpoPushTokenAsync() sin projectId tira en físico.
@@ -100,6 +101,7 @@ const NotificationsContext = createContext<NotificationsContextValue | null>(nul
  */
 export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { session } = useSupabase();
+  const { refreshAlerts } = useHealth();
   const [expoPushToken, setExpoPushToken] = useState<string | null>(null);
   const [dispositivoId, setDispositivoId] = useState<string | null>(null);
   const [notification, setNotification] = useState<Notifications.Notification | null>(null);
@@ -253,6 +255,7 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
         marcarRecibidaPorAlerta(alertId, session?.access_token ?? null).catch(err =>
           console.error('Error marking delivery recibida:', err),
         );
+        refreshAlerts().catch(err => console.error('Error refreshing alerts on push:', err));
       }
     });
 
@@ -289,7 +292,7 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
         responseListener.remove();
       }
     };
-  }, []);
+  }, [refreshAlerts]);
 
   const value: NotificationsContextValue = {
     expoPushToken,

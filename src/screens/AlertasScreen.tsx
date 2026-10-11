@@ -2,6 +2,7 @@ import React, {useState, useEffect, useCallback} from 'react';
 import {View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl} from 'react-native';
 import Card from '../components/Card';
 import {colors, spacing, fontSize} from '../theme';
+import {severityToColorKey, severityLabel, alertIcon, formatAlertTime, SEVERITY_COLORS} from '../utils/alertas';
 import {useHealth} from '../context/HealthProvider';
 import type {Alerta} from '../services/supabase/models';
 
@@ -18,44 +19,6 @@ const TABS: {id: TabId; label: string}[] = [
  */
 function isAlertRead(alert: Alerta): boolean {
   return alert.leida_en !== null;
-}
-
-/**
- * Map Supabase severidad to UI severity color key.
- */
-function severityToColorKey(severidad: Alerta['severidad']): 'danger' | 'warning' | 'info' {
-  if (severidad === 'critica') return 'danger';
-  if (severidad === 'advertencia') return 'warning';
-  return 'info';
-}
-
-/**
- * Get the appropriate icon for the alert type.
- */
-function alertIcon(tipo: Alerta['tipo']): string {
-  switch (tipo) {
-    case 'hipoxia': return '\uD83E\uDEC1'; // 🫁
-    case 'hipertension': return '\u26A0\uFE0F'; // ⚠️
-    case 'hipotension': return '\u2B07\uFE0F'; // ⬇️
-    default: return '\uD83D\uDD14'; // 🔔
-  }
-}
-
-/**
- * Format ISO timestamp to a human-readable string.
- */
-function formatAlertTime(isoString: string | null): string {
-  if (!isoString) return '';
-  const date = new Date(isoString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMin = Math.floor(diffMs / 60_000);
-
-  if (diffMin < 1) return 'Ahora';
-  if (diffMin < 60) return `Hace ${diffMin} min`;
-  const diffHours = Math.floor(diffMin / 60);
-  if (diffHours < 24) return `Hace ${diffHours}h`;
-  return date.toLocaleDateString('es-AR', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'});
 }
 
 /**
@@ -80,12 +43,6 @@ function alertDescription(alert: Alerta): string {
   return parts.join(' · ');
 }
 
-const SEVERITY_COLORS: Record<'danger' | 'warning' | 'info', {bg: string; dot: string}> = {
-  danger: {bg: colors.dangerLight, dot: colors.danger},
-  warning: {bg: colors.warningLight, dot: colors.warning},
-  info: {bg: colors.surface, dot: colors.textSecondary},
-};
-
 const AlertasScreen: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabId>('todas');
   const [refreshing, setRefreshing] = useState(false);
@@ -101,6 +58,7 @@ const AlertasScreen: React.FC = () => {
     setRefreshing(false);
   }, [refreshAlerts]);
 
+  const unreadCount = activeAlerts.filter(a => a.leida_en === null).length;
   const filtered = activeAlerts.filter(a => {
     const read = isAlertRead(a);
     if (activeTab === 'no-leidas') return !read;
@@ -115,16 +73,19 @@ const AlertasScreen: React.FC = () => {
 
       {/* Tabs */}
       <View style={styles.tabRow}>
-        {TABS.map(tab => (
+        {TABS.map(tab => {
+          const label = tab.id === 'no-leidas' ? `No leídas (${unreadCount})` : tab.label;
+          return (
           <TouchableOpacity
             key={tab.id}
             onPress={() => setActiveTab(tab.id)}
             style={[styles.tab, activeTab === tab.id && styles.tabActive]}>
             <Text style={[styles.tabText, activeTab === tab.id && styles.tabTextActive]}>
-              {tab.label}
+              {label}
             </Text>
           </TouchableOpacity>
-        ))}
+          );
+        })}
       </View>
 
       {/* Lista */}
@@ -163,6 +124,11 @@ const AlertasScreen: React.FC = () => {
                   <Text style={styles.alertDesc}>{alertDescription(alert)}</Text>
                   {alert.datos && typeof alert.datos === 'object' && (alert.datos as Record<string, unknown>).escalada === true && (
                     <Text style={styles.escalatedBadge}>⬆ Escalada</Text>
+                  )}
+                  {severityLabel(alert.severidad) && (
+                    <Text style={[styles.severityBadgeText, {color: sev.text}]}>
+                      {severityLabel(alert.severidad)}
+                    </Text>
                   )}
                 </View>
                 {!read && <View style={[styles.unreadDot, {backgroundColor: sev.dot}]} />}
@@ -270,6 +236,12 @@ const styles = StyleSheet.create({
   escalatedBadge: {
     fontSize: fontSize.caption,
     color: colors.danger,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  severityBadgeText: {
+    fontSize: fontSize.badge,
+    color: colors.textSecondary,
     fontWeight: '600',
     marginTop: 4,
   },

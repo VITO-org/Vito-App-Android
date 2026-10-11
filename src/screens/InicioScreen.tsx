@@ -1,6 +1,6 @@
 import React, {useEffect, useCallback, useState} from 'react';
 import {View, Text, FlatList, StyleSheet, TouchableOpacity, Dimensions} from 'react-native';
-import {useNavigation} from '@react-navigation/native';
+import {useNavigation, useFocusEffect} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useHealth} from '../context/HealthProvider';
 import {useSupabase} from '../context/SupabaseProvider';
@@ -113,6 +113,14 @@ const InicioScreen: React.FC = () => {
       }
     }
   }, [hcStatus, permissionsGranted, loading, error, summary, requestPermissionsAndLoad, refreshData]);
+
+  // Red de seguridad: al volver al dashboard, refrescar alertas
+  // (la push server-side no pasa por el motor local).
+  useFocusEffect(
+    useCallback(() => {
+      refreshAlerts();
+    }, [refreshAlerts]),
+  );
 
   // Construir vitals desde la fuente única de datos
   const allSignos = buildSignosFromSummary(summary, lastSync);
