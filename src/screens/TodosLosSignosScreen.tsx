@@ -76,8 +76,16 @@ const TodosLosSignosScreen: React.FC<Props> = ({navigation}) => {
                       <Text style={styles.iconEmoji}>{s.icon}</Text>
                     )}
                   </View>
-                  <Text style={styles.resumenValue}>{s.value}</Text>
-                  <Text style={styles.resumenUnit}>{s.unit}</Text>
+                  <Text
+                    style={styles.resumenValue}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.7}>
+                    {s.value}
+                    {s.unit ? <Text style={styles.resumenUnit}> {s.unit}</Text> : null}
+                    {s.value2 ? <Text> {s.value2}</Text> : null}
+                    {s.unit2 ? <Text style={styles.resumenUnit}> {s.unit2}</Text> : null}
+                  </Text>
                   <Text style={styles.resumenLabel}>{s.label}</Text>
                   {s.rangeLabel ? (
                     <Text style={styles.resumenRange}>{s.rangeLabel}</Text>

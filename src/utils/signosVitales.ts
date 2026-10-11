@@ -19,6 +19,10 @@ export interface SignoVitalItem {
   value: string;
   /** Unidad de medida */
   unit: string;
+  /** Segunda parte del valor con estilo de valor (ej: "50" en "9h 50m" de sueño) */
+  value2?: string;
+  /** Unidad de la segunda parte (ej: "m"). Estilo de unidad. */
+  unit2?: string;
   /** Emoji del icono (fallback cuando no hay iconName) */
   icon: string;
   /** Nombre del icono PNG en AppIcon (reemplaza al emoji cuando está presente) */
@@ -207,11 +211,18 @@ export function buildSignosFromSummary(
   // ── Bienestar ──
 
   const sueno = summary?.sleepMinutes;
+  // Hora exacta sin decimal: "9" + "h" + "50" + "m".
+  // Números con estilo de valor, letras con estilo de unidad (igual que "m"/"kcal").
+  const totalMin = sueno != null && sueno > 0 ? Math.round(sueno) : 0;
+  const suenoH = Math.floor(totalMin / 60);
+  const suenoM = totalMin % 60;
   items.push({
     id: 'sueno',
     label: 'Sueño',
-    value: sueno != null && sueno > 0 ? (sueno / 60).toFixed(1) : '--',
-    unit: 'h',
+    value: totalMin > 0 ? `${suenoH > 0 ? suenoH : suenoM}` : '--',
+    unit: totalMin <= 0 ? '' : suenoH === 0 ? 'm' : 'h',
+    value2: totalMin > 0 && suenoH > 0 && suenoM > 0 ? `${suenoM}` : undefined,
+    unit2: totalMin > 0 && suenoH > 0 && suenoM > 0 ? 'm' : undefined,
     icon: '😴',
     iconName: 'sueno',
     iconSize: 36,

@@ -252,7 +252,17 @@ const InicioScreen: React.FC = () => {
             ) : (
               <Text style={styles.daySummaryIcon}>{s.icon}</Text>
             )}
-            <Text style={styles.daySummaryValue}>{s.value}</Text>
+            {/* Fix distancia: unidad siempre visible inline, nunca número pelado. Sin 'm' fantasma cuando value '--' (unit=''). Sueño usa value2/unit2 ("9" "h" "50" "m") en un solo renglón. */}
+            <Text
+              style={styles.daySummaryValue}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}>
+              {s.value}
+              {s.unit ? <Text style={styles.daySummaryUnit}> {s.unit}</Text> : null}
+              {s.value2 ? <Text> {s.value2}</Text> : null}
+              {s.unit2 ? <Text style={styles.daySummaryUnit}> {s.unit2}</Text> : null}
+            </Text>
             <Text style={styles.daySummaryLabel}>{s.label}</Text>
           </View>
         ))}
@@ -608,9 +618,15 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   daySummaryValue: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
     color: colors.textPrimary,
+    textAlign: 'center',
+  },
+  daySummaryUnit: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: colors.textSecondary,
   },
   daySummaryLabel: {
     fontSize: fontSize.caption,

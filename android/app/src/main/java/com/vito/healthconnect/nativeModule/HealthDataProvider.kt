@@ -150,6 +150,18 @@ class HealthDataProvider(
     }
 
     /**
+     * Ventana "última noche" para sueño: desde ayer 18:00 hasta ahora.
+     * La sesión de anoche empieza el día anterior y todayTimeRange la excluye
+     * (spec 2026-10-10: card en "--" con 0 sesiones). El merge/dedup de
+     * SCRUM-207 se aplica igual sobre lo leído en esta ventana.
+     */
+    private fun lastNightTimeRange(): TimeRangeFilter {
+        val zone = ZoneId.systemDefault()
+        val start = ZonedDateTime.now(zone).toLocalDate().minusDays(1).atTime(18, 0).atZone(zone).toInstant()
+        return TimeRangeFilter.between(start, Instant.now())
+    }
+
+    /**
      * Lee todos los datos de Health Connect del día de hoy.
      *
      * Cada tipo de registro tiene su propio try/catch para que un error
@@ -171,12 +183,16 @@ class HealthDataProvider(
             ),
         )
 
-        // ReadRecords: sueño
+        // ReadRecords: sueño con ventana "última noche" (ayer 18:00→ahora).
+        // Con todayTimeRange la sesión de anoche (inicio día anterior) queda
+        // afuera y la card muestra "--" con 0 sesiones. No toca pasos/distancia.
         val sleepSessions = try {
+            val nightRange = lastNightTimeRange()
+            Log.d(TAG, "Ventana sueño (última noche): $nightRange")
             healthConnectClient.readRecords(
                 ReadRecordsRequest(
                     recordType = SleepSessionRecord::class,
-                    timeRangeFilter = timeRange,
+                    timeRangeFilter = nightRange,
                 ),
             ).records
         } catch (e: Exception) {
