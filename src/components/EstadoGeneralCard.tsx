@@ -1,19 +1,38 @@
-import React, {useState} from 'react';
+import React, {useEffect, useState} from 'react';
+import {useNavigation} from '@react-navigation/native';
 import {
   View,
   Text,
   Pressable,
+  TouchableOpacity,
+  Modal,
+  LayoutAnimation,
+  Platform,
   StyleSheet,
+  UIManager,
 } from 'react-native';
 import {colors, spacing, fontSize, shadows} from '../theme';
+import AppIcon from './AppIcon';
 import {getEstadoGeneral, type EstadoGeneral} from '../utils/estadoGeneral';
 import {
+  alertIcon,
   cleanAlertTitle,
+  formatAlertTime,
   getAlertValue,
+  getUmbralLabel,
+  getUmbralOnlyLabel,
+  severityLabel,
   SEVERITY_COLORS,
 } from '../utils/alertas';
 import type {Alerta} from '../services/supabase/models';
 import type {HealthSummary} from '../types/health';
+
+if (
+  Platform.OS === 'android' &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 export interface EstadoGeneralCardProps {
   alerts: Alerta[];
@@ -21,6 +40,7 @@ export interface EstadoGeneralCardProps {
   lastSync: Date | null;
   onAlertPress?: (alert: Alerta) => void;
   onReview?: () => void;
+  onMarkRead?: (alertId: string) => void | Promise<void>;
 }
 
 // ── Paleta semáforo ─────────────────────────────────────────────────
@@ -43,7 +63,7 @@ interface EstadoVisual {
 const VISUAL: Record<EstadoGeneral, EstadoVisual> = {
   bien: {
     color: colors.success,          // verde
-    bg:    '#E6F4EC',
+    bg:    colors.surface,
     icon:  '✓',
     iconType: 'check',
   },
@@ -91,12 +111,30 @@ const EstadoGeneralCard: React.FC<EstadoGeneralCardProps> = ({
   lastSync,
   onAlertPress,
   onReview,
+  onMarkRead,
 }) => {
   const resultado = getEstadoGeneral({activeAlerts: alerts, summary, lastSync});
   const visual    = VISUAL[resultado.estado];
   const hasAlerts = alerts.length > 0;
-  const alertZoneBg = resultado.estado === 'revisar' ? '#FFF7F7' : colors.surface;
+  const alertZoneBg = resultado.estado === 'revisar' ? '#FFF7F7' : resultado.estado === 'requiere-atencion' ? colors.warningLight : colors.surface;
   const [expanded, setExpanded] = useState(false);
+  const [selectedAlert, setSelectedAlert] = useState<Alerta | null>(null);
+  const [pendingReopen, setPendingReopen] = useState<Alerta | null>(null);
+  const navigation = useNavigation();
+
+  useEffect(() => {
+    const unsub = (navigation as any).addListener('focus', () => {
+      setPendingReopen(prev => {
+        if (prev) {
+          const r = prev;
+          setSelectedAlert(r);
+          return null;
+        }
+        return prev;
+      });
+    });
+    return unsub;
+  }, [navigation]);
 
   // ── Render del ícono de estado ───────────────────────────────────
   const StatusIcon = () => {
@@ -160,6 +198,7 @@ const EstadoGeneralCard: React.FC<EstadoGeneralCardProps> = ({
           {lastSync.toLocaleTimeString('es-AR', {
             hour: '2-digit',
             minute: '2-digit',
+            hour12: false,
           })}{' '}
           h
         </Text>
@@ -172,7 +211,12 @@ const EstadoGeneralCard: React.FC<EstadoGeneralCardProps> = ({
       {hasAlerts && (
         <View style={[styles.alertZone, {backgroundColor: alertZoneBg}]}>
           <Pressable
-            onPress={() => setExpanded(v => !v)}
+            onPress={() => {
+              LayoutAnimation.configureNext(
+                LayoutAnimation.Presets.easeInEaseOut,
+              );
+              setExpanded(v => !v);
+            }}
             style={({pressed}) => [
               styles.verAlertasRow,
               {borderTopColor: colors.border},
@@ -196,7 +240,7 @@ const EstadoGeneralCard: React.FC<EstadoGeneralCardProps> = ({
                 return (
                   <Pressable
                     key={a.id}
-                    onPress={onAlertPress ? () => onAlertPress(a) : undefined}
+                    onPress={() => setSelectedAlert(a)}
                     accessibilityRole="button"
                     accessibilityLabel={`Alerta ${cleanAlertTitle(a.titulo)}${value ? `: ${value}` : ''}`}
                     style={({pressed}) => [
@@ -222,6 +266,161 @@ const EstadoGeneralCard: React.FC<EstadoGeneralCardProps> = ({
           )}
         </View>
       )}
+      <Modal
+        visible={selectedAlert != null}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setSelectedAlert(null)}>
+        <View style={styles.modalOverlay}>
+          <Pressable
+            style={styles.modalBackdrop}
+            onPress={() => setSelectedAlert(null)}
+            accessibilityRole="button"
+            accessibilityLabel="Cerrar detalle de alerta"
+          />
+          <View style={styles.modalSheet}>
+            {selectedAlert != null && (() => {
+              const sev = coloresPorSeveridad(selectedAlert.severidad);
+              const title = cleanAlertTitle(selectedAlert.titulo);
+              const value = getAlertValue(selectedAlert);
+              const time = formatAlertTime(selectedAlert.created_at);
+              const sevLabel = severityLabel(selectedAlert.severidad);
+              const mensaje = (selectedAlert.mensaje ?? '').trim();
+              const umbralOnly = getUmbralOnlyLabel(selectedAlert);
+              const strippedMensaje =
+                mensaje !== ''
+                  ? mensaje.replace(/^FC\s+\d+\s*lpm\s*(\(.*?\)\.?\s*)?/i, '').trim()
+                  : '';
+              const detalle =
+                umbralOnly ?? (strippedMensaje !== '' ? strippedMensaje : null);
+              const rawTopDescripcion =
+                (selectedAlert as unknown as {descripcion?: unknown})
+                  .descripcion;
+              const rawDatosDescripcion = selectedAlert.datos?.descripcion;
+              const rawDescripcion =
+                typeof rawTopDescripcion === 'string'
+                  ? rawTopDescripcion
+                  : rawDatosDescripcion;
+              const descripcion =
+                typeof rawDescripcion === 'string' &&
+                rawDescripcion.trim() !== '' &&
+                rawDescripcion.trim() !== detalle
+                  ? rawDescripcion.trim()
+                  : null;
+              const rawOrigen = selectedAlert.datos?.dispositivo_origen;
+              const origen =
+                typeof rawOrigen === 'string' && rawOrigen.trim() !== ''
+                  ? rawOrigen.trim()
+                  : null;
+              return (
+                <>
+                  <View style={styles.modalHeader}>
+                    <Text style={styles.modalIcon}>
+                      {alertIcon(selectedAlert.tipo)}
+                    </Text>
+                    {title !== '' && (
+                      <Text style={styles.modalTitle}>{title}</Text>
+                    )}
+                    {onAlertPress != null && (
+                      <TouchableOpacity
+                        onPress={() => {
+                          const a = selectedAlert;
+                          if (!a) return;
+                          setSelectedAlert(null);
+                          setPendingReopen(a);
+                          onAlertPress?.(a);
+                        }}
+                        style={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: 20,
+                          backgroundColor: colors.backgroundLight,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel="Ver gráficos">
+                        <AppIcon name="graficos" size={20} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                  {(sevLabel != null || time !== '') && (
+                    <View style={styles.modalMetaRow}>
+                      {sevLabel != null && (
+                        <View
+                          style={[styles.modalChip, {backgroundColor: sev.bg}]}>
+                          <Text style={[styles.modalChipText, {color: sev.text}]}>
+                            {sevLabel}
+                          </Text>
+                        </View>
+                      )}
+                      {time !== '' && (
+                        <Text style={styles.modalTime}>{time}</Text>
+                      )}
+                    </View>
+                  )}
+                  {value !== '' && (
+                    <Text style={[styles.modalValue, {color: sev.text}]}>
+                      {value}
+                    </Text>
+                  )}
+                  {detalle != null && (
+                    <Text style={styles.modalDetalle}>{detalle}</Text>
+                  )}
+                  {descripcion != null && (
+                    <Text style={styles.modalDescripcion}>{descripcion}</Text>
+                  )}
+                  {origen != null && (
+                    <Text style={styles.modalOrigen}>Origen: {origen}</Text>
+                  )}
+                  {selectedAlert.leida_en != null ? (
+                    <Pressable
+                      onPress={() => setSelectedAlert(null)}
+                      style={({pressed}) => [
+                        styles.modalCloseButton,
+                        pressed && styles.verAlertasPressed,
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel="Cerrar">
+                      <Text style={styles.modalCloseText}>Cerrar</Text>
+                    </Pressable>
+                  ) : (
+                    <View style={styles.modalButtonRow}>
+                      <Pressable
+                        onPress={() => setSelectedAlert(null)}
+                        style={({pressed}) => [
+                          styles.modalCloseButton,
+                          styles.modalButtonFlex,
+                          pressed && styles.verAlertasPressed,
+                        ]}
+                        accessibilityRole="button"
+                        accessibilityLabel="Cerrar">
+                        <Text style={styles.modalCloseText}>Cerrar</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={async () => {
+                          await onMarkRead?.(selectedAlert.id);
+                          setSelectedAlert(null);
+                        }}
+                        style={({pressed}) => [
+                          styles.modalSecondaryButton,
+                          styles.modalButtonFlex,
+                          pressed && styles.verAlertasPressed,
+                        ]}
+                        accessibilityRole="button"
+                        accessibilityLabel="Marcar como leída">
+                        <Text style={styles.modalSecondaryText}>
+                          Marcar como leída
+                        </Text>
+                      </Pressable>
+                    </View>
+                  )}
+                </>
+              );
+            })()}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -368,10 +567,117 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: fontSize.body,
     color: colors.textPrimary,
-    fontWeight: '600',
+    fontWeight: '400',
     marginRight: 12,
   },
   alertValue: {
+    fontSize: fontSize.body,
+    fontWeight: '700',
+  },
+
+  // Modal detalle de alerta — bottom-sheet
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  modalBackdrop: {
+    flex: 1,
+  },
+  modalSheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: spacing.cardPadding,
+    maxHeight: '80%',
+    ...shadows.card,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  modalIcon: {
+    fontSize: 22,
+    marginRight: 8,
+  },
+  modalTitle: {
+    flex: 1,
+    fontSize: 17,
+    fontWeight: '400',
+    color: colors.textPrimary,
+  },
+  modalMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  modalChip: {
+    alignSelf: 'flex-start',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginRight: 8,
+  },
+  modalChipText: {
+    fontSize: fontSize.caption,
+    fontWeight: '700',
+  },
+  modalTime: {
+    fontSize: fontSize.caption,
+    color: colors.textSecondary,
+  },
+  modalValue: {
+    fontSize: 24,
+    fontWeight: '800',
+    marginTop: 8,
+  },
+  modalDetalle: {
+    fontSize: fontSize.body,
+    color: colors.textPrimary,
+    fontWeight: '400',
+    marginTop: 8,
+  },
+  modalDescripcion: {
+    fontSize: fontSize.body,
+    color: colors.textSecondary,
+    marginTop: 6,
+  },
+  modalOrigen: {
+    fontSize: fontSize.caption,
+    color: colors.textSecondary,
+    marginTop: 6,
+  },
+  modalCloseButton: {
+    marginTop: 16,
+    backgroundColor: colors.primaryDark,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  modalButtonRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 16,
+  },
+  modalButtonFlex: {
+    flex: 1,
+    marginTop: 0,
+  },
+  modalSecondaryButton: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  modalSecondaryText: {
+    color: colors.primaryDark,
+    fontSize: fontSize.body,
+    fontWeight: '700',
+  },
+  modalCloseText: {
+    color: colors.surface,
     fontSize: fontSize.body,
     fontWeight: '700',
   },

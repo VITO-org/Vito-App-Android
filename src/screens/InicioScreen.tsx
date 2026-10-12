@@ -207,6 +207,7 @@ const InicioScreen: React.FC = () => {
         summary={summary}
         lastSync={lastSync}
         onAlertPress={handleAlertPress}
+        onMarkRead={(id) => confirmAlert(id)}
         onReview={() =>
           navigation.navigate(
             (alertasActivas.length > 0 ? 'Alertas' : 'TodosLosSignos') as any,

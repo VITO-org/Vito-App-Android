@@ -27,6 +27,7 @@ const ICON_MAP: Record<string, ReturnType<typeof require>> = {
   'oxigenacion': require('../assets/icons/ic-oxigenacion.png'),
   'temperatura': require('../assets/icons/ic-temperatura.png'),
   'flecha': require('../assets/icons/ic-flecha.png'),
+  'graficos': require('../assets/icons/ic-graficos.png'),
 } as const;
 
 export type AppIconName = keyof typeof ICON_MAP;

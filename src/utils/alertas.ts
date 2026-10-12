@@ -58,7 +58,9 @@ export function formatAlertTime(isoString: string | null): string {
 
 export function cleanAlertTitle(titulo: string | null): string {
   if (!titulo) return '';
-  return titulo.replace(/^(alerta\s+(crítica|critica|advertencia|info)\s*[:\-–—]?\s*)/i, '').trim() || titulo;
+  const sinPrefijo = titulo.replace(/^(alerta\s+(crítica|critica|advertencia|info)\s*[:\-–—]?\s*)/i, '').trim();
+  const sinParentesis = sinPrefijo.replace(/\s*\([^)]*\)\s*/g, '').replace(/\s{2,}/g, ' ').trim();
+  return sinParentesis || titulo;
 }
 
 export const SEVERITY_COLORS: Record<SeverityKey, {bg: string; dot: string; text: string}> = {
