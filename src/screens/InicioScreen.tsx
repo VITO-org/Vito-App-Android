@@ -1,5 +1,5 @@
 import React, {useEffect, useCallback, useState} from 'react';
-import {View, Text, FlatList, StyleSheet, TouchableOpacity, Dimensions} from 'react-native';
+import {View, Text, FlatList, ScrollView, StyleSheet, TouchableOpacity, Dimensions} from 'react-native';
 import {useNavigation, useFocusEffect} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useHealth} from '../context/HealthProvider';
@@ -13,6 +13,7 @@ import StatusIndicator from '../components/StatusIndicator';
 import EstadoGeneralCard from '../components/EstadoGeneralCard';
 import {colors, spacing, fontSize, shadows} from '../theme';
 import {buildSignosFromSummary, getMetricasBienestar} from '../utils/signosVitales';
+import {getSintomasCatalogo, getSintomasUsuario} from '../services/supabase/api';
 import type {Alerta} from '../services/supabase/models';
 
 
@@ -77,6 +78,7 @@ const InicioScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const [refreshing, setRefreshing] = useState(false);
+  const [ultimosSintomas, setUltimosSintomas] = useState<{nombre: string; icono: string}[]>([]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -116,10 +118,43 @@ const InicioScreen: React.FC = () => {
 
   // Red de seguridad: al volver al dashboard, refrescar alertas
   // (la push server-side no pasa por el motor local).
+  // + últimos síntomas registrados (silencioso si falla).
   useFocusEffect(
     useCallback(() => {
       refreshAlerts();
-    }, [refreshAlerts]),
+      const userId = session?.user?.id;
+      if (!userId) {
+        setUltimosSintomas([]);
+        return;
+      }
+      (async () => {
+        try {
+          let catalogoMap: Record<string, {nombre: string; icono: string | null}> = {};
+          try {
+            const catalogo = await getSintomasCatalogo();
+            for (const s of catalogo ?? []) {
+              catalogoMap[s.id_sintomas] = {nombre: s.nombre, icono: s.icono};
+            }
+          } catch {
+            // Catálogo opcional: se tolera vacío y se usa genérico.
+          }
+          const registros = await getSintomasUsuario(userId, {limit: 5});
+          const resueltos = (registros ?? [])
+            .map(r => {
+              const ref = r.id_sintomas ? catalogoMap[r.id_sintomas] : undefined;
+              const esFisico = r.categoria === 'fisico';
+              return {
+                nombre: ref?.nombre ?? (esFisico ? 'Síntoma físico' : 'Síntoma emocional'),
+                icono: ref?.icono || (esFisico ? '🏥' : '💭'),
+              };
+            })
+            .slice(0, 3);
+          setUltimosSintomas(resueltos);
+        } catch {
+          setUltimosSintomas([]);
+        }
+      })();
+    }, [refreshAlerts, session?.user?.id]),
   );
 
   // Construir vitals desde la fuente única de datos
@@ -283,32 +318,42 @@ const InicioScreen: React.FC = () => {
         ))}
       </View>
 
-      {/* ── Síntomas: registrar + consultar en la misma sección ── */}
+      {/* ── Síntomas: últimos + registrar/historial ── */}
       <Text style={styles.sectionTitle}>Síntomas</Text>
       <View style={styles.sintomasSection}>
-        <TouchableOpacity
-          style={[styles.sintomaBtn, styles.sintomaRow]}
-          onPress={() => navigation.navigate('RegistrarSintoma')}
-          activeOpacity={0.8}>
-          <Text style={styles.sintomaBtnIcon}>🩺</Text>
-          <View style={styles.sintomaBtnInfo}>
-            <Text style={styles.sintomaBtnTitle}>Registrar Síntoma</Text>
-            <Text style={styles.sintomaBtnSubtitle}>¿Sentís algo? Registralo acá</Text>
-          </View>
-          <Text style={styles.sintomaBtnArrow}>›</Text>
-        </TouchableOpacity>
-        <View style={styles.sintomaDivider} />
-        <TouchableOpacity
-          style={[styles.sintomaBtn, styles.sintomaRow]}
-          onPress={() => navigation.navigate('HistorialSintomas')}
-          activeOpacity={0.8}>
-          <Text style={styles.sintomaBtnIcon}>📋</Text>
-          <View style={styles.sintomaBtnInfo}>
-            <Text style={styles.sintomaBtnTitle}>Consultar Síntomas</Text>
-            <Text style={styles.sintomaBtnSubtitle}>Historial para mostrar a tu médico</Text>
-          </View>
-          <Text style={styles.sintomaBtnArrow}>›</Text>
-        </TouchableOpacity>
+        <Text style={styles.sintomasLabel}>Últimos registrados</Text>
+        {ultimosSintomas.length === 0 ? (
+          <Text style={styles.sintomasHint}>Todavía no registraste síntomas</Text>
+        ) : (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sintomasChips}>
+            {ultimosSintomas.map((s, i) => (
+              <View key={`${s.nombre}_${i}`} style={styles.sintomaChip} accessible={true} accessibilityLabel={s.nombre}>
+                <Text style={styles.sintomaChipIcon}>{s.icono}</Text>
+                <Text style={styles.sintomaChipText} numberOfLines={1}>{s.nombre}</Text>
+              </View>
+            ))}
+          </ScrollView>
+        )}
+        <View style={styles.sintomasBtnRow}>
+          <TouchableOpacity
+            style={[styles.sintomasActionBtn, styles.sintomasRegistrarBtn]}
+            onPress={() => navigation.navigate('RegistrarSintoma')}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Registrar síntoma">
+            <Text style={styles.sintomasActionIcon}>🩺</Text>
+            <Text style={styles.sintomasActionText}>Registrar</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.sintomasActionBtn, styles.sintomasHistorialBtn]}
+            onPress={() => navigation.navigate('HistorialSintomas')}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Ver historial de síntomas">
+            <Text style={styles.sintomasActionIcon}>📋</Text>
+            <Text style={styles.sintomasActionText}>Historial</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* ── Signos Vitales ── */}
@@ -701,6 +746,69 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '300',
     color: colors.textSecondary,
+  },
+  sintomasLabel: {
+    fontSize: fontSize.caption,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginBottom: 8,
+  },
+  sintomasChips: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingBottom: 12,
+  },
+  sintomaChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    gap: 6,
+  },
+  sintomaChipIcon: {
+    fontSize: 16,
+  },
+  sintomaChipText: {
+    fontSize: fontSize.caption,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    maxWidth: 140,
+  },
+  sintomasHint: {
+    fontSize: fontSize.caption,
+    color: colors.textSecondary,
+    marginBottom: 12,
+  },
+  sintomasBtnRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  sintomasActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    paddingVertical: 14,
+    gap: 6,
+  },
+  sintomasRegistrarBtn: {
+    backgroundColor: '#E9F1FD',
+  },
+  sintomasHistorialBtn: {
+    backgroundColor: '#FAF3E7',
+  },
+  sintomasActionIcon: {
+    fontSize: 18,
+  },
+  sintomasActionText: {
+    fontSize: fontSize.body,
+    fontWeight: '600',
+    color: colors.textPrimary,
   },
 
   // ── Última Actividad ──
