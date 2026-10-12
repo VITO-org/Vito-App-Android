@@ -19,6 +19,7 @@ import {
   cleanAlertTitle,
   formatAlertTime,
   getAlertValue,
+  getComparacionAlerta,
   getUmbralLabel,
   getUmbralOnlyLabel,
   severityLabel,
@@ -237,12 +238,15 @@ const EstadoGeneralCard: React.FC<EstadoGeneralCardProps> = ({
               {alerts.map((a, index) => {
                 const sev = coloresPorSeveridad(a.severidad);
                 const value = getAlertValue(a);
+                const sevLabel = severityLabel(a.severidad);
+                const comp = getComparacionAlerta(a);
+                const a11yValue = comp != null ? `${comp.medido} / ${comp.limite}` : value;
                 return (
                   <Pressable
                     key={a.id}
                     onPress={() => setSelectedAlert(a)}
                     accessibilityRole="button"
-                    accessibilityLabel={`Alerta ${cleanAlertTitle(a.titulo)}${value ? `: ${value}` : ''}`}
+                    accessibilityLabel={`Alerta ${cleanAlertTitle(a.titulo)}${a11yValue ? `: ${a11yValue}` : ''}`}
                     style={({pressed}) => [
                       styles.alertRow,
                       index > 0 && {
@@ -251,13 +255,45 @@ const EstadoGeneralCard: React.FC<EstadoGeneralCardProps> = ({
                       },
                       pressed && styles.verAlertasPressed,
                     ]}>
-                    <Text style={styles.alertTitle}>
-                      {cleanAlertTitle(a.titulo)}
-                    </Text>
-                    {value !== '' && (
-                      <Text style={[styles.alertValue, {color: sev.text}]}>
-                        {value}
+                    {a.severidad === 'critica' ? (
+                      <View style={[styles.alertCritDot, {backgroundColor: sev.text}]}>
+                        <Text style={styles.alertCritText}>!</Text>
+                      </View>
+                    ) : a.severidad === 'advertencia' ? (
+                      <AppIcon name="advertencia" size={18} style={{marginRight: 8, tintColor: colors.warningStrong}} />
+                    ) : (
+                      <View style={[styles.alertSevDot, {backgroundColor: sev.text}]} />
+                    )}
+                    <View style={styles.alertTitleWrap}>
+                      <Text style={styles.alertTitle} numberOfLines={2} ellipsizeMode="tail">
+                        {cleanAlertTitle(a.titulo)}
                       </Text>
+                    </View>
+                    {(comp?.medido ?? value) !== '' && (
+                      <View style={styles.alertRight}>
+                        <Text
+                          numberOfLines={1}
+                          style={[
+                            styles.alertMedidoBig,
+                            {color: sev.text},
+                          ]}>
+                          {comp?.medido ?? value}
+                        </Text>
+                        {comp != null && (
+                          <>
+                            <Text
+                              numberOfLines={1}
+                              style={styles.alertSeparator}>
+                              {'/'}
+                            </Text>
+                            <Text
+                              numberOfLines={1}
+                              style={styles.alertLimiteSmall}>
+                              {comp.limite}
+                            </Text>
+                          </>
+                        )}
+                      </View>
                     )}
                   </Pressable>
                 );
@@ -559,22 +595,73 @@ const styles = StyleSheet.create({
   },
   alertRow: {
     flexDirection: 'row',
+    flexWrap: 'nowrap',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 10,
   },
-  alertTitle: {
+  alertTitleWrap: {
     flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
+    marginRight: 8,
+  },
+  alertTitle: {
     fontSize: fontSize.body,
     color: colors.textPrimary,
     fontWeight: '400',
-    marginRight: 12,
+    textAlign: 'left',
+    flexShrink: 1,
   },
-  alertValue: {
-    fontSize: fontSize.body,
+  alertRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexWrap: 'nowrap',
+    flexShrink: 0,
+    maxWidth: '52%',
+  },
+  alertMedidoBig: {
+    fontSize: 16,
+    fontWeight: '800',
+    flexShrink: 0,
+  },
+  alertSeparator: {
+    fontSize: 16,
+    fontWeight: '400',
+    color: colors.textSecondary,
+    flexShrink: 0,
+    marginHorizontal: 2,
+  },
+  alertLimiteSmall: {
+    fontSize: 10,
     fontWeight: '700',
+    color: colors.success,
+    flexShrink: 0,
   },
-
+  alertSevDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 8,
+    alignSelf: 'center',
+  },
+  alertCritDot: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    marginRight: 8,
+    alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  alertCritText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 14,
+    textAlign: 'center',
+  },
   // Modal detalle de alerta — bottom-sheet
   modalOverlay: {
     flex: 1,

@@ -58,7 +58,7 @@ export function formatAlertTime(isoString: string | null): string {
 
 export function cleanAlertTitle(titulo: string | null): string {
   if (!titulo) return '';
-  const sinPrefijo = titulo.replace(/^(alerta\s+(crítica|critica|advertencia|info)\s*[:\-–—]?\s*)/i, '').trim();
+  const sinPrefijo = titulo.replace(/^(alerta\s+(crítica|critica|advertencia|info)\s*[:\-–—]?\s*)/i, '').replace(/^(alerta\s*[:\-–—]\s*)/i, '').trim();
   const sinParentesis = sinPrefijo.replace(/\s*\([^)]*\)\s*/g, '').replace(/\s{2,}/g, ' ').trim();
   return sinParentesis || titulo;
 }
@@ -162,6 +162,50 @@ export function getAlertValue(alert: Alerta): string {
     }
     default:
       return '';
+  }
+}
+
+/**
+ * Comparativa límite vs medido para filas expandidas (sin la palabra "umbral").
+ * Solo usa campos presentes en `alert.datos`; `null` si falta alguno.
+ * - hipoxia: limite `${umbral}%`, medido `${valor}%`.
+ * - taquicardia/bradicardia: limite `${umbral} lpm`, medido `${valor} lpm`.
+ * - hiper/hipotension: medido como getAlertValue, limite mismo formato con
+ *   umbral_sist/umbral_diast (sin "mmHg", corto como el valor).
+ */
+export function getComparacionAlerta(alert: Alerta): {limite: string; medido: string} | null {
+  const datos = alert.datos;
+  if (datos == null) return null;
+  const roundIfNum = (v: unknown): number | null =>
+    typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : null;
+
+  switch (alert.tipo) {
+    case 'hipoxia': {
+      const valor = roundIfNum(datos.valor_registrado);
+      const umbral = roundIfNum(datos.umbral_configurado);
+      if (valor == null || umbral == null) return null;
+      return {limite: `${umbral}%`, medido: `${valor}%`};
+    }
+    case 'taquicardia':
+    case 'bradicardia': {
+      const valor = roundIfNum(datos.valor_registrado);
+      const umbral = roundIfNum(datos.umbral_configurado);
+      if (valor == null || umbral == null) return null;
+      return {limite: `${umbral} lpm`, medido: `${valor} lpm`};
+    }
+    case 'hipertension':
+    case 'hipotension': {
+      const medido = getAlertValue(alert);
+      if (medido === '') return null;
+      const uSist = roundIfNum(datos.umbral_sist);
+      const uDiast = roundIfNum(datos.umbral_diast);
+      if (uSist != null && uDiast != null) return {limite: `${uSist}/${uDiast}`, medido};
+      if (uSist != null) return {limite: `${uSist}`, medido};
+      if (uDiast != null) return {limite: `${uDiast}`, medido};
+      return null;
+    }
+    default:
+      return null;
   }
 }
 
