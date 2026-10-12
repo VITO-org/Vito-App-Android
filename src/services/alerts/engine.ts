@@ -347,21 +347,16 @@ export class AlertEngine {
   }
 
   /**
-   * Resolve an alert (SpO₂ returned to normal) — mark as read.
+   * Resolve an alert (SpO₂ returned to normal).
+   * Does NOT mark as read — alert stays unread until user confirms.
    *
    * @param alert The alert to resolve
    * @param now Current timestamp
    */
   async resolveAlert(alert: AlertRecord, now: Date = new Date()): Promise<void> {
-    await this.deps.markAlertRead(alert.id);
     this.escalationManager.cancelEscalation(alert.id);
 
-    const resolvedAlert: AlertRecord = {
-      ...alert,
-      leida_en: now.toISOString(),
-      status: 'leida',
-    };
-    this.onAlertResolved(resolvedAlert);
+    this.onAlertResolved(alert);
 
     // Update cache
     this.invalidateCacheForAlert(alert.id);

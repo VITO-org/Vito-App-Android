@@ -582,8 +582,8 @@ describe('AlertEngine', () => {
     const alert = await engine.evaluateSpo2Reading('u1', 95, 'wearable');
 
     expect(alert).toBeNull();
-    expect(deps.markedRead).toHaveLength(1);
-    expect(deps.markedRead[0]).toBe('existing-1');
+    expect(deps.markedRead).toHaveLength(0);
+    expect(deps.markedRead).not.toContain('existing-1');
     expect(onResolved).toHaveBeenCalledTimes(1);
 
     engine.dispose();
@@ -981,8 +981,8 @@ describe('AlertEngine BP', () => {
     const alert = await engine.evaluateBpReading('u1', 120, 80, 'wearable');
 
     expect(alert).toBeNull();
-    expect(deps.markedRead).toHaveLength(1);
-    expect(deps.markedRead[0]).toBe('existing-1');
+    expect(deps.markedRead).toHaveLength(0);
+    expect(deps.markedRead).not.toContain('existing-1');
     expect(onResolved).toHaveBeenCalledTimes(1);
 
     engine.dispose();
@@ -1250,7 +1250,8 @@ describe('AlertEngine HR', () => {
 
     const alert = await engine.evaluateHrReading('u1', 75, 'wearable');
     expect(alert).toBeNull();
-    expect(deps.markedRead).toContain(existingAlert.id);
+    expect(deps.markedRead).toHaveLength(0);
+    expect(deps.markedRead).not.toContain(existingAlert.id);
 
     engine.dispose();
   });

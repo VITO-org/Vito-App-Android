@@ -88,6 +88,14 @@ const VISUAL: Record<EstadoGeneral, EstadoVisual> = {
   },
 };
 
+// Etiqueta de nivel bajo el ícono (no es conteo; el conteo vive en badgeLabel p/ accesibilidad)
+const NIVEL_LABEL: Record<EstadoGeneral, string> = {
+  revisar: 'Crítico',
+  'requiere-atencion': 'Advertencia',
+  bien: 'Bien',
+  'sin-datos': 'Sin datos',
+};
+
 function coloresPorSeveridad(severidad: Alerta['severidad']) {
   if (severidad === 'critica') return SEVERITY_COLORS.danger;
   if (severidad === 'advertencia') return SEVERITY_COLORS.warning;
@@ -182,14 +190,18 @@ const EstadoGeneralCard: React.FC<EstadoGeneralCardProps> = ({
         {/* Textos a la izquierda */}
         <View style={styles.headerText}>
           <Text style={styles.sectionLabel}>Estado general</Text>
-          <Text style={[styles.badgeLabel, {color: visual.color}]}>
-            {resultado.badgeLabel}
-          </Text>
           <Text style={styles.mensaje}>{resultado.mensaje}</Text>
         </View>
 
-        {/* Ícono de estado a la derecha */}
-        <StatusIcon />
+        {/* Ícono + estado a la derecha */}
+        <View style={styles.statusColumn}>
+          <StatusIcon />
+          <Text
+            style={[styles.badgeLabel, {color: visual.color}]}
+            numberOfLines={2}>
+            {NIVEL_LABEL[resultado.estado]}
+          </Text>
+        </View>
       </Pressable>
 
       {/* Última actualización */}
@@ -224,10 +236,10 @@ const EstadoGeneralCard: React.FC<EstadoGeneralCardProps> = ({
               pressed && styles.verAlertasPressed,
             ]}
             accessibilityRole="button"
-            accessibilityLabel={expanded ? 'Ocultar alertas' : 'Ver alertas'}
+            accessibilityLabel={expanded ? `Ocultar alertas (${alerts.length})` : `Ver alertas (${alerts.length})`}
             accessibilityState={{expanded}}>
             <Text style={[styles.verAlertasText, {color: visual.color}]}>
-              Ver alertas
+              {`Ver alertas (${alerts.length})`}
             </Text>
             <Text style={[styles.verAlertasChevron, {color: visual.color}]}>
               {expanded ? '⌃' : '⌄'}
@@ -467,7 +479,7 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
     borderRadius: spacing.cardBorderRadius,
-    padding: spacing.cardPadding,
+    padding: 14,
     marginBottom: spacing.cardMarginBottom,
     ...shadows.card,
   },
@@ -482,10 +494,13 @@ const styles = StyleSheet.create({
   },
 
   // Ícono de estado (círculo izquierdo)
+  statusColumn: {
+    alignItems: 'center',
+  },
   statusCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -498,27 +513,27 @@ const styles = StyleSheet.create({
   },
   statusIconText: {
     color: '#FFFFFF',
-    fontSize: 15,
+    fontSize: 12,
     fontWeight: '800',
-    lineHeight: 18,
+    lineHeight: 14,
   },
   bangIconText: {
     color: '#FFFFFF',
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '700',
-    lineHeight: 26,
+    lineHeight: 21,
   },
   clockRing: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 19,
+    height: 19,
+    borderRadius: 10,
     borderWidth: 2,
     borderColor: colors.textSecondary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   clockHandsText: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '800',
     marginTop: -2,
     marginLeft: 3,
@@ -534,9 +549,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   badgeLabel: {
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '700',
-    marginTop: 1,
+    marginTop: 4,
+    textAlign: 'center',
   },
   mensaje: {
     fontSize: fontSize.metricLabel,
@@ -556,16 +572,16 @@ const styles = StyleSheet.create({
   syncText: {
     fontSize: fontSize.caption,
     color: colors.textSecondary,
-    marginTop: 8,
+    marginTop: 4,
   },
 
   // Zona desplegable "Ver alertas" — fondo más claro que la card, ancho completo
   alertZone: {
-    marginTop: 12,
-    marginHorizontal: -spacing.cardPadding,
-    paddingHorizontal: spacing.cardPadding,
-    marginBottom: -spacing.cardPadding,
-    paddingBottom: spacing.cardPadding,
+    marginTop: 8,
+    marginHorizontal: -14,
+    paddingHorizontal: 14,
+    marginBottom: -14,
+    paddingBottom: 14,
     borderBottomLeftRadius: spacing.cardBorderRadius,
     borderBottomRightRadius: spacing.cardBorderRadius,
   },
@@ -575,7 +591,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: 0,
-    paddingTop: 12,
+    paddingTop: 6,
     borderTopWidth: 1,
     backgroundColor: 'transparent',
   },
