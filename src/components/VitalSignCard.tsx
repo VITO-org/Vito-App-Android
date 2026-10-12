@@ -62,7 +62,7 @@ const VitalSignCard: React.FC<VitalSignCardProps> = ({
       {hasNoData ? (
         <Text style={styles.noData}>{noDataMessage}</Text>
       ) : (
-        <Text style={styles.value}>{unit ? `${value} ${unit}` : value}</Text>
+        <Text style={styles.value}>{value}{unit ? <Text style={styles.valueUnit}> {unit}</Text> : null}</Text>
       )}
 
       {/* Label */}
@@ -106,6 +106,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.textPrimary,
     lineHeight: 36,
+  },
+  valueUnit: {
+    fontSize: fontSize.caption,
+    fontWeight: '400',
+    color: colors.textSecondary,
   },
   unit: {
     fontSize: fontSize.caption,

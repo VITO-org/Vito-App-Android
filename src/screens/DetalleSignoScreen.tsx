@@ -186,8 +186,8 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
           // Diario y Semanal pintan CADA medición (no agrupan): semanal necesita
           // el día en la etiqueta porque 6 mediciones pueden caer en 1-2 días y
           // agruparPorDia colapsa a 1 punto (GiftedCharts no dibuja línea con ≤1).
-          registros = datos.map(d => {
-            const val = extraerValor(d, t) ?? 0;
+          registros = datos.filter(d => extraerValor(d, t) != null).map(d => {
+            const val = extraerValor(d, t)!;
             const fecha = new Date(d.recorded_at!);
             return {
               label: vista === 'weekly'
