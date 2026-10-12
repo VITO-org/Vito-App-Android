@@ -11,7 +11,7 @@ import AppIcon, {type AppIconName} from '../components/AppIcon';
 import VitoAvatar from '../components/VitoAvatar';
 import StatusIndicator from '../components/StatusIndicator';
 import EstadoGeneralCard from '../components/EstadoGeneralCard';
-import {colors, spacing, fontSize, shadows} from '../theme';
+import {colors, spacing, fontSize} from '../theme';
 import {buildSignosFromSummary, getMetricasBienestar} from '../utils/signosVitales';
 import {getSintomasCatalogo, getSintomasUsuario} from '../services/supabase/api';
 import type {Alerta} from '../services/supabase/models';
@@ -296,9 +296,7 @@ const InicioScreen: React.FC = () => {
         {getMetricasBienestar(allSignos).map(s => (
           <View key={s.id} style={styles.daySummaryCard}>
             {s.iconName ? (
-              <View style={[styles.daySummaryIconCircle, {backgroundColor: s.iconBgColor + '20'}]}>
-                <AppIcon name={s.iconName as AppIconName} size={s.iconSize ?? 26} />
-              </View>
+              <AppIcon name={s.iconName as AppIconName} size={30} />
             ) : (
               <Text style={styles.daySummaryIcon}>{s.icon}</Text>
             )}
@@ -321,7 +319,27 @@ const InicioScreen: React.FC = () => {
       {/* ── Síntomas: últimos + registrar/historial ── */}
       <Text style={styles.sectionTitle}>Síntomas</Text>
       <View style={styles.sintomasSection}>
-        <Text style={styles.sintomasLabel}>Últimos registrados</Text>
+        <View style={styles.sintomasHeaderRow}>
+          <Text style={styles.sintomasLabel}>Últimos registrados</Text>
+          <View style={styles.sintomasHeaderActions}>
+            <TouchableOpacity
+              style={styles.sintomasHistorialCircleBtn}
+              onPress={() => navigation.navigate('HistorialSintomas')}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Ver historial de síntomas">
+              <AppIcon name="historial-doc" size={18} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.sintomasAddBtn}
+              onPress={() => navigation.navigate('RegistrarSintoma')}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Registrar síntoma">
+              <Text style={styles.sintomasAddText}>+</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
         {ultimosSintomas.length === 0 ? (
           <Text style={styles.sintomasHint}>Todavía no registraste síntomas</Text>
         ) : (
@@ -334,26 +352,6 @@ const InicioScreen: React.FC = () => {
             ))}
           </ScrollView>
         )}
-        <View style={styles.sintomasBtnRow}>
-          <TouchableOpacity
-            style={[styles.sintomasActionBtn, styles.sintomasRegistrarBtn]}
-            onPress={() => navigation.navigate('RegistrarSintoma')}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel="Registrar síntoma">
-            <Text style={styles.sintomasActionIcon}>🩺</Text>
-            <Text style={styles.sintomasActionText}>Registrar</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.sintomasActionBtn, styles.sintomasHistorialBtn]}
-            onPress={() => navigation.navigate('HistorialSintomas')}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel="Ver historial de síntomas">
-            <Text style={styles.sintomasActionIcon}>📋</Text>
-            <Text style={styles.sintomasActionText}>Historial</Text>
-          </TouchableOpacity>
-        </View>
       </View>
 
       {/* ── Signos Vitales ── */}
@@ -363,6 +361,7 @@ const InicioScreen: React.FC = () => {
           <TouchableOpacity
             style={styles.refreshButton}
             onPress={refreshData}
+            hitSlop={12}
             disabled={loading}>
             <AppIcon
               name="recargar"
@@ -591,14 +590,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   refreshButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
+    padding: 8,
   },
   seeAll: {
     fontSize: fontSize.caption,
@@ -650,25 +644,17 @@ const styles = StyleSheet.create({
     borderRadius: spacing.cardBorderRadius,
     padding: 12,
     width: '23%',
-    alignItems: 'center',
-  },
-  daySummaryIconCircle: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 6,
+    alignItems: 'flex-start',
   },
   daySummaryIcon: {
-    fontSize: 22,
+    fontSize: 30,
     marginBottom: 6,
   },
   daySummaryValue: {
     fontSize: 16,
     fontWeight: '700',
     color: colors.textPrimary,
-    textAlign: 'center',
+    textAlign: 'left',
   },
   daySummaryUnit: {
     fontSize: 12,
@@ -679,6 +665,7 @@ const styles = StyleSheet.create({
     fontSize: fontSize.caption,
     color: colors.textSecondary,
     marginTop: 2,
+    textAlign: 'left',
   },
   hcText: {
     fontSize: fontSize.caption,
@@ -694,7 +681,6 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     borderWidth: 1,
     borderColor: colors.border,
-    ...shadows.card,
   },
   sintomaDivider: {
     height: StyleSheet.hairlineWidth,
@@ -710,20 +696,14 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     borderWidth: 1,
     borderColor: colors.border,
-    ...shadows.card,
   },
-  // Fila dentro de la sección: sin caja ni sombra propia
-  // (anula ...shadows.card heredado de sintomaBtn).
+  // Fila dentro de la sección: sin caja propia.
   sintomaRow: {
     backgroundColor: 'transparent',
     borderWidth: 0,
     marginBottom: 0,
     paddingVertical: 8,
     paddingHorizontal: 0,
-    elevation: 0,
-    shadowOpacity: 0,
-    shadowRadius: 0,
-    shadowOffset: {width: 0, height: 0},
   },
   sintomaBtnIcon: {
     fontSize: 28,
@@ -751,7 +731,41 @@ const styles = StyleSheet.create({
     fontSize: fontSize.caption,
     fontWeight: '600',
     color: colors.textSecondary,
+  },
+  sintomasHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 8,
+  },
+  sintomasHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  sintomasHistorialCircleBtn: {
+    backgroundColor: colors.surface,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sintomasAddBtn: {
+    backgroundColor: colors.primary,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sintomasAddText: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '700',
+    lineHeight: 22,
   },
   sintomasChips: {
     flexDirection: 'row',
@@ -761,7 +775,7 @@ const styles = StyleSheet.create({
   sintomaChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: 'transparent',
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 20,
@@ -783,34 +797,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginBottom: 12,
   },
-  sintomasBtnRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  sintomasActionBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 12,
-    paddingVertical: 14,
-    gap: 6,
-  },
-  sintomasRegistrarBtn: {
-    backgroundColor: '#E9F1FD',
-  },
-  sintomasHistorialBtn: {
-    backgroundColor: '#FAF3E7',
-  },
-  sintomasActionIcon: {
-    fontSize: 18,
-  },
-  sintomasActionText: {
-    fontSize: fontSize.body,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-
   // ── Última Actividad ──
   activityIconCircle: {
     width: 32,

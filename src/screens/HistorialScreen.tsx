@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
-import {colors, fontSize, spacing, shadows} from '../theme';
+import {colors, fontSize, spacing} from '../theme';
 import Card from '../components/Card';
 import AppIcon from '../components/AppIcon';
 import FlechaIcon from '../components/FlechaIcon';
@@ -394,9 +394,11 @@ const HistorialScreen: React.FC = () => {
               const tieneDetalle = !['pasos', 'sueno'].includes(signo.id);
               const content = (
                 <>
-                  <View style={[styles.iconCircle, {backgroundColor: signo.iconBgColor + '20'}]}>
-                    <AppIcon name={signo.iconName!} size={signo.iconSize!} />
-                  </View>
+                  {signo.iconName ? (
+                    <AppIcon name={signo.iconName!} size={signo.iconName === 'temperatura' ? 28 : 30} />
+                  ) : (
+                    <Text style={styles.resumenEmoji}>{signo.icon}</Text>
+                  )}
                   <Text style={styles.resumenValue}>{signo.value}</Text>
                   <Text style={styles.resumenUnit}>{signo.unit}</Text>
                   <Text style={styles.resumenLabel}>{signo.label}</Text>
@@ -593,14 +595,10 @@ const styles = StyleSheet.create({
     padding: 14,
     width: '48%',
     marginBottom: spacing.gridGap,
-    ...shadows.card, // needs import
+    alignItems: 'flex-start',
   },
-  iconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
+  resumenEmoji: {
+    fontSize: 30,
     marginBottom: 10,
   },
   resumenValue: {
@@ -608,21 +606,25 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.textPrimary,
     lineHeight: 30,
+    textAlign: 'left',
   },
   resumenUnit: {
     fontSize: fontSize.caption,
     color: colors.textSecondary,
     marginTop: 1,
+    textAlign: 'left',
   },
   resumenLabel: {
     fontSize: fontSize.metricLabel,
     color: colors.textSecondary,
     marginTop: 6,
+    textAlign: 'left',
   },
   resumenRange: {
     fontSize: fontSize.caption,
     color: colors.textSecondary,
     marginTop: 2,
+    textAlign: 'left',
   },
 
   // ── Últimas lecturas ──
