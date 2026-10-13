@@ -39,6 +39,8 @@ const VISTAS: {key: VistaReporte; label: string}[] = [
 
 const DAY_LABELS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
+const MONTH_X_LABELS = ['7', '14', '21', '28'];
+
 const INITIAL_SPACING = 8;
 // El eje termina con aire; el label final llega al borde por su alineación, no por endSpacing.
 const END_SPACING = 10;
@@ -60,6 +62,17 @@ function extraerValor(dato: DatosReloj, tipo: TipoSignoVital): number | null {
     case 'presion_diastolica':  return dato.bp_diastolica;
     case 'saturacion_oxigeno':  return dato.spo2_pct;
     case 'temperatura':         return dato.temperatura;
+  }
+}
+
+/** Columna NOT NULL a pedir a PostgREST según el tipo (espejo de `extraerValor`). */
+function columnaNotNull(tipo: TipoSignoVital): string {
+  switch (tipo) {
+    case 'frecuencia_cardiaca': return 'frec_cardiaca_bpm';
+    case 'presion_sistolica':   return 'bp_sistolica';
+    case 'presion_diastolica':  return 'bp_diastolica';
+    case 'saturacion_oxigeno':  return 'spo2_pct';
+    case 'temperatura':         return 'temperatura';
   }
 }
 
@@ -146,7 +159,10 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
 
   const [vista, setVista] = useState<VistaReporte>('daily');
   const [dayOffset, setDayOffset] = useState(0);
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [monthOffset, setMonthOffset] = useState(0);
   const [chartData, setChartData] = useState<ChartPoint[]>([]);
+  const [weekXLabels, setWeekXLabels] = useState<string[]>([]);
   const [chartContainerWidth, setChartContainerWidth] = useState(0);
   const [values, setValues] = useState<number[]>([]);
   const [normalMin, setNormalMin] = useState(NORMAL_RANGES[tipoSigno as TipoSignoVital].min);
@@ -200,13 +216,19 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
             : now;
           break;
         case 'weekly':
-          desde = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          hasta = new Date(now.getTime() - weekOffset * 7 * 24 * 60 * 60 * 1000);
+          desde = new Date(hasta.getTime() - 7 * 24 * 60 * 60 * 1000);
           limite = 500;
           break;
-        case 'monthly':
-          desde = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        case 'monthly': {
+          const base = new Date(now.getFullYear(), now.getMonth() - monthOffset, 1);
+          desde = base;
+          hasta = monthOffset === 0
+            ? now
+            : new Date(base.getFullYear(), base.getMonth() + 1, 0, 23, 59, 59);
           limite = 1000;
           break;
+        }
       }
 
       try {
@@ -214,6 +236,7 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
           from: desde.toISOString(),
           to: hasta.toISOString(),
           limit: limite,
+          notNullColumn: columnaNotNull(t),
         });
 
         if (cancelled) return;
@@ -227,6 +250,7 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
           setChartData([]);
           setValues([]);
           setHasData(false);
+          setWeekXLabels([]);
           return;
         }
 
@@ -254,38 +278,30 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
           }
           giftedData = puntos.map(p => p.point);
         } else if (vista === 'weekly') {
-          // Semanal INTACTO: pinta CADA medición (agruparPorDia colapsa a 1 punto
-          // y GiftedCharts no dibuja línea con ≤1).
-          registros = datos.filter(d => extraerValor(d, t) != null).map(d => {
-            const val = extraerValor(d, t)!;
-            const fecha = new Date(d.recorded_at!);
-            return {
-              label: `${String(fecha.getDate()).padStart(2, '0')}/${String(fecha.getMonth() + 1).padStart(2, '0')} ${String(fecha.getHours()).padStart(2, '0')}:${String(fecha.getMinutes()).padStart(2, '0')}`,
-              value: val,
-              isAbnormal: val < normalMin || val > normalMax,
-            };
-          }).sort((a, b) => {
-            const timeA = a.label;
-            const timeB = b.label;
-            return timeA.localeCompare(timeB);
-          });
-          // Transformar a formato gifted-charts (descarta valores no numéricos)
+          // Semanal: un solo punto por día (promedio del día, días sin datos omitidos).
+          // Mismo redondeo que diaria: 1 decimal temperatura, Math.round resto.
+          // Label = día de semana (DAY_LABELS, vía agruparPorDia).
+          registros = agruparPorDia(datos, t, normalMin, normalMax);
+          // Transformar a formato gifted-charts (descarta valores no numéricos).
+          // Labels planos '' para todos (sin labelComponent): el eje X lo dibuja
+          // la fila propia weekXLabels (como en diaria).
           giftedData = registros
             .filter(r => Number.isFinite(r.value))
             .map(r => ({
               value: r.value,
-              label: r.label,
+              label: '',
               dataPointText: '',
             }));
         } else {
-          // Mensual INTACTO: agrupar por día (muchos registros, evita superposición de etiquetas)
+          // Mensual INTACTO: agrupar por día (un punto por día).
+          // Labels planos '' en gifted (el eje X lo dibuja la fila propia fija 7/14/21/28).
           registros = agruparPorDia(datos, t, normalMin, normalMax);
           // Transformar a formato gifted-charts (descarta valores no numéricos)
           giftedData = registros
             .filter(r => Number.isFinite(r.value))
             .map(r => ({
               value: r.value,
-              label: r.label,
+              label: '',
               dataPointText: '',
             }));
         }
@@ -294,12 +310,20 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
           setChartData(giftedData);
           setValues(registros.map(r => r.value));
           setHasData(registros.length > 0);
+          if (vista === 'weekly') {
+            setWeekXLabels(
+              registros.filter(r => Number.isFinite(r.value)).map(r => r.label),
+            );
+          } else {
+            setWeekXLabels([]);
+          }
         }
       } catch {
         if (!cancelled) {
           setChartData([]);
           setValues([]);
           setHasData(false);
+          setWeekXLabels([]);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -308,7 +332,7 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
 
     fetchData();
     return () => { cancelled = true; };
-  }, [vista, tipoSigno, getUserId, normalMin, normalMax, t, dayOffset]);
+  }, [vista, tipoSigno, getUserId, normalMin, normalMax, t, dayOffset, weekOffset, monthOffset]);
 
   const refLineValue = useMemo(() => (normalMin + normalMax) / 2, [normalMin, normalMax]);
 
@@ -317,6 +341,20 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
     return new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOffset);
   }, [dayOffset]);
   const etiquetaFechaVista = `${String(fechaVista.getDate()).padStart(2, '0')}/${String(fechaVista.getMonth() + 1).padStart(2, '0')}`;
+
+  const etiquetaSemanaVista = useMemo(() => {
+    const now = new Date();
+    const hasta = new Date(now.getTime() - weekOffset * 7 * 24 * 60 * 60 * 1000);
+    const desde = new Date(hasta.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const fmt = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+    return `${fmt(desde)} - ${fmt(hasta)}`;
+  }, [weekOffset]);
+
+  const etiquetaMesVista = useMemo(() => {
+    const now = new Date();
+    const base = new Date(now.getFullYear(), now.getMonth() - monthOffset, 1);
+    return base.toLocaleDateString('es-ES', {month: 'long', year: 'numeric'});
+  }, [monthOffset]);
 
   const formatYLabel = useCallback((v: string) => {
     const num = parseFloat(v);
@@ -329,7 +367,7 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
   const chartWidth = containerWidth - 62;
   const N = chartData.length;
   // Tope: min(ideal (chartWidth+4)/(N-0.5), contenido 18+s(N-2)<=chartWidth) con mínimo 4.
-  const chartSpacing = N>2 ? Math.max(4, Math.min((chartWidth+4)/(N-0.5), (chartWidth-18)/Math.max(1,N-2))) : 10;
+  const chartSpacing = N>1 ? Math.max(4, Math.min((chartWidth+4)/(N-0.5), (chartWidth-18)/Math.max(1,N-2))) : 10;
   const rulesLength = INITIAL_SPACING + chartSpacing * (N - 1) + 4;
 
   return (
@@ -350,7 +388,7 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
           <TouchableOpacity
             key={v.key}
             style={[styles.segment, vista === v.key && styles.segmentActive]}
-            onPress={() => { setVista(v.key); setDayOffset(0); }}>
+            onPress={() => { setVista(v.key); setDayOffset(0); setWeekOffset(0); setMonthOffset(0); }}>
             <Text style={[styles.segmentText, vista === v.key && styles.segmentTextActive]}>
               {v.label}
             </Text>
@@ -374,6 +412,46 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
             style={styles.dayNavButton}
             accessibilityLabel="Día siguiente">
             <Text style={[styles.dayNavArrow, dayOffset === 0 && styles.dayNavArrowDisabled]}>›</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Paginación de semanas (solo vista Semanal) */}
+      {vista === 'weekly' && (
+        <View style={styles.dayNavRow}>
+          <TouchableOpacity
+            onPress={() => setWeekOffset(o => o + 1)}
+            style={styles.dayNavButton}
+            accessibilityLabel="Semana anterior">
+            <Text style={styles.dayNavArrow}>‹</Text>
+          </TouchableOpacity>
+          <Text style={styles.dayNavLabel}>{etiquetaSemanaVista}</Text>
+          <TouchableOpacity
+            onPress={() => setWeekOffset(o => Math.max(0, o - 1))}
+            disabled={weekOffset === 0}
+            style={styles.dayNavButton}
+            accessibilityLabel="Semana siguiente">
+            <Text style={[styles.dayNavArrow, weekOffset === 0 && styles.dayNavArrowDisabled]}>›</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Paginación de meses (solo vista Mensual) */}
+      {vista === 'monthly' && (
+        <View style={styles.dayNavRow}>
+          <TouchableOpacity
+            onPress={() => setMonthOffset(o => o + 1)}
+            style={styles.dayNavButton}
+            accessibilityLabel="Mes anterior">
+            <Text style={styles.dayNavArrow}>‹</Text>
+          </TouchableOpacity>
+          <Text style={styles.dayNavLabel}>{etiquetaMesVista}</Text>
+          <TouchableOpacity
+            onPress={() => setMonthOffset(o => Math.max(0, o - 1))}
+            disabled={monthOffset === 0}
+            style={styles.dayNavButton}
+            accessibilityLabel="Mes siguiente">
+            <Text style={[styles.dayNavArrow, monthOffset === 0 && styles.dayNavArrowDisabled]}>›</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -404,7 +482,7 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
               style={{width: '100%'}}
               onLayout={e => setChartContainerWidth(e.nativeEvent.layout.width)}>
               <LineChart
-                key={`${vista}-${dayOffset}`}
+                key={`${vista}-${dayOffset}-${weekOffset}-${monthOffset}`}
                 data={chartData}
                 width={chartWidth}
                 height={260}
@@ -453,6 +531,34 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
                   <Text style={[{color: colors.textSecondary, fontSize: 9}, {textAlign: 'center'}]}>12:00</Text>
                   <Text style={[{color: colors.textSecondary, fontSize: 9}, {textAlign: 'center'}]}>18:00</Text>
                   <Text style={[{color: colors.textSecondary, fontSize: 9}, {textAlign: 'right'}]}>00:00</Text>
+                </View>
+              )}
+              {vista === 'weekly' && weekXLabels.length > 0 && (
+                <View style={styles.xAxisRow}>
+                  {weekXLabels.map((lbl, i) => (
+                    <Text
+                      key={`${i}-${lbl}`}
+                      style={[
+                        {color: colors.textSecondary, fontSize: 9},
+                        {textAlign: i === 0 ? 'left' : i === weekXLabels.length - 1 ? 'right' : 'center'},
+                      ]}>
+                      {lbl}
+                    </Text>
+                  ))}
+                </View>
+              )}
+              {vista === 'monthly' && (
+                <View style={styles.xAxisRow}>
+                  {MONTH_X_LABELS.map((lbl, i) => (
+                    <Text
+                      key={`${i}-${lbl}`}
+                      style={[
+                        {color: colors.textSecondary, fontSize: 9},
+                        {textAlign: i === 0 ? 'left' : i === MONTH_X_LABELS.length - 1 ? 'right' : 'center'},
+                      ]}>
+                      {lbl}
+                    </Text>
+                  ))}
                 </View>
               )}
             </View>
