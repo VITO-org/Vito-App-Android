@@ -19,6 +19,10 @@ export interface SignoVitalItem {
   value: string;
   /** Unidad de medida */
   unit: string;
+  /** Segunda parte del valor con estilo de valor (ej: "50" en "9h 50m" de sueño) */
+  value2?: string;
+  /** Unidad de la segunda parte (ej: "m"). Estilo de unidad. */
+  unit2?: string;
   /** Emoji del icono (fallback cuando no hay iconName) */
   icon: string;
   /** Nombre del icono PNG en AppIcon (reemplaza al emoji cuando está presente) */
@@ -76,7 +80,7 @@ export function buildSignosFromSummary(
     icon: '❤️',
     iconName: 'frecuencia-cardiaca',
     iconSize: 36,
-    iconBgColor: colors.heartRed,
+    iconBgColor: colors.surface,
     trend: summary?.averageBpm != null
       ? summary.averageBpm > fc.max ? 'up' : summary.averageBpm < fc.min ? 'down' : 'stable'
       : 'stable',
@@ -93,7 +97,7 @@ export function buildSignosFromSummary(
     icon: '🫀',
     iconName: 'presion-arterial',
     iconSize: 36,
-    iconBgColor: colors.danger,
+    iconBgColor: colors.surface,
     trend: summary?.bloodPressureSystolic != null
       ? summary.bloodPressureSystolic > sist.max ? 'up' : 'stable'
       : 'stable',
@@ -110,7 +114,7 @@ export function buildSignosFromSummary(
     icon: '🫀',
     iconName: 'presion-arterial',
     iconSize: 36,
-    iconBgColor: colors.danger,
+    iconBgColor: colors.surface,
     trend: summary?.bloodPressureDiastolic != null
       ? summary.bloodPressureDiastolic > diast.max ? 'up' : 'stable'
       : 'stable',
@@ -127,7 +131,8 @@ export function buildSignosFromSummary(
     icon: '💧',
     iconName: 'oxigenacion',
     iconSize: 36,
-    iconBgColor: colors.oxygenBlue,
+    // Icono propio con círculo azul sólido: surface (+ '20' en renderers) queda invisible sobre card blanca.
+    iconBgColor: colors.surface,
     trend: summary?.spo2Percent != null
       ? summary.spo2Percent >= spo2.min ? 'stable' : 'down'
       : 'stable',
@@ -144,7 +149,7 @@ export function buildSignosFromSummary(
     icon: '🌡️',
     iconName: 'temperatura',
     iconSize: 36,
-    iconBgColor: colors.tempRed,
+    iconBgColor: colors.surface,
     trend: summary?.bodyTemperatureCelsius != null
       ? summary.bodyTemperatureCelsius > temp.max ? 'up' : summary.bodyTemperatureCelsius < temp.min ? 'down' : 'stable'
       : 'stable',
@@ -160,11 +165,11 @@ export function buildSignosFromSummary(
     id: 'pasos',
     label: 'Pasos',
     value: pasos != null && pasos > 0 ? pasos.toLocaleString('es-ES') : '--',
-    unit: 'hoy',
+    unit: '',
     icon: '👣',
     iconName: 'pasos',
     iconSize: 36,
-    iconBgColor: colors.primary,
+    iconBgColor: colors.surface,
     trend: undefined,
     rangeLabel: '',
     rawValue: pasos ?? null,
@@ -179,7 +184,7 @@ export function buildSignosFromSummary(
     icon: '🔥',
     iconName: 'calorias',
     iconSize: 36,
-    iconBgColor: colors.warning,
+    iconBgColor: colors.surface,
     trend: undefined,
     rangeLabel: '',
     rawValue: calorias ?? null,
@@ -194,11 +199,11 @@ export function buildSignosFromSummary(
         ? `${(dist / 1000).toFixed(2)}`
         : `${dist.toFixed(0)}`
       : '--',
-    unit: dist != null && dist >= 1000 ? 'km' : 'm',
+    unit: dist != null && dist > 0 ? (dist >= 1000 ? 'km' : 'm') : '',
     icon: '📏',
     iconName: 'distancia',
     iconSize: 36,
-    iconBgColor: colors.oxygenBlue,
+    iconBgColor: colors.surface,
     trend: undefined,
     rangeLabel: '',
     rawValue: dist ?? null,
@@ -207,15 +212,22 @@ export function buildSignosFromSummary(
   // ── Bienestar ──
 
   const sueno = summary?.sleepMinutes;
+  // Hora exacta sin decimal: "9" + "h" + "50" + "m".
+  // Números con estilo de valor, letras con estilo de unidad (igual que "m"/"kcal").
+  const totalMin = sueno != null && sueno > 0 ? Math.round(sueno) : 0;
+  const suenoH = Math.floor(totalMin / 60);
+  const suenoM = totalMin % 60;
   items.push({
     id: 'sueno',
     label: 'Sueño',
-    value: sueno != null && sueno > 0 ? (sueno / 60).toFixed(1) : '--',
-    unit: 'h',
+    value: totalMin > 0 ? `${suenoH > 0 ? suenoH : suenoM}` : '--',
+    unit: totalMin <= 0 ? '' : suenoH === 0 ? 'm' : 'h',
+    value2: totalMin > 0 && suenoH > 0 && suenoM > 0 ? `${suenoM}` : undefined,
+    unit2: totalMin > 0 && suenoH > 0 && suenoM > 0 ? 'm' : undefined,
     icon: '😴',
     iconName: 'sueno',
     iconSize: 36,
-    iconBgColor: '#7C3AED',
+    iconBgColor: colors.surface,
     trend: undefined,
     rangeLabel: '',
     rawValue: sueno ?? null,
@@ -259,7 +271,7 @@ export function buildSignosFromResumen(resumen: Resumen): SignoVitalItem[] {
       icon: '❤️',
       iconName: 'frecuencia-cardiaca',
       iconSize: 36,
-      iconBgColor: colors.heartRed,
+      iconBgColor: colors.surface,
       trend: resumen.frecCardiaca.avg > fc.max ? 'up' : resumen.frecCardiaca.avg < fc.min ? 'down' : 'stable',
       rangeLabel: `${Math.round(resumen.frecCardiaca.min)}-${Math.round(resumen.frecCardiaca.max)} lpm`,
       rawValue: resumen.frecCardiaca.count > 0 ? resumen.frecCardiaca.avg : null,
@@ -272,7 +284,7 @@ export function buildSignosFromResumen(resumen: Resumen): SignoVitalItem[] {
       icon: '🫀',
       iconName: 'presion-arterial',
       iconSize: 36,
-      iconBgColor: colors.danger,
+      iconBgColor: colors.surface,
       trend: resumen.sistolica.avg > sist.max ? 'up' : 'stable',
       rangeLabel: `${Math.round(resumen.sistolica.min)}-${Math.round(resumen.sistolica.max)} mmHg`,
       rawValue: resumen.sistolica.count > 0 ? resumen.sistolica.avg : null,
@@ -285,7 +297,7 @@ export function buildSignosFromResumen(resumen: Resumen): SignoVitalItem[] {
       icon: '🫀',
       iconName: 'presion-arterial',
       iconSize: 36,
-      iconBgColor: colors.danger,
+      iconBgColor: colors.surface,
       trend: resumen.diastolica.avg > diast.max ? 'up' : 'stable',
       rangeLabel: `${Math.round(resumen.diastolica.min)}-${Math.round(resumen.diastolica.max)} mmHg`,
       rawValue: resumen.diastolica.count > 0 ? resumen.diastolica.avg : null,
@@ -298,7 +310,8 @@ export function buildSignosFromResumen(resumen: Resumen): SignoVitalItem[] {
       icon: '💧',
       iconName: 'oxigenacion',
       iconSize: 36,
-      iconBgColor: colors.oxygenBlue,
+      // Icono propio con círculo azul sólido: surface (+ '20' en renderers) queda invisible sobre card blanca.
+      iconBgColor: colors.surface,
       trend: resumen.spo2.avg >= spo2.min ? 'stable' : 'down',
       rangeLabel: `${resumen.spo2.min.toFixed(0)}-${resumen.spo2.max.toFixed(0)}%`,
       rawValue: resumen.spo2.count > 0 ? resumen.spo2.avg : null,
@@ -311,7 +324,7 @@ export function buildSignosFromResumen(resumen: Resumen): SignoVitalItem[] {
       icon: '🌡️',
       iconName: 'temperatura',
       iconSize: 36,
-      iconBgColor: colors.tempRed,
+      iconBgColor: colors.surface,
       trend: resumen.temperatura.avg > temp.max ? 'up' : resumen.temperatura.avg < temp.min ? 'down' : 'stable',
       rangeLabel: `${resumen.temperatura.min.toFixed(1)}-${resumen.temperatura.max.toFixed(1)} °C`,
       rawValue: resumen.temperatura.count > 0 ? resumen.temperatura.avg : null,
@@ -324,7 +337,7 @@ export function buildSignosFromResumen(resumen: Resumen): SignoVitalItem[] {
       icon: '👣',
       iconName: 'pasos',
       iconSize: 36,
-      iconBgColor: colors.primary,
+      iconBgColor: colors.surface,
       trend: undefined,
       rangeLabel: resumen.pasos.count > 0
         ? `Ø ${Math.round(resumen.pasos.avg).toLocaleString('es-ES')}/día`
@@ -339,7 +352,7 @@ export function buildSignosFromResumen(resumen: Resumen): SignoVitalItem[] {
       icon: '😴',
       iconName: 'sueno',
       iconSize: 36,
-      iconBgColor: '#7C3AED',
+      iconBgColor: colors.surface,
       trend: undefined,
       rangeLabel: resumen.sueno.count > 0 ? `${resumen.sueno.count} registros` : '',
       rawValue: resumen.sueno.count > 0 ? resumen.sueno.avg : null,

@@ -137,7 +137,7 @@ function evaluarRegistro(record: DatosRelojRecord): AlertaCandidata | null {
       return {
         tipo: "hipoxia",
         severidad: sev,
-        titulo: sev === "critica" ? "Alerta crítica: SpO₂ muy baja" : "Alerta: SpO₂ baja",
+        titulo: sev === "critica" ? "Saturación de oxígeno muy baja" : "Saturación de oxígeno baja",
         mensaje:
           sev === "critica"
             ? `Saturación de oxígeno en ${record.spo2_pct}% (umbral crítico: ${umbral}%). Seek immediate medical attention.`

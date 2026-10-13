@@ -251,7 +251,7 @@ export async function insertDatosRelojBatch(
 
 export async function getDatosReloj(
   userId: string,
-  options?: { from?: string; to?: string; limit?: number; origen?: OrigenDato },
+  options?: { from?: string; to?: string; limit?: number; origen?: OrigenDato; notNullColumn?: string },
 ): Promise<DatosReloj[]> {
   let query = supabase
     .from('datos_reloj')
@@ -262,6 +262,7 @@ export async function getDatosReloj(
   if (options?.origen) query = query.eq('origen', options.origen);
   if (options?.from) query = query.gte('recorded_at', options.from);
   if (options?.to) query = query.lte('recorded_at', options.to);
+  if (options?.notNullColumn) query = query.not(options.notNullColumn, 'is', null);
   if (options?.limit) query = query.limit(options.limit);
 
   const { data, error } = await query;

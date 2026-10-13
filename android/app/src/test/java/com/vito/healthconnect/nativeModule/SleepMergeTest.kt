@@ -79,4 +79,54 @@ class SleepMergeTest {
         assertEquals(2, merged.size)
         assertEquals(510, totalMinutes(merged))
     }
+
+    @Test
+    fun `gap de 4min se fusiona por tolerancia de 5min`() {
+        val merged = mergeSleepIntervals(
+            listOf(
+                interval("2026-10-06T01:00:00Z", "2026-10-06T02:00:00Z"),
+                interval("2026-10-06T02:04:00Z", "2026-10-06T03:00:00Z"),
+            ),
+        )
+        assertEquals(1, merged.size)
+        assertEquals(120, totalMinutes(merged))
+    }
+
+    @Test
+    fun `gap de 30min no se fusiona`() {
+        val merged = mergeSleepIntervals(
+            listOf(
+                interval("2026-10-06T01:00:00Z", "2026-10-06T02:00:00Z"),
+                interval("2026-10-06T02:30:00Z", "2026-10-06T03:00:00Z"),
+            ),
+        )
+        assertEquals(2, merged.size)
+        assertEquals(90, totalMinutes(merged))
+    }
+
+    @Test
+    fun `solo etapas dormidas cuentan awake se excluye`() {
+        // Noche 23:00-07:00 (480min cama) pero 267min dormido + resto awake:
+        // reproduce caso real 8.7h cama vs 4h27 reloj.
+        val stages = listOf(
+            Triple(Instant.parse("2026-10-05T23:00:00Z"), Instant.parse("2026-10-06T03:27:00Z"), 4),
+            Triple(Instant.parse("2026-10-06T03:27:00Z"), Instant.parse("2026-10-06T07:00:00Z"), 1),
+        )
+        val only = sleepOnlyIntervals(stages)
+        assertEquals(1, only.size)
+        assertEquals(267, only.sumOf { (s, e) -> Duration.between(s, e).toMinutes() })
+    }
+
+    @Test
+    fun `out of bed y awake in bed se excluyen`() {
+        val stages = listOf(
+            Triple(Instant.parse("2026-10-06T01:00:00Z"), Instant.parse("2026-10-06T02:00:00Z"), 5),
+            Triple(Instant.parse("2026-10-06T02:00:00Z"), Instant.parse("2026-10-06T02:15:00Z"), 3),
+            Triple(Instant.parse("2026-10-06T02:15:00Z"), Instant.parse("2026-10-06T02:30:00Z"), 7),
+            Triple(Instant.parse("2026-10-06T02:30:00Z"), Instant.parse("2026-10-06T03:00:00Z"), 6),
+        )
+        val only = sleepOnlyIntervals(stages)
+        assertEquals(2, only.size)
+        assertEquals(90, only.sumOf { (s, e) -> Duration.between(s, e).toMinutes() })
+    }
 }

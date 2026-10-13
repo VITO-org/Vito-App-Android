@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {useSupabase} from '../context/SupabaseProvider';
-import {getSintomasUsuario, deleteSintomaUsuario} from '../services/supabase/api';
+import {getSintomasUsuario, deleteSintomaUsuario, getSintomasCatalogo} from '../services/supabase/api';
 import type {SintomasUsuario, CatSintoma} from '../services/supabase/models';
 import {colors, spacing, fontSize} from '../theme';
 
@@ -31,6 +31,28 @@ const HistorialSintomasScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filterCategoria, setFilterCategoria] = useState<CatSintoma | 'todos'>('todos');
+  // Mapa id_sintomas → {nombre, icono} para mostrar el nombre en la card.
+  // Se cachea en memoria: se carga una vez, no en cada refresh.
+  const [catalogoMap, setCatalogoMap] = useState<Record<string, {nombre: string; icono: string | null}>>({});
+
+  const cargarCatalogo = useCallback(async () => {
+    try {
+      const data = await getSintomasCatalogo();
+      if (data.length > 0) {
+        const map: Record<string, {nombre: string; icono: string | null}> = {};
+        for (const s of data) {
+          map[s.id_sintomas] = {nombre: s.nombre, icono: s.icono};
+        }
+        setCatalogoMap(map);
+      }
+    } catch {
+      // Catálogo opcional: sin él se usa nombre genérico por categoría.
+    }
+  }, []);
+
+  useEffect(() => {
+    cargarCatalogo();
+  }, [cargarCatalogo]);
 
   const cargarSintomas = useCallback(async () => {
     if (!session?.user?.id) return;
@@ -119,15 +141,23 @@ const HistorialSintomasScreen: React.FC = () => {
   const renderSintoma = ({item}: {item: SintomasUsuario}) => {
     const intensidad = item.intensidad ?? 3;
     const colores = INTENSIDAD_COLORES[intensidad] || INTENSIDAD_COLORES[3];
+    // Nombre+icono por join con catálogo; genérico por categoría si no hay id
+    // (fallback local o chat IA guardan id_sintomas null).
+    const ref = item.id_sintomas ? catalogoMap[item.id_sintomas] : undefined;
+    const esFisico = item.categoria === 'fisico';
+    const nombre = ref?.nombre ?? (esFisico ? 'Síntoma físico' : 'Síntoma emocional');
+    const icono = ref?.icono || (esFisico ? '🏥' : '💭');
+    const hora = formatearHora(item);
 
     return (
       <View style={styles.card}>
         <View style={styles.cardHeader}>
-          <View style={styles.cardDate}>
-            <Text style={styles.dateText}>{formatearFecha(item)}</Text>
-            {formatearHora(item) ? (
-              <Text style={styles.timeText}>{formatearHora(item)}</Text>
-            ) : null}
+          <Text style={styles.sintomaIcono}>{icono}</Text>
+          <View style={styles.cardTitleBlock}>
+            <Text style={styles.sintomaNombre}>{nombre}</Text>
+            <Text style={styles.timeText}>
+              {formatearFecha(item)}{hora ? ` • ${hora}` : ''}
+            </Text>
           </View>
           <View style={styles.cardHeaderRight}>
             <View style={[styles.intensidadBadge, {backgroundColor: colores.bg}]}>
@@ -298,11 +328,20 @@ const styles = StyleSheet.create({
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginBottom: 10,
   },
-  cardDate: {
+  cardTitleBlock: {
     flex: 1,
+  },
+  sintomaIcono: {
+    fontSize: 28,
+    marginRight: 10,
+  },
+  sintomaNombre: {
+    fontSize: fontSize.body,
+    fontWeight: '700',
+    color: colors.textPrimary,
   },
   cardHeaderRight: {
     flexDirection: 'row',

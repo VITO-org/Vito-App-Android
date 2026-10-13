@@ -33,10 +33,14 @@ export const colors = {
   // ── Semáforo de alertas ─────────────────────────────────
   /** Rojo alerta crítica */
   danger: '#EF4444',
+  /** Rojo oscuro mockup — texto/valores críticos (Inicio) */
+  critical: '#C62828',
   /** Rojo fondo muy claro */
   dangerLight: '#FEF2F2',
   /** Naranja advertencia */
   warning: '#F59E0B',
+  /** Ámbar oscuro mockup — texto/valores de advertencia (Inicio) */
+  warningStrong: '#D97706',
   /** Naranja fondo muy claro */
   warningLight: '#FFFBEB',
   /** Verde éxito / seguro */
