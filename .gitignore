@@ -53,5 +53,3 @@ ml-trainer/models/
 
 *.deb
 *.apk
-vito-alert-dashboard/.env
-vito-alert-dashboard/.env.local
