@@ -249,7 +249,7 @@ describe('buildAlertRecord', () => {
     expect(record.id_usuario).toBe('user-1');
     expect(record.tipo).toBe('hipoxia');
     expect(record.severidad).toBe('advertencia');
-    expect(record.titulo).toContain('SpO₂ baja');
+    expect(record.titulo).toContain('Saturación de oxígeno baja');
     expect(record.mensaje).toContain('88%');
     expect(record.mensaje).toContain('90%');
     expect(record.datos).toEqual(expect.objectContaining({
@@ -279,7 +279,8 @@ describe('buildAlertRecord', () => {
 
     const record = buildAlertRecord(input, detection, 'user-1', new Date('2026-08-18T12:00:00Z'));
 
-    expect(record.titulo).toContain('crítica');
+    expect(record.titulo).toBe('Saturación de oxígeno muy baja');
+    expect(record.severidad).toBe('critica');
     expect(record.mensaje).toContain('82%');
     expect(record.mensaje).toContain('85%');
   });
@@ -502,7 +503,7 @@ describe('AlertEngine', () => {
 
     expect(alert).not.toBeNull();
     expect(alert!.severidad).toBe('leve');
-    expect(alert!.titulo).toContain('SpO₂ baja');
+    expect(alert!.titulo).toContain('Saturación de oxígeno baja');
     expect(alert!.datos).toEqual(expect.objectContaining({valor_registrado: 88}));
     expect(deps.inserted).toHaveLength(1);
     expect(onGenerated).toHaveBeenCalledTimes(1);

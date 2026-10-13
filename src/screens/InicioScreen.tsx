@@ -8,11 +8,13 @@ import Card from '../components/Card';
 import VitalSignCard from '../components/VitalSignCard';
 import PrimaryButton from '../components/PrimaryButton';
 import AppIcon, {type AppIconName} from '../components/AppIcon';
+import SignoIcon from '../components/SignoIcon';
 import VitoAvatar from '../components/VitoAvatar';
 import StatusIndicator from '../components/StatusIndicator';
 import EstadoGeneralCard from '../components/EstadoGeneralCard';
 import {colors, spacing, fontSize} from '../theme';
 import {buildSignosFromSummary, getMetricasBienestar} from '../utils/signosVitales';
+import {destinoPorTipoAlerta} from '../utils/alertas';
 import {getSintomasCatalogo, getSintomasUsuario} from '../services/supabase/api';
 import type {Alerta} from '../services/supabase/models';
 
@@ -29,29 +31,6 @@ type RootStackParamList = {
   RegistrarSintoma: undefined;
   HistorialSintomas: undefined;
 };
-
-/**
- * FIX SCRUM-191 (BUG HU-37): mapea tipo de alerta → params de DetalleSigno
- * para que el tap en el banner abra el detalle del evento que la generó (CA-03).
- */
-function destinoPorTipoAlerta(alertType: Alerta['tipo']): {
-  tipoSigno: string;
-  label: string;
-  unit: string;
-  icon: string;
-} {
-  switch (alertType) {
-    case 'hipoxia':
-      return {tipoSigno: 'saturacion_oxigeno', label: 'Saturación de oxígeno', unit: '%', icon: '🩸'};
-    case 'hipertension':
-    case 'hipotension':
-      return {tipoSigno: 'presion_sistolica', label: 'Presión arterial', unit: 'mmHg', icon: '❤️'};
-    case 'taquicardia':
-    case 'bradicardia':
-    default:
-      return {tipoSigno: 'frecuencia_cardiaca', label: 'Frecuencia cardíaca', unit: 'lpm', icon: '💓'};
-  }
-}
 
 /**
  * Dashboard principal — pantalla de inicio de VITO.
@@ -295,11 +274,7 @@ const InicioScreen: React.FC = () => {
       <View style={styles.daySummaryGrid}>
         {getMetricasBienestar(allSignos).map(s => (
           <View key={s.id} style={styles.daySummaryCard}>
-            {s.iconName ? (
-              <AppIcon name={s.iconName as AppIconName} size={30} />
-            ) : (
-              <Text style={styles.daySummaryIcon}>{s.icon}</Text>
-            )}
+            <SignoIcon name={s.iconName} emoji={s.icon} style={styles.daySummaryIcon} />
             {/* Fix distancia: unidad siempre visible inline, nunca número pelado. Sin 'm' fantasma cuando value '--' (unit=''). Sueño usa value2/unit2 ("9" "h" "50" "m") en un solo renglón. */}
             <Text
               style={styles.daySummaryValue}

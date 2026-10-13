@@ -3,7 +3,7 @@ import {View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl} fr
 import {useNavigation} from '@react-navigation/native';
 import Card from '../components/Card';
 import {colors, spacing, fontSize} from '../theme';
-import {severityToColorKey, severityLabel, alertIcon, formatAlertTime, SEVERITY_COLORS, cleanAlertTitle} from '../utils/alertas';
+import {severityToColorKey, severityLabel, alertIcon, formatAlertTime, SEVERITY_COLORS, cleanAlertTitle, destinoPorTipoAlerta} from '../utils/alertas';
 import {useHealth} from '../context/HealthProvider';
 import type {Alerta} from '../services/supabase/models';
 
@@ -42,32 +42,6 @@ function alertDescription(alert: Alerta): string {
   }
 
   return parts.join(' · ');
-}
-
-/**
- * Mapeo tipo de alerta → params de DetalleSigno (replicado de InicioScreen,
- * ya que `destinoPorTipoAlerta` NO está exportado en
- * `../context/NotificationsProvider` — es una función local privada allí).
- * Mismos valores que usa InicioScreen para hipoxia/hipertension/hipotension/
- * taquicardia/bradicardia.
- */
-function destinoPorTipoAlerta(alertType: Alerta['tipo']): {
-  tipoSigno: string;
-  label: string;
-  unit: string;
-  icon: string;
-} {
-  switch (alertType) {
-    case 'hipoxia':
-      return {tipoSigno: 'saturacion_oxigeno', label: 'Saturación de oxígeno', unit: '%', icon: '🩸'};
-    case 'hipertension':
-    case 'hipotension':
-      return {tipoSigno: 'presion_sistolica', label: 'Presión arterial', unit: 'mmHg', icon: '❤️'};
-    case 'taquicardia':
-    case 'bradicardia':
-    default:
-      return {tipoSigno: 'frecuencia_cardiaca', label: 'Frecuencia cardíaca', unit: 'lpm', icon: '💓'};
-  }
 }
 
 const AlertasScreen: React.FC = () => {

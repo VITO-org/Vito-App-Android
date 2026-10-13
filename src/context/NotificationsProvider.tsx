@@ -12,6 +12,7 @@ const EAS_PROJECT_ID =
   (Constants.expoConfig?.extra as any)?.eas?.projectId ??
   'fa67daf3-789f-4cc2-a373-ceb1507c4a50';
 import { registerDispositivo, getPreferenciaNotificacion, upsertPreferenciaNotificacion, marcarRecibidaPorAlerta, marcarLeidaPorAlerta } from '../services/supabase/api';
+import {destinoPorTipoAlerta} from '../utils/alertas';
 import type { DispositivoUsuario } from '../services/supabase/models';
 
 // ===========================================================================
@@ -68,30 +69,6 @@ const defaultPreferences: NotificationPreferences = {
   horario_silencioso_inicio: '23:00:00',
   horario_silencioso_fin: '07:00:00',
 };
-
-/**
- * CA-03: map alert type → DetalleSigno params so a tap always lands
- * on a valid detail screen, carrying alertId for traceability.
- */
-function destinoPorTipoAlerta(alertType: string | undefined): {
-  tipoSigno: string;
-  label: string;
-  unit: string;
-  icon: string;
-} {
-  switch (alertType) {
-    case 'hipoxia':
-      return {tipoSigno: 'saturacion_oxigeno', label: 'Saturación de oxígeno', unit: '%', icon: '🩸'};
-    case 'hipertension':
-    case 'hipotension':
-      return {tipoSigno: 'presion_sistolica', label: 'Presión arterial', unit: 'mmHg', icon: '❤️'};
-    case 'taquicardia':
-    case 'bradicardia':
-      return {tipoSigno: 'frecuencia_cardiaca', label: 'Frecuencia cardíaca', unit: 'lpm', icon: '💓'};
-    default:
-      return {tipoSigno: 'frecuencia_cardiaca', label: 'Frecuencia cardíaca', unit: 'lpm', icon: '💓'};
-  }
-}
 
 const NotificationsContext = createContext<NotificationsContextValue | null>(null);
 

@@ -123,7 +123,7 @@ export function buildAlertRecord(
   const valorReg = input.spo2Percent;
   const umbral = detection.thresholdExceeded ?? input.thresholds.warningPercent;
 
-  const titulo = `${severityPrefix(detection.severity)}: SpO₂ ${detection.severity === 'critica' ? 'muy baja' : 'baja'}`;
+  const titulo = detection.severity === 'critica' ? 'Saturación de oxígeno muy baja' : 'Saturación de oxígeno baja';
 
   const mensaje =
     detection.severity === 'critica'

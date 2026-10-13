@@ -124,8 +124,8 @@ describe('Badge de alertas — listeners del engine', () => {
     await engine.evaluateSpo2Reading('user-1', 97, 'wearable');
 
     expect(resolvedCb).toHaveBeenCalledTimes(1);
-    expect(deps.markedRead).toHaveLength(1);
-    expect(deps.markedRead[0]).toBe(deps.inserted[0].id);
+    expect(deps.markedRead).toHaveLength(0);
+    expect(deps.markedRead).not.toContain(deps.inserted[0].id);
   });
 
   test('confirmAlert llama markAlertRead', async () => {

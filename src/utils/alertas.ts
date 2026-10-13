@@ -4,6 +4,11 @@
  */
 import {colors} from '../theme';
 import type {Alerta} from '../services/supabase/models';
+import {
+  DEFAULT_BP_THRESHOLDS,
+  DEFAULT_HR_THRESHOLDS,
+  DEFAULT_SPO2_THRESHOLDS,
+} from '../services/alerts/types';
 
 export type SeverityKey = 'danger' | 'warning' | 'info';
 
@@ -60,6 +65,8 @@ export function cleanAlertTitle(titulo: string | null): string {
   if (!titulo) return '';
   const sinPrefijo = titulo.replace(/^(alerta\s+(crítica|critica|advertencia|info)\s*[:\-–—]?\s*)/i, '').replace(/^(alerta\s*[:\-–—]\s*)/i, '').trim();
   const sinParentesis = sinPrefijo.replace(/\s*\([^)]*\)\s*/g, '').replace(/\s{2,}/g, ' ').trim();
+  if (/^spo₂ muy baja$/i.test(sinParentesis)) return 'Saturación de oxígeno muy baja';
+  if (/^spo₂ baja$/i.test(sinParentesis)) return 'Saturación de oxígeno baja';
   return sinParentesis || titulo;
 }
 
@@ -155,9 +162,9 @@ export function getAlertValue(alert: Alerta): string {
     case 'hipotension': {
       const sist = roundIfNum(datos.bp_sistolica);
       const diast = roundIfNum(datos.bp_diastolica);
-      if (sist != null && diast != null) return `${sist}/${diast}`;
-      if (sist != null) return `${sist}`;
-      if (diast != null) return `${diast}`;
+      if (sist != null && diast != null) return `${sist}/${diast} mmHg`;
+      if (sist != null) return `${sist} mmHg`;
+      if (diast != null) return `${diast} mmHg`;
       return '';
     }
     default:
@@ -170,26 +177,39 @@ export function getAlertValue(alert: Alerta): string {
  * Solo usa campos presentes en `alert.datos`; `null` si falta alguno.
  * - hipoxia: limite `${umbral}%`, medido `${valor}%`.
  * - taquicardia/bradicardia: limite `${umbral} lpm`, medido `${valor} lpm`.
- * - hiper/hipotension: medido como getAlertValue, limite mismo formato con
- *   umbral_sist/umbral_diast (sin "mmHg", corto como el valor).
+ * - hiper/hipotension: medido como getAlertValue + " mmHg", limite mismo formato con
+ *   umbral_sist/umbral_diast + " mmHg".
  */
 export function getComparacionAlerta(alert: Alerta): {limite: string; medido: string} | null {
   const datos = alert.datos;
   if (datos == null) return null;
   const roundIfNum = (v: unknown): number | null =>
     typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : null;
+  const isCritica = alert.severidad === 'critica';
 
   switch (alert.tipo) {
     case 'hipoxia': {
       const valor = roundIfNum(datos.valor_registrado);
-      const umbral = roundIfNum(datos.umbral_configurado);
+      const umbral =
+        roundIfNum(datos.umbral_configurado) ??
+        (isCritica
+          ? DEFAULT_SPO2_THRESHOLDS.criticalPercent
+          : DEFAULT_SPO2_THRESHOLDS.warningPercent);
       if (valor == null || umbral == null) return null;
       return {limite: `${umbral}%`, medido: `${valor}%`};
     }
     case 'taquicardia':
     case 'bradicardia': {
       const valor = roundIfNum(datos.valor_registrado);
-      const umbral = roundIfNum(datos.umbral_configurado);
+      const fallback =
+        alert.tipo === 'taquicardia'
+          ? isCritica
+            ? DEFAULT_HR_THRESHOLDS.tachyCritical
+            : DEFAULT_HR_THRESHOLDS.tachyWarning
+          : isCritica
+            ? DEFAULT_HR_THRESHOLDS.bradyCritical
+            : DEFAULT_HR_THRESHOLDS.bradyWarning;
+      const umbral = roundIfNum(datos.umbral_configurado) ?? fallback;
       if (valor == null || umbral == null) return null;
       return {limite: `${umbral} lpm`, medido: `${valor} lpm`};
     }
@@ -197,11 +217,18 @@ export function getComparacionAlerta(alert: Alerta): {limite: string; medido: st
     case 'hipotension': {
       const medido = getAlertValue(alert);
       if (medido === '') return null;
-      const uSist = roundIfNum(datos.umbral_sist);
-      const uDiast = roundIfNum(datos.umbral_diast);
-      if (uSist != null && uDiast != null) return {limite: `${uSist}/${uDiast}`, medido};
-      if (uSist != null) return {limite: `${uSist}`, medido};
-      if (uDiast != null) return {limite: `${uDiast}`, medido};
+      const medidoConUnidad = `${medido} mmHg`;
+      const fallbackSist = isCritica
+        ? DEFAULT_BP_THRESHOLDS.sistolicaCritical
+        : DEFAULT_BP_THRESHOLDS.sistolicaWarning;
+      const fallbackDiast = isCritica
+        ? DEFAULT_BP_THRESHOLDS.diastolicaCritical
+        : DEFAULT_BP_THRESHOLDS.diastolicaWarning;
+      const uSist = roundIfNum(datos.umbral_sist) ?? fallbackSist;
+      const uDiast = roundIfNum(datos.umbral_diast) ?? fallbackDiast;
+      if (uSist != null && uDiast != null) return {limite: `${uSist}/${uDiast} mmHg`, medido: medidoConUnidad};
+      if (uSist != null) return {limite: `${uSist} mmHg`, medido: medidoConUnidad};
+      if (uDiast != null) return {limite: `${uDiast} mmHg`, medido: medidoConUnidad};
       return null;
     }
     default:
@@ -255,4 +282,28 @@ export function formatAlertClockTime(isoString: string | null): string {
   const date = new Date(isoString);
   if (Number.isNaN(date.getTime())) return '';
   return `${date.toLocaleTimeString('es-AR', {hour: '2-digit', minute: '2-digit'})} h`;
+}
+
+/**
+ * Mapeo único tipo de alerta → params de DetalleSigno (CA-03 / SCRUM-191).
+ * Única fuente de verdad: misma tabla que usaban InicioScreen y
+ * NotificationsProvider (copiada exacta, mismos labels/units/emojis).
+ */
+export function destinoPorTipoAlerta(tipo: string | undefined): {
+  tipoSigno: string;
+  label: string;
+  unit: string;
+  icon: string;
+} {
+  switch (tipo) {
+    case 'hipoxia':
+      return {tipoSigno: 'saturacion_oxigeno', label: 'Saturación de oxígeno', unit: '%', icon: '🩸'};
+    case 'hipertension':
+    case 'hipotension':
+      return {tipoSigno: 'presion_sistolica', label: 'Presión arterial', unit: 'mmHg', icon: '❤️'};
+    case 'taquicardia':
+    case 'bradicardia':
+    default:
+      return {tipoSigno: 'frecuencia_cardiaca', label: 'Frecuencia cardíaca', unit: 'lpm', icon: '💓'};
+  }
 }
