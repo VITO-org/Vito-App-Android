@@ -1,5 +1,5 @@
 import React, {useState, useEffect, useCallback, useMemo} from 'react';
-import {View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator} from 'react-native';
+import {View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Dimensions} from 'react-native';
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {LineChart} from 'react-native-gifted-charts';
 import {colors, fontSize, spacing} from '../theme';
@@ -38,6 +38,19 @@ const VISTAS: {key: VistaReporte; label: string}[] = [
 ];
 
 const DAY_LABELS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+
+const INITIAL_SPACING = 8;
+// El eje termina con aire; el label final llega al borde por su alineación, no por endSpacing.
+const END_SPACING = 10;
+const TRAILING_RIGHT_AIR = 24;
+
+type ChartPoint = {
+  value?: number;
+  label?: string;
+  labelComponent?: () => React.ReactElement;
+  hideDataPoint?: boolean;
+  dataPointText?: string;
+};
 
 /** Extrae el valor numérico de un DatosReloj según el tipo de signo vital. */
 function extraerValor(dato: DatosReloj, tipo: TipoSignoVital): number | null {
@@ -96,12 +109,45 @@ function agruparPorDia(
   return result.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
 }
 
+/** Agrupa los samples del día en 24 buckets de 1 hora ({min,max,avg,count,minutes}).
+ *  Centro del slot = h*60+30. Los slots vacíos se omiten (no inventa datos).
+ *  Solo vista Diaria. `value` = avg redondeado (1 decimal solo temperatura). */
+function agruparPorHora(
+  datos: DatosReloj[],
+  tipo: TipoSignoVital,
+): {min: number; max: number; avg: number; count: number; minutes: number; value: number}[] {
+  const slots: number[][] = Array.from({length: 24}, () => []);
+  for (const d of datos) {
+    if (!d.recorded_at) continue;
+    const val = extraerValor(d, tipo);
+    if (val == null || !Number.isFinite(val)) continue;
+    const fecha = new Date(d.recorded_at);
+    if (Number.isNaN(fecha.getTime())) continue;
+    const h = fecha.getHours();
+    if (h < 0 || h > 23) continue;
+    slots[h].push(val);
+  }
+  const result: {min: number; max: number; avg: number; count: number; minutes: number; value: number}[] = [];
+  for (let h = 0; h < 24; h++) {
+    const arr = slots[h];
+    if (arr.length === 0) continue;
+    const min = Math.min(...arr);
+    const max = Math.max(...arr);
+    const avg = arr.reduce((a, b) => a + b, 0) / arr.length;
+    const value = tipo === 'temperatura' ? parseFloat(avg.toFixed(1)) : Math.round(avg);
+    result.push({min, max, avg, count: arr.length, minutes: h * 60 + 30, value});
+  }
+  return result.sort((a, b) => a.minutes - b.minutes);
+}
+
 export default function DetalleSignoScreen({route, navigation}: Props) {
   const {tipoSigno, label, unit} = route.params;
   const {getUserId, session} = useSupabase();
 
   const [vista, setVista] = useState<VistaReporte>('daily');
-  const [chartData, setChartData] = useState<{value: number; label: string; dataPointText: string}[]>([]);
+  const [dayOffset, setDayOffset] = useState(0);
+  const [chartData, setChartData] = useState<ChartPoint[]>([]);
+  const [chartContainerWidth, setChartContainerWidth] = useState(0);
   const [values, setValues] = useState<number[]>([]);
   const [normalMin, setNormalMin] = useState(NORMAL_RANGES[tipoSigno as TipoSignoVital].min);
   const [normalMax, setNormalMax] = useState(NORMAL_RANGES[tipoSigno as TipoSignoVital].max);
@@ -142,12 +188,16 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
       setLoading(true);
       const now = new Date();
       let desde: Date;
+      let hasta: Date = now;
       let limite: number;
 
       switch (vista) {
         case 'daily':
-          desde = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          desde = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOffset);
           limite = 200;
+          hasta = dayOffset > 0
+            ? new Date(desde.getFullYear(), desde.getMonth(), desde.getDate(), 23, 59, 59)
+            : now;
           break;
         case 'weekly':
           desde = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -162,7 +212,7 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
       try {
         let datos = await getDatosReloj(userId, {
           from: desde.toISOString(),
-          to: now.toISOString(),
+          to: hasta.toISOString(),
           limit: limite,
         });
 
@@ -170,7 +220,7 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
 
         // Fallback a cache local si Supabase no tiene datos
         if (datos.length === 0) {
-          datos = await getCacheData(desde, now, t);
+          datos = await getCacheData(desde, hasta, t);
         }
 
         if (datos.length === 0) {
@@ -181,18 +231,36 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
         }
 
         let registros: {label: string; value: number; isAbnormal: boolean}[];
+        let giftedData: ChartPoint[];
 
-        if (vista === 'daily' || vista === 'weekly') {
-          // Diario y Semanal pintan CADA medición (no agrupan): semanal necesita
-          // el día en la etiqueta porque 6 mediciones pueden caer en 1-2 días y
-          // agruparPorDia colapsa a 1 punto (GiftedCharts no dibuja línea con ≤1).
+        if (vista === 'daily') {
+          // Diaria: buckets de 1 HORA (24 slots, vacíos omitidos). Semanal/mensual intactos.
+          const buckets = agruparPorHora(datos, t);
+          registros = buckets.map(b => ({
+            label: `${String(Math.floor(b.minutes / 60)).padStart(2, '0')}:00`,
+            value: b.value,
+            isAbnormal: b.avg < normalMin || b.avg > normalMax,
+          }));
+          const puntos: {point: ChartPoint; minutes: number}[] = buckets.map(b => ({
+            point: {value: b.value, label: '', dataPointText: ''},
+            minutes: b.minutes,
+          }));
+          // Anclas gap (sin value, hideDataPoint) en 00:00 y 24:00 si faltan
+          if (puntos.length === 0 || puntos[0].minutes !== 0) {
+            puntos.unshift({point: {label: '', dataPointText: '', hideDataPoint: true}, minutes: 0});
+          }
+          if (puntos.length === 0 || puntos[puntos.length - 1].minutes !== 1440) {
+            puntos.push({point: {label: '', dataPointText: '', hideDataPoint: true}, minutes: 1440});
+          }
+          giftedData = puntos.map(p => p.point);
+        } else if (vista === 'weekly') {
+          // Semanal INTACTO: pinta CADA medición (agruparPorDia colapsa a 1 punto
+          // y GiftedCharts no dibuja línea con ≤1).
           registros = datos.filter(d => extraerValor(d, t) != null).map(d => {
             const val = extraerValor(d, t)!;
             const fecha = new Date(d.recorded_at!);
             return {
-              label: vista === 'weekly'
-                ? `${String(fecha.getDate()).padStart(2, '0')}/${String(fecha.getMonth() + 1).padStart(2, '0')} ${String(fecha.getHours()).padStart(2, '0')}:${String(fecha.getMinutes()).padStart(2, '0')}`
-                : `${String(fecha.getHours()).padStart(2, '0')}:${String(fecha.getMinutes()).padStart(2, '0')}`,
+              label: `${String(fecha.getDate()).padStart(2, '0')}/${String(fecha.getMonth() + 1).padStart(2, '0')} ${String(fecha.getHours()).padStart(2, '0')}:${String(fecha.getMinutes()).padStart(2, '0')}`,
               value: val,
               isAbnormal: val < normalMin || val > normalMax,
             };
@@ -201,19 +269,26 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
             const timeB = b.label;
             return timeA.localeCompare(timeB);
           });
+          // Transformar a formato gifted-charts (descarta valores no numéricos)
+          giftedData = registros
+            .filter(r => Number.isFinite(r.value))
+            .map(r => ({
+              value: r.value,
+              label: r.label,
+              dataPointText: '',
+            }));
         } else {
-          // Mensual: agrupar por día (muchos registros, evita superposición de etiquetas)
+          // Mensual INTACTO: agrupar por día (muchos registros, evita superposición de etiquetas)
           registros = agruparPorDia(datos, t, normalMin, normalMax);
+          // Transformar a formato gifted-charts (descarta valores no numéricos)
+          giftedData = registros
+            .filter(r => Number.isFinite(r.value))
+            .map(r => ({
+              value: r.value,
+              label: r.label,
+              dataPointText: '',
+            }));
         }
-
-        // Transformar a formato gifted-charts (descarta valores no numéricos)
-        const giftedData = registros
-          .filter(r => Number.isFinite(r.value))
-          .map(r => ({
-            value: r.value,
-            label: r.label,
-            dataPointText: '',
-          }));
 
         if (!cancelled) {
           setChartData(giftedData);
@@ -233,14 +308,29 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
 
     fetchData();
     return () => { cancelled = true; };
-  }, [vista, tipoSigno, getUserId, normalMin, normalMax, t]);
+  }, [vista, tipoSigno, getUserId, normalMin, normalMax, t, dayOffset]);
 
   const refLineValue = useMemo(() => (normalMin + normalMax) / 2, [normalMin, normalMax]);
+
+  const fechaVista = useMemo(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOffset);
+  }, [dayOffset]);
+  const etiquetaFechaVista = `${String(fechaVista.getDate()).padStart(2, '0')}/${String(fechaVista.getMonth() + 1).padStart(2, '0')}`;
 
   const formatYLabel = useCallback((v: string) => {
     const num = parseFloat(v);
     return isTemperature ? num.toFixed(1) : String(Math.round(num));
   }, [isTemperature]);
+
+  const containerWidth = chartContainerWidth > 0
+    ? chartContainerWidth
+    : Dimensions.get('window').width - spacing.screenPaddingHorizontal * 2 - 16;
+  const chartWidth = containerWidth - 62;
+  const N = chartData.length;
+  // Tope: min(ideal (chartWidth+4)/(N-0.5), contenido 18+s(N-2)<=chartWidth) con mínimo 4.
+  const chartSpacing = N>2 ? Math.max(4, Math.min((chartWidth+4)/(N-0.5), (chartWidth-18)/Math.max(1,N-2))) : 10;
+  const rulesLength = INITIAL_SPACING + chartSpacing * (N - 1) + 4;
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
@@ -260,13 +350,33 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
           <TouchableOpacity
             key={v.key}
             style={[styles.segment, vista === v.key && styles.segmentActive]}
-            onPress={() => setVista(v.key)}>
+            onPress={() => { setVista(v.key); setDayOffset(0); }}>
             <Text style={[styles.segmentText, vista === v.key && styles.segmentTextActive]}>
               {v.label}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
+
+      {/* Paginación de días (solo vista Diaria) */}
+      {vista === 'daily' && (
+        <View style={styles.dayNavRow}>
+          <TouchableOpacity
+            onPress={() => setDayOffset(o => o + 1)}
+            style={styles.dayNavButton}
+            accessibilityLabel="Día anterior">
+            <Text style={styles.dayNavArrow}>‹</Text>
+          </TouchableOpacity>
+          <Text style={styles.dayNavLabel}>{etiquetaFechaVista}</Text>
+          <TouchableOpacity
+            onPress={() => setDayOffset(o => Math.max(0, o - 1))}
+            disabled={dayOffset === 0}
+            style={styles.dayNavButton}
+            accessibilityLabel="Día siguiente">
+            <Text style={[styles.dayNavArrow, dayOffset === 0 && styles.dayNavArrowDisabled]}>›</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Estado vacío */}
       {chartData.length === 0 && !loading && (
@@ -290,13 +400,20 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
       {chartData.length > 0 && (
         <Card style={styles.chartCard}>
           <ChartErrorBoundary>
-            <LineChart
-              key={vista}
-              data={chartData}
-              width={spacing.screenPaddingHorizontal * 2 + 200}
-              height={220}
-              spacing={vista === 'daily' ? 40 : 60}
-              color={colors.primary}
+            <View
+              style={{width: '100%'}}
+              onLayout={e => setChartContainerWidth(e.nativeEvent.layout.width)}>
+              <LineChart
+                key={`${vista}-${dayOffset}`}
+                data={chartData}
+                width={chartWidth}
+                height={260}
+                spacing={chartSpacing}
+                initialSpacing={INITIAL_SPACING}
+                endSpacing={END_SPACING}
+                disableScroll
+                rulesLength={rulesLength}
+                color={colors.primary}
               thickness={2}
               curved={chartData.length > 1}
               areaChart={chartData.length > 1}
@@ -312,6 +429,7 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
               xAxisColor={colors.border}
               yAxisTextStyle={{color: colors.textSecondary, fontSize: 10}}
               xAxisLabelTextStyle={{color: colors.textSecondary, fontSize: 9}}
+              labelsExtraHeight={6}
               noOfSections={5}
               yAxisOffset={0}
               formatYLabel={formatYLabel}
@@ -328,6 +446,16 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
               rulesColor={colors.border}
               rulesType="dashed"
             />
+              {vista === 'daily' && (
+                <View style={styles.xAxisRow}>
+                  <Text style={[{color: colors.textSecondary, fontSize: 9}, {textAlign: 'left'}]}>00:00</Text>
+                  <Text style={[{color: colors.textSecondary, fontSize: 9}, {textAlign: 'center'}]}>06:00</Text>
+                  <Text style={[{color: colors.textSecondary, fontSize: 9}, {textAlign: 'center'}]}>12:00</Text>
+                  <Text style={[{color: colors.textSecondary, fontSize: 9}, {textAlign: 'center'}]}>18:00</Text>
+                  <Text style={[{color: colors.textSecondary, fontSize: 9}, {textAlign: 'right'}]}>00:00</Text>
+                </View>
+              )}
+            </View>
           </ChartErrorBoundary>
         </Card>
       )}
@@ -493,7 +621,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: spacing.cardBorderRadius,
     padding: 4,
-    marginBottom: 16,
+    marginBottom: 6,
   },
   segment: {
     flex: 1,
@@ -512,10 +640,34 @@ const styles = StyleSheet.create({
   segmentTextActive: {
     color: colors.surface,
   },
+  dayNavRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  dayNavButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  dayNavArrow: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  dayNavArrowDisabled: {
+    color: colors.textSecondary,
+    opacity: 0.4,
+  },
+  dayNavLabel: {
+    fontSize: fontSize.body,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
   chartCard: {
     marginBottom: 16,
-    alignItems: 'center',
-    paddingVertical: 16,
+    alignItems: 'flex-start',
+    paddingVertical: 8,
     paddingHorizontal: 8,
   },
   loadingCard: {
@@ -558,5 +710,13 @@ const styles = StyleSheet.create({
     paddingVertical: 32,
     paddingHorizontal: 16,
     lineHeight: 22,
+  },
+  xAxisRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginLeft: 30,
+    marginRight: 0,
+    marginTop: 0,
+    marginBottom: 10,
   },
 });
