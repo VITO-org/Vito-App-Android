@@ -11,7 +11,7 @@ import {useNavigation} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {colors, fontSize, spacing} from '../theme';
 import Card from '../components/Card';
-import AppIcon from '../components/AppIcon';
+import SignoIcon from '../components/SignoIcon';
 import FlechaIcon from '../components/FlechaIcon';
 import {useSupabase} from '../context/SupabaseProvider';
 import {useHealth} from '../context/HealthProvider';
@@ -394,11 +394,7 @@ const HistorialScreen: React.FC = () => {
               const tieneDetalle = !['pasos', 'sueno'].includes(signo.id);
               const content = (
                 <>
-                  {signo.iconName ? (
-                    <AppIcon name={signo.iconName!} size={signo.iconName === 'temperatura' ? 28 : 30} />
-                  ) : (
-                    <Text style={styles.resumenEmoji}>{signo.icon}</Text>
-                  )}
+                  <SignoIcon name={signo.iconName} emoji={signo.icon} style={styles.resumenEmoji} />
                   <Text style={styles.resumenValue}>{signo.value}</Text>
                   <Text style={styles.resumenUnit}>{signo.unit}</Text>
                   <Text style={styles.resumenLabel}>{signo.label}</Text>

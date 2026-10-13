@@ -1,7 +1,8 @@
 import React from 'react';
 import {View, Text, Pressable, StyleSheet} from 'react-native';
 import {colors, spacing, fontSize} from '../theme';
-import AppIcon, {type AppIconName} from './AppIcon';
+import {type AppIconName} from './AppIcon';
+import SignoIcon from './SignoIcon';
 import FlechaIcon from './FlechaIcon';
 
 interface VitalSignCardProps {
@@ -42,11 +43,7 @@ const VitalSignCard: React.FC<VitalSignCardProps> = ({
       {/* Fila superior: icono + título + flecha de tendencia a la derecha */}
       <View style={styles.topRow}>
         <View style={styles.titleGroup}>
-          {iconName ? (
-            <AppIcon name={iconName} size={iconName === 'temperatura' ? 28 : 30} />
-          ) : (
-            <Text style={styles.icon}>{icon}</Text>
-          )}
+          <SignoIcon name={iconName} emoji={icon} style={styles.icon} />
           <Text style={styles.title} numberOfLines={2} ellipsizeMode="tail">{label}</Text>
         </View>
         {trend && (

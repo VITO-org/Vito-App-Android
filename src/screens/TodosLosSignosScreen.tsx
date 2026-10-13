@@ -8,7 +8,7 @@ import {
   getSignosVitales,
   getMetricasBienestar,
 } from '../utils/signosVitales';
-import AppIcon, {type AppIconName} from '../components/AppIcon';
+import SignoIcon from '../components/SignoIcon';
 import FlechaIcon from '../components/FlechaIcon';
 import type {RootStackParamList} from '../navigation/RootNavigator';
 
@@ -69,11 +69,7 @@ const TodosLosSignosScreen: React.FC<Props> = ({navigation}) => {
 
               return (
                 <Card key={s.id} style={styles.resumenCard} {...cardProps}>
-                  {s.iconName ? (
-                    <AppIcon name={s.iconName as AppIconName} size={s.iconName === 'temperatura' ? 28 : 30} />
-                  ) : (
-                    <Text style={styles.iconEmoji}>{s.icon}</Text>
-                  )}
+                  <SignoIcon name={s.iconName} emoji={s.icon} style={styles.iconEmoji} />
                   <Text
                     style={styles.resumenValue}
                     numberOfLines={1}
