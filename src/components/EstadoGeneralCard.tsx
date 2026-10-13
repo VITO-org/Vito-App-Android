@@ -252,7 +252,7 @@ const EstadoGeneralCard: React.FC<EstadoGeneralCardProps> = ({
                 const value = getAlertValue(a);
                 const sevLabel = severityLabel(a.severidad);
                 const comp = getComparacionAlerta(a);
-                const a11yValue = comp != null ? `${comp.medido} / ${comp.limite}` : value;
+                const a11yValue = comp != null ? `${comp.medido}, normal ${comp.limite}` : value;
                 return (
                   <Pressable
                     key={a.id}
@@ -289,21 +289,14 @@ const EstadoGeneralCard: React.FC<EstadoGeneralCardProps> = ({
                             styles.alertMedidoBig,
                             {color: sev.text},
                           ]}>
-                          {comp?.medido ?? value}
+                          {comp != null ? comp.medido.replace(/\s*(lpm|%|mmHg)\s*$/i, '') : value}
                         </Text>
                         {comp != null && (
-                          <>
-                            <Text
-                              numberOfLines={1}
-                              style={styles.alertSeparator}>
-                              {'/'}
-                            </Text>
-                            <Text
-                              numberOfLines={1}
-                              style={styles.alertLimiteSmall}>
-                              {comp.limite}
-                            </Text>
-                          </>
+                          <Text
+                            numberOfLines={1}
+                            style={styles.alertLimiteSmall}>
+                            {`normal ${comp.limite}`}
+                          </Text>
                         )}
                       </View>
                     )}
@@ -327,6 +320,18 @@ const EstadoGeneralCard: React.FC<EstadoGeneralCardProps> = ({
             accessibilityLabel="Cerrar detalle de alerta"
           />
           <View style={styles.modalSheet}>
+            {onReview != null && (
+              <Pressable
+                style={StyleSheet.absoluteFill}
+                onPress={() => {
+                  setSelectedAlert(null);
+                  onReview?.();
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Ir a Alertas"
+              />
+            )}
+            <View pointerEvents="box-none">
             {selectedAlert != null && (() => {
               const sev = coloresPorSeveridad(selectedAlert.severidad);
               const title = cleanAlertTitle(selectedAlert.titulo);
@@ -335,6 +340,7 @@ const EstadoGeneralCard: React.FC<EstadoGeneralCardProps> = ({
               const sevLabel = severityLabel(selectedAlert.severidad);
               const mensaje = (selectedAlert.mensaje ?? '').trim();
               const umbralOnly = getUmbralOnlyLabel(selectedAlert);
+              const comp = getComparacionAlerta(selectedAlert);
               const strippedMensaje =
                 mensaje !== ''
                   ? mensaje.replace(/^FC\s+\d+\s*lpm\s*(\(.*?\)\.?\s*)?/i, '').trim()
@@ -360,6 +366,34 @@ const EstadoGeneralCard: React.FC<EstadoGeneralCardProps> = ({
                 typeof rawOrigen === 'string' && rawOrigen.trim() !== ''
                   ? rawOrigen.trim()
                   : null;
+              const datos = selectedAlert.datos;
+              const rawTendencia = datos?.tendencia;
+              const tendencia =
+                (selectedAlert.tipo === 'taquicardia' ||
+                  selectedAlert.tipo === 'bradicardia') &&
+                typeof rawTendencia === 'string' &&
+                rawTendencia.trim() !== ''
+                  ? rawTendencia.trim()
+                  : null;
+              const rawContexto = datos?.contexto;
+              const contexto =
+                (selectedAlert.tipo === 'hipertension' ||
+                  selectedAlert.tipo === 'hipotension') &&
+                typeof rawContexto === 'string' &&
+                rawContexto.trim() !== '' &&
+                rawContexto.trim() !== 'normal'
+                  ? rawContexto.trim()
+                  : null;
+              const rawCombined = datos?.is_combined;
+              const combinada =
+                (selectedAlert.tipo === 'hipertension' ||
+                  selectedAlert.tipo === 'hipotension') &&
+                typeof rawCombined === 'boolean'
+                  ? rawCombined
+                    ? 'sí'
+                    : 'no'
+                  : null;
+              const escalada = datos?.escalada === true;
               return (
                 <>
                   <View style={styles.modalHeader}>
@@ -412,15 +446,55 @@ const EstadoGeneralCard: React.FC<EstadoGeneralCardProps> = ({
                       {value}
                     </Text>
                   )}
-                  {detalle != null && (
+                  {comp == null && detalle != null && (
                     <Text style={styles.modalDetalle}>{detalle}</Text>
                   )}
                   {descripcion != null && (
                     <Text style={styles.modalDescripcion}>{descripcion}</Text>
                   )}
-                  {origen != null && (
-                    <Text style={styles.modalOrigen}>Origen: {origen}</Text>
-                  )}
+                  <View style={styles.modalDetalles}>
+                    <Text style={styles.modalDetallesTitle}>Detalles</Text>
+                    <View style={styles.modalDetalleRow}>
+                      <Text style={styles.modalDetalleLabel}>Normal</Text>
+                      <Text style={styles.modalDetalleValue}>
+                        {comp?.limite ?? '—'}
+                      </Text>
+                    </View>
+                    <View style={styles.modalDetalleRow}>
+                      <Text style={styles.modalDetalleLabel}>Origen</Text>
+                      <Text style={styles.modalDetalleValue}>
+                        {origen ?? '—'}
+                      </Text>
+                    </View>
+                    {tendencia != null && (
+                      <View style={styles.modalDetalleRow}>
+                        <Text style={styles.modalDetalleLabel}>Tendencia</Text>
+                        <Text style={styles.modalDetalleValue}>
+                          {tendencia}
+                        </Text>
+                      </View>
+                    )}
+                    {contexto != null && (
+                      <View style={styles.modalDetalleRow}>
+                        <Text style={styles.modalDetalleLabel}>Contexto</Text>
+                        <Text style={styles.modalDetalleValue}>{contexto}</Text>
+                      </View>
+                    )}
+                    {combinada != null && (
+                      <View style={styles.modalDetalleRow}>
+                        <Text style={styles.modalDetalleLabel}>Combinada</Text>
+                        <Text style={styles.modalDetalleValue}>
+                          {combinada}
+                        </Text>
+                      </View>
+                    )}
+                    {escalada && (
+                      <View style={styles.modalDetalleRow}>
+                        <Text style={styles.modalDetalleLabel}>Escalada</Text>
+                        <Text style={styles.modalDetalleValue}>sí</Text>
+                      </View>
+                    )}
+                  </View>
                   {selectedAlert.leida_en != null ? (
                     <Pressable
                       onPress={() => setSelectedAlert(null)}
@@ -466,6 +540,7 @@ const EstadoGeneralCard: React.FC<EstadoGeneralCardProps> = ({
                 </>
               );
             })()}
+            </View>
           </View>
         </View>
       </Modal>
@@ -630,10 +705,9 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   alertRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'column',
+    alignItems: 'flex-end',
     justifyContent: 'center',
-    flexWrap: 'nowrap',
     flexShrink: 0,
     maxWidth: '52%',
   },
@@ -641,13 +715,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
     flexShrink: 0,
-  },
-  alertSeparator: {
-    fontSize: 16,
-    fontWeight: '400',
-    color: colors.textSecondary,
-    flexShrink: 0,
-    marginHorizontal: 2,
   },
   alertLimiteSmall: {
     fontSize: 10,
@@ -740,6 +807,27 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     marginTop: 8,
   },
+  modalCompRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    marginTop: 8,
+  },
+  modalCompLimite: {
+    fontSize: fontSize.body,
+    fontWeight: '700',
+    color: colors.success,
+  },
+  modalCompSep: {
+    fontSize: fontSize.body,
+    fontWeight: '400',
+    color: colors.textSecondary,
+    marginHorizontal: 2,
+  },
+  modalCompMedido: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
   modalDescripcion: {
     fontSize: fontSize.body,
     color: colors.textSecondary,
@@ -749,6 +837,30 @@ const styles = StyleSheet.create({
     fontSize: fontSize.caption,
     color: colors.textSecondary,
     marginTop: 6,
+  },
+  modalDetalles: {
+    marginTop: 12,
+  },
+  modalDetallesTitle: {
+    fontSize: fontSize.caption,
+    color: colors.textSecondary,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  modalDetalleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 2,
+  },
+  modalDetalleLabel: {
+    fontSize: fontSize.caption,
+    color: colors.textSecondary,
+  },
+  modalDetalleValue: {
+    fontSize: fontSize.caption,
+    color: colors.textPrimary,
+    fontWeight: '600',
   },
   modalCloseButton: {
     marginTop: 16,
