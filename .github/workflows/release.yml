@@ -48,6 +48,19 @@ jobs:
           fi
           echo "✅ Tag '$TAG' coincide con package.json"
 
+      - name: Verify CHANGELOG has a section for this version (DoD DESPLIEGUE-2)
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"       # ej: 1.2.0
+          if ! grep -q "^## \[$VERSION\]" CHANGELOG.md; then
+            echo "❌ CHANGELOG.md no tiene la sección '## [$VERSION]'."
+            echo "   Agregá la sección de la versión (con sus release notes) antes de taguear:"
+            echo "   - Editá CHANGELOG.md y creá '## [$VERSION] — $(date -u +%Y-%m-%d)'"
+            echo "   - Commit: git commit -m 'chore(release): v$VERSION'"
+            echo "   - Re-tag: git tag -a v$VERSION -m 'Release $VERSION — ver CHANGELOG.md' && git push origin v$VERSION"
+            exit 1
+          fi
+          echo "✅ CHANGELOG.md tiene la sección '## [$VERSION]'"
+
   # Job 2: Build del APK de release
   build-release-apk:
     name: Build Release APK
@@ -131,7 +144,9 @@ jobs:
           # Extrae la sección del CHANGELOG para esta versión
           NOTES=$(awk "/^## \[$VERSION\]/,/^## \[/" CHANGELOG.md | head -n -1 | tail -n +2)
           if [ -z "$NOTES" ]; then
-            NOTES="Ver CHANGELOG.md para los cambios de esta versión."
+            echo "❌ No se pudo extraer la sección '## [$VERSION]' del CHANGELOG.md."
+            echo "   No se publica la release con notas genéricas. Agregá la sección del CHANGELOG y re-tagueá."
+            exit 1
           fi
           # Guardar como variable de entorno multi-línea
           {

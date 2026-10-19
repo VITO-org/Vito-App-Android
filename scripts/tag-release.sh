@@ -4,17 +4,27 @@
 # Ejemplo: bash scripts/tag-release.sh 1.2.0
 #
 # Qué hace:
-#   1. Verifica que el working tree esté limpio
-#   2. Corre dod:check (paridad versiones + CHANGELOG + migraciones)
-#   3. Verifica que el CHANGELOG tenga la sección [VERSION]
-#   4. Crea el tag anotado vX.Y.Z
-#   5. Hace push del tag → dispara release.yml automáticamente
+#   1. Sincroniza los tags remotos (git fetch --tags) para no colisionar
+#   2. Verifica que el working tree esté limpio
+#   3. Corre dod:check (paridad versiones + CHANGELOG + migraciones)
+#   4. Verifica que el CHANGELOG tenga la sección [VERSION]
+#   5. Verifica que el tag no exista (ni local ni remoto)
+#   6. Crea el tag anotado vX.Y.Z
+#   7. Hace push del tag → dispara release.yml automáticamente
 #
 # Prerequisito: haber actualizado manualmente:
 #   - version en package.json
-#   - expo.version y android.versionCode en app.json
+#   - expo.version y android.versionCode en app.json (versionCode MONOTÓNICO: +1)
 #   - sección [VERSION] en CHANGELOG.md
 #   - commit con: git commit -m "chore(release): vX.Y.Z"
+#
+# IMPORTANTE (política de tags — DEC-2026-10-19):
+#   - El bump de versión se hace sobre main/dev, NUNCA sobre una rama de feature:
+#     taguear desde una feature reintroduce la regresión de versiones (1.0.0).
+#   - La versión nueva debe ser MAYOR que el último tag publicado.
+#   - Los tags ya publicados no se borran ni se re-apuntan (trazabilidad de release).
+#   - El tag y el bump deben estar en el MISMO commit: release.yml valida
+#     TAG == package.json version y cancela toda la cadena si difieren.
 
 set -euo pipefail
 
@@ -45,39 +55,64 @@ if ! git diff-index --quiet HEAD --; then
 fi
 ok "Working tree limpio"
 
-# --- 3. Verificar que la versión en package.json coincide ---
+# --- 3. Sincronizar tags remotos (evita colisionar con un tag ya publicado) ---
+git fetch --tags --quiet 2>/dev/null || warn "No se pudieron sincronizar los tags remotos (sin red?). Se verifica contra los tags locales."
+ok "Tags sincronizados con origin"
+
+# --- 4. Rama de release (el bump NO se hace en ramas de feature) ---
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+if [[ ! "$BRANCH" =~ ^(main|dev|release/.*|chore/release.*)$ ]]; then
+  warn "Estás en la rama '$BRANCH'. El bump de versión y el tag se hacen sobre main/dev o release/*."
+  warn "Taguear desde una feature puede reintroducir la regresión de versiones."
+fi
+ok "Rama actual: $BRANCH"
+
+# --- 5. Verificar que la versión en package.json coincide ---
 PKG_VER=$(node -p "require('./package.json').version")
 if [ "$PKG_VER" != "$VERSION" ]; then
   fail "Versión '$VERSION' no coincide con package.json ('$PKG_VER'). Actualizar package.json primero."
 fi
 ok "package.json versión: $PKG_VER"
 
-# --- 4. Verificar que app.json coincide ---
+# --- 6. Verificar que app.json coincide ---
 APP_VER=$(python3 -c "import json;print(json.load(open('app.json'))['expo']['version'])" 2>/dev/null || echo "ERROR")
 if [ "$APP_VER" != "$VERSION" ]; then
   fail "app.json expo.version ('$APP_VER') no coincide con '$VERSION'. Actualizar app.json antes de taggear."
 fi
 ok "app.json versión: $APP_VER"
 
-# --- 5. Correr dod:check completo ---
+# --- 7. Correr dod:check completo ---
 echo ""
 echo "📋 Corriendo dod:check..."
 if ! npm run dod:check; then
   fail "dod:check falló. Corregir gaps antes de taggear."
 fi
 
-# --- 6. Verificar que CHANGELOG tiene la sección de esta versión ---
+# --- 8. Verificar que CHANGELOG tiene la sección de esta versión ---
 if ! grep -q "## \[$VERSION\]" CHANGELOG.md; then
   fail "CHANGELOG.md no tiene sección '## [$VERSION]'. Agregala antes de taggear."
 fi
 ok "CHANGELOG.md tiene sección [$VERSION]"
 
-# --- 7. Verificar que el tag no existe ya ---
+# --- 9. Verificar que el tag no existe ya (local ni remoto) ---
 if git tag --list | grep -q "^${TAG}$"; then
   fail "El tag '$TAG' ya existe. Usá una versión diferente o borrá el tag existente."
 fi
+if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+  fail "El tag '$TAG' ya existe en origin. Usá una versión diferente."
+fi
 
-# --- 8. Confirmación final ---
+# --- 10. Verificar que la versión es mayor que el último tag semver publicado ---
+LAST_TAG=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n 1)
+if [ -n "$LAST_TAG" ]; then
+  LAST_VER="${LAST_TAG#v}"
+  if [ "$(printf '%s\n%s\n' "$LAST_VER" "$VERSION" | sort -V | head -n 1)" != "$LAST_VER" ]; then
+    fail "La versión '$VERSION' no es mayor que el último tag publicado ('$LAST_TAG'). Usá una versión superior."
+  fi
+  ok "Versión '$VERSION' > último tag publicado ('$LAST_TAG')"
+fi
+
+# --- 11. Confirmación final ---
 echo ""
 echo "──────────────────────────────"
 echo "📦 Todo verificado. A punto de crear y pushear: $TAG"
@@ -88,7 +123,7 @@ if [[ ! "$confirm" =~ ^[sS]$ ]]; then
   exit 0
 fi
 
-# --- 9. Crear tag y push ---
+# --- 12. Crear tag y push ---
 git tag -a "$TAG" -m "Release $VERSION — ver CHANGELOG.md"
 ok "Tag $TAG creado localmente"
 
