@@ -64,6 +64,11 @@ agregados (doble conteo por sesiones solapadas y suma de acumulados).
   bloqueantes en los PRs a `dev` (lint sigue siendo permisivo).
 - **Workflows**: `ci-jira.yml` restringido a `opened` + notas de release mejoradas;
   se ignora el borrado de ramas para evitar transiciones falsas a "In Progress".
+- **Lint no bloqueante en el gate de `main`** (`ci-pr-main.yml`): el repo arrastra
+  60 errores de lint idénticos en `main` y `dev`, por lo que el step hacía
+  inoperable cualquier PR a `main`. Ahora corre con `continue-on-error: true`
+  (los errores siguen en el log); `tsc`, `jest`, `dod:check` y el build de Gradle
+  siguen bloqueando el merge.
 
 ### Infraestructura
 
