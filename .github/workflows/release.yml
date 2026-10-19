@@ -143,15 +143,26 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "Vito App ${{ github.ref_name }}"
+          name: "Vito Health Connect ${{ github.ref_name }}"
           body: |
             ## Vito Health Connect ${{ github.ref_name }}
 
+            **Vito Health Connect** es una aplicación móvil de salud para Android que permite a pacientes monitorear y registrar sus signos vitales, visualizar reportes clínicos, y recibir alertas cuando algún parámetro está fuera de rango.
+
+            ### Qué incluye esta versión
+
             ${{ steps.changelog.outputs.notes }}
 
+            ### Cómo instalar
+
+            1. Descargá el archivo APK adjunto.
+            2. En tu dispositivo Android, habilitá "Fuentes desconocidas" (Ajustes → Seguridad).
+            3. Abrí el APK y seguí las instrucciones de instalación.
+
+            > **Nota**: Los archivos "Source code" que genera GitHub son automáticos y no son necesarios para instalar la app. El único artefacto utilizable es el **APK adjunto**.
+
             ---
-            **APK adjunto**: instalar directamente en el dispositivo físico de prueba.
-            **Rollback**: ver `.cortex/vault/runbooks/RB-dod-de-releases-checklist-canonico-estado-de-brechas.md` → OPERACIONES-3.
+            **Rollback**: ver runbook DoD → OPERACIONES-3.
           files: ./release-artifacts/app-release.apk
           draft: false
           prerelease: false
