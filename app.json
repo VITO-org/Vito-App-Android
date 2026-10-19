@@ -4,13 +4,13 @@
   "expo": {
     "name": "Vito Health Connect",
     "slug": "vito-health-connect",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./src/assets/launcher-icon.png",
     "android": {
       "package": "com.vito.healthconnect.rn",
       "googleServicesFile": "./android/app/google-services.json",
-      "versionCode": 2,
+      "versionCode": 3,
       "adaptiveIcon": {
         "foregroundImage": "./src/assets/adaptive-foreground.png",
         "backgroundColor": "#0E2A2D"
