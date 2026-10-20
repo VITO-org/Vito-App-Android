@@ -48,6 +48,19 @@ jobs:
           fi
           echo "✅ Tag '$TAG' coincide con package.json"
 
+      - name: Verify CHANGELOG has a section for this version (DoD DESPLIEGUE-2)
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"       # ej: 1.2.0
+          if ! grep -q "^## \[$VERSION\]" CHANGELOG.md; then
+            echo "❌ CHANGELOG.md no tiene la sección '## [$VERSION]'."
+            echo "   Agregá la sección de la versión (con sus release notes) antes de taguear:"
+            echo "   - Editá CHANGELOG.md y creá '## [$VERSION] — $(date -u +%Y-%m-%d)'"
+            echo "   - Commit: git commit -m 'chore(release): v$VERSION'"
+            echo "   - Re-tag: git tag -a v$VERSION -m 'Release $VERSION — ver CHANGELOG.md' && git push origin v$VERSION"
+            exit 1
+          fi
+          echo "✅ CHANGELOG.md tiene la sección '## [$VERSION]'"
+
   # Job 2: Build del APK de release
   build-release-apk:
     name: Build Release APK
@@ -131,7 +144,9 @@ jobs:
           # Extrae la sección del CHANGELOG para esta versión
           NOTES=$(awk "/^## \[$VERSION\]/,/^## \[/" CHANGELOG.md | head -n -1 | tail -n +2)
           if [ -z "$NOTES" ]; then
-            NOTES="Ver CHANGELOG.md para los cambios de esta versión."
+            echo "❌ No se pudo extraer la sección '## [$VERSION]' del CHANGELOG.md."
+            echo "   No se publica la release con notas genéricas. Agregá la sección del CHANGELOG y re-tagueá."
+            exit 1
           fi
           # Guardar como variable de entorno multi-línea
           {
@@ -143,15 +158,26 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "Vito App ${{ github.ref_name }}"
+          name: "Vito Health Connect ${{ github.ref_name }}"
           body: |
             ## Vito Health Connect ${{ github.ref_name }}
 
+            **Vito Health Connect** es una aplicación móvil de salud para Android que permite a pacientes monitorear y registrar sus signos vitales, visualizar reportes clínicos, y recibir alertas cuando algún parámetro está fuera de rango.
+
+            ### Qué incluye esta versión
+
             ${{ steps.changelog.outputs.notes }}
 
+            ### Cómo instalar
+
+            1. Descargá el archivo APK adjunto.
+            2. En tu dispositivo Android, habilitá "Fuentes desconocidas" (Ajustes → Seguridad).
+            3. Abrí el APK y seguí las instrucciones de instalación.
+
+            > **Nota**: Los archivos "Source code" que genera GitHub son automáticos y no son necesarios para instalar la app. El único artefacto utilizable es el **APK adjunto**.
+
             ---
-            **APK adjunto**: instalar directamente en el dispositivo físico de prueba.
-            **Rollback**: ver `.cortex/vault/runbooks/RB-dod-de-releases-checklist-canonico-estado-de-brechas.md` → OPERACIONES-3.
+            **Rollback**: ver runbook DoD → OPERACIONES-3.
           files: ./release-artifacts/app-release.apk
           draft: false
           prerelease: false
