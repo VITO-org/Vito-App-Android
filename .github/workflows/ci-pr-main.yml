@@ -64,6 +64,11 @@ jobs:
           npm run dod:check
 
       - name: Verify release version is new (tag not already taken)
+        env:
+          # GITHUB_TOKEN no es variable de entorno por defecto en los runners:
+          # hay que inyectarla. Sin ella, el header Authorization vacío hace
+          # que la API devuelva 401 y el gate bloquee los PRs post-release.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PKG_VER=$(node -p "require('./package.json').version")
           TAG="v${PKG_VER}"
@@ -74,10 +79,15 @@ jobs:
             # versión) y el tag normalmente ya está. Si el tag existe pero NO
             # hay release publicada, el tag está reservado y bloquea una
             # release duplicada.
-            if curl -sf \
-                -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-                -H "Accept: application/vnd.github+json" \
-                "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" >/dev/null; then
+            AUTH_ARGS=()
+            if [ -n "${GH_TOKEN:-}" ]; then
+              AUTH_ARGS=(-H "Authorization: Bearer ${GH_TOKEN}")
+            fi
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${AUTH_ARGS[@]}" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" || echo "000")
+            echo "ℹ️ API releases/tags/${TAG} -> HTTP ${HTTP_CODE}"
+            if [ "${HTTP_CODE}" = "200" ]; then
               echo "✅ El tag '$TAG' ya tiene GitHub Release publicada: se admite el PR (fix posterior al release)."
               exit 0
             fi
