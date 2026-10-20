@@ -153,6 +153,13 @@ jobs:
           NOTES=$(awk -v v="$VERSION" '
             $0 ~ "^## \\[" v "\\]" { found=1; next }
             found && /^## \[/ { exit }
+            # Las tablas/listas de Historias de Usuario no se publican en la
+            # release: se omiten el encabezado y su tabla. El detalle por HU
+            # queda en el CHANGELOG del repo.
+            found && /^### .*Historias de Usuario/ { skip_hu=1; next }
+            found && skip_hu && /^\|/ { next }
+            found && skip_hu && /^[[:space:]]*$/ { next }
+            found && skip_hu { skip_hu=0 }
             found { print }
           ' CHANGELOG.md)
           if [ -z "$NOTES" ]; then
@@ -170,9 +177,12 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "Vito Health Connect ${{ github.ref_name }}"
+          # Nombre de la release: "Vito vX.Y.Z", consistente con v1.0.0 y v1.1.0.
+          # El TAG (vX.Y.Z) es lo que dispara el pipeline; esto es solo la etiqueta
+          # visible en la pagina de releases, y se puede editar a mano despues.
+          name: "Vito ${{ github.ref_name }}"
           body: |
-            ## Vito Health Connect ${{ github.ref_name }}
+            ## Vito ${{ github.ref_name }}
 
             **Vito Health Connect** es una aplicación móvil de salud para Android que permite a pacientes monitorear y registrar sus signos vitales, visualizar reportes clínicos, y recibir alertas cuando algún parámetro está fuera de rango.
 
