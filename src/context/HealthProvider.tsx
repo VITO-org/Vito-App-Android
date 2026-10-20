@@ -7,6 +7,7 @@ import React, {
   useRef,
   type ReactNode,
 } from 'react';
+import {AppState} from 'react-native';
 import type {HealthSummary, HealthConnectStatus} from '../types/health';
 import {
   checkAvailability,
@@ -100,6 +101,19 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
 
   // ── HU-41: Alert Engine (initialized lazily after userId is available) ──
   const alertEngineRef = useRef<AlertEngine | null>(null);
+
+  // ── HU-41: Alert helpers (definido arriba para que los effects de abajo
+  // lo referencien sin forward-reference en el array de deps) ──
+  const refreshAlerts = useCallback(async () => {
+    const userId = getUserId();
+    if (!userId) return;
+    try {
+      const alerts = await getAlertas(userId);
+      setActiveAlerts(alerts);
+    } catch {
+      // Best-effort: don't crash the app if alerts can't be loaded
+    }
+  }, [getUserId]);
 
   // Cargar intervalo configurable desde perfil_usuario.intervalo_sync_min (HU-25 CA-01)
   useEffect(() => {
@@ -222,6 +236,18 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
       }
     })();
   }, []);
+
+  // Al volver de segundo plano, refrescar alertas (la push server-side
+  // no pasa por el motor local y el foco no se re-dispara en la misma pantalla).
+  // Va junto a los demás useEffect incondicionales, antes de cualquier return.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', state => {
+      if (state === 'active') {
+        refreshAlerts();
+      }
+    });
+    return () => sub.remove();
+  }, [refreshAlerts]);
 
   const loadHealthData = useCallback(async () => {
     setLoading(true);
@@ -376,18 +402,6 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
       await loadHealthData();
     }
   }, [permissionsGranted, requestPermissionsAndLoad, loadHealthData]);
-
-  // ── HU-41: Alert helpers ──
-  const refreshAlerts = useCallback(async () => {
-    const userId = getUserId();
-    if (!userId) return;
-    try {
-      const alerts = await getAlertas(userId);
-      setActiveAlerts(alerts);
-    } catch {
-      // Best-effort: don't crash the app if alerts can't be loaded
-    }
-  }, [getUserId]);
 
   const confirmAlert = useCallback(async (alertId: string) => {
     if (!alertEngineRef.current) return;

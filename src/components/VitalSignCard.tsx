@@ -1,7 +1,8 @@
 import React from 'react';
 import {View, Text, Pressable, StyleSheet} from 'react-native';
-import {colors, spacing, fontSize, shadows} from '../theme';
-import AppIcon, {type AppIconName} from './AppIcon';
+import {colors, spacing, fontSize} from '../theme';
+import {type AppIconName} from './AppIcon';
+import SignoIcon from './SignoIcon';
 import FlechaIcon from './FlechaIcon';
 
 interface VitalSignCardProps {
@@ -10,7 +11,7 @@ interface VitalSignCardProps {
   unit?: string;
   icon: string;        // emoji placeholder (fallback)
   iconName?: AppIconName; // icono PNG (reemplaza al emoji)
-  iconSize?: number;   // tamaño del icono PNG (default: 24)
+  iconSize?: number;   // tamaño del icono PNG (default: 36)
   iconBgColor: string; // color de fondo del icono
   trend?: 'up' | 'down' | 'stable';
   /** CA-05: Mensaje alternativo cuando no hay datos (ej: "Sin datos recientes"). */
@@ -28,8 +29,8 @@ const VitalSignCard: React.FC<VitalSignCardProps> = ({
   unit,
   icon,
   iconName,
-  iconSize = 24,
-  iconBgColor,
+  // Se conserva por compatibilidad con llamadores (prop declarada pero sin uso visual).
+  iconBgColor: _iconBgColor,
   trend,
   noDataMessage,
   onPress,
@@ -39,37 +40,31 @@ const VitalSignCard: React.FC<VitalSignCardProps> = ({
 
   const content = (
     <>
-      {/* Fila superior: icono + flecha de tendencia */}
+      {/* Fila superior: icono + título + flecha de tendencia a la derecha */}
       <View style={styles.topRow}>
-        <View style={[styles.iconContainer, {backgroundColor: iconBgColor + '20'}]}>
-          {iconName ? (
-            <AppIcon name={iconName} size={iconSize} />
-          ) : (
-            <Text style={[styles.icon, {color: iconBgColor}]}>{icon}</Text>
-          )}
+        <View style={styles.titleGroup}>
+          <SignoIcon name={iconName} emoji={icon} style={styles.icon} />
+          <Text style={styles.title} numberOfLines={2} ellipsizeMode="tail">{label}</Text>
         </View>
         {trend && (
           <FlechaIcon
             direction={trend === 'up' ? 'up' : trend === 'down' ? 'down' : 'right'}
             size={14}
             color={trendColor}
-            style={{opacity: 0.65}}
+            style={{opacity: 0.65, marginRight: -4}}
           />
         )}
       </View>
 
-      {/* Valor */}
+      {/* Valor + unidad en la misma línea: nunca número pelado (distancia 35 sin km) */}
       {hasNoData ? (
         <Text style={styles.noData}>{noDataMessage}</Text>
       ) : (
-        <>
+        <View style={styles.valueRow}>
           <Text style={styles.value}>{value}</Text>
-          {unit && <Text style={styles.unit}>{unit}</Text>}
-        </>
+          {unit ? <Text style={styles.valueUnit}> {unit}</Text> : null}
+        </View>
       )}
-
-      {/* Label */}
-      <Text style={styles.label}>{label}</Text>
     </>
   );
 
@@ -86,7 +81,6 @@ const styles = StyleSheet.create({
     padding: 16,
     width: '48%',
     marginBottom: spacing.gridGap,
-    ...shadows.card,
   },
   topRow: {
     flexDirection: 'row',
@@ -94,21 +88,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  iconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
+  icon: {
+    fontSize: 30,
+  },
+  titleGroup: {
+    flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
+    flexDirection: 'row',
     alignItems: 'center',
   },
-  icon: {
-    fontSize: 20,
+  title: {
+    flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginLeft: 8,
+  },
+  valueRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
   },
   value: {
-    fontSize: fontSize.metricValue,
+    fontSize: 28,
     fontWeight: '700',
     color: colors.textPrimary,
     lineHeight: 36,
+  },
+  valueUnit: {
+    fontSize: fontSize.caption,
+    fontWeight: '400',
+    color: colors.textSecondary,
   },
   unit: {
     fontSize: fontSize.caption,

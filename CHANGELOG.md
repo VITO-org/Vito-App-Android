@@ -9,6 +9,73 @@ Cada PR futuro agrega su entrada bajo `Unreleased`. Ver DoD de releases:
 ### Agregado
 - (Tus cambios acá: `### Agregado/Cambiado/Corregido/Quitado` por PR)
 
+## [1.2.0] — 2026-10-19
+
+### Sobre esta release
+
+**Release 3 — Dashboard, Gráficos y Correcciones de Datos**. Esta versión consolida
+el trabajo de `dev` desde la release anterior: rediseño de la pantalla de Inicio
+según mockups, detalle de signos con buckets horarios, unificación del visual de
+alertas, y las correcciones de cálculo de sueño y pasos que Inflaban los valores
+agregados (doble conteo por sesiones solapadas y suma de acumulados).
+
+### Agregado
+
+- **Rediseño de la pantalla de Inicio** (`InicioScreen`): filas con comparativa
+  verde/rojo, iconos por severidad, pop-up de detalle y acceso directo a gráficos.
+- **Tarjeta de Estado General** (`EstadoGeneralCard`): reemplaza el banner de
+  alertas con una vista unificada del estado clínico del paciente.
+- **Detalle de signos con buckets horarios** (`DetalleSignoScreen`): agrupación
+  de lecturas en intervalos de 30 minutos, ejes con 5 divisiones y tooltips con
+  medición del rango.
+- **Sección de últimos síntomas registrados** en el historial, con nombre e icono
+  del síntoma y mejoras de accesibilidad.
+- **Iconografía unificada** (`SignoIcon`): componente compartido para los 30
+  signos vitales, con sets nuevos de Flaticon (frecuencia cardíaca, presión
+  arterial, oxígeno, temperatura, advertencia, gráficos, historial).
+- **Icono de app y launcher VITO** + icono de notificación con silueta.
+- **Tests unitarios** de `estadoGeneral` (`__tests__/estadoGeneral.test.ts`).
+
+### Corregido
+
+- **Sueño sin doble conteo**: se fusionan las sesiones de sueño solapadas antes
+  de sumar (la app marcaba 9.1 h contra 4.54 h del reloj) y solo se cuentan las
+  etapas dormidas, con tolerancia de 5 min.
+- **Ventana de sueño**: la tarjeta ya no muestra `--` cuando la ventana de
+  lectura (medianoche → ahora) excluye la sesión de la noche; formato `Xh Ym`.
+- **Pasos acumulados**: se agregan con `MAX` por día en vez de `SUMA`, que
+  inflaba el total con cada refresh (3.470 → 10.977 pasos).
+- **Distancia imposible** (valor 35): unidad `km`/`m` visible en la card y sanéo
+  de `DISTANCE_TOTAL`.
+- **Unidades y promedios**: unidades en tamaño chico en las cards y promedio sin
+  nulos en el detalle de signo.
+- **Gráfico semanal**: ya dibuja los registros del período.
+- **Alertas**: refresh de push/foreground compartido y destino/títulos
+  centralizados en `src/utils/alertas.ts`; el menú de alertas ya no auto-marca
+  como revisada y navega a los gráficos.
+
+### Cambiado
+
+- **Visual de alertas unificado** entre banner y pantalla de alertas (HU-37),
+  con helpers compartidos en `src/utils/alertas.ts`.
+- **`ActiveAlertsBanner`** eliminado: la información se muestra en
+  `EstadoGeneralCard` (banner duplicado sin uso).
+- **CI/CD de `dev` endurecido**: `tsc --noEmit` y `jest` pasan a ser
+  bloqueantes en los PRs a `dev` (lint sigue siendo permisivo).
+- **Workflows**: `ci-jira.yml` restringido a `opened` + notas de release mejoradas;
+  se ignora el borrado de ramas para evitar transiciones falsas a "In Progress".
+- **Lint no bloqueante en el gate de `main`** (`ci-pr-main.yml`): el repo arrastra
+  60 errores de lint idénticos en `main` y `dev`, por lo que el step hacía
+  inoperable cualquier PR a `main`. Ahora corre con `continue-on-error: true`
+  (los errores siguen en el log); `tsc`, `jest`, `dod:check` y el build de Gradle
+  siguen bloqueando el merge.
+
+### Infraestructura
+
+- Sin migraciones de base de datos en esta release.
+- Se eliminan los archivos de planificación desactualizados del repo
+  (`SPRINTS.md`, `RELEASES.md`, índice de épicas, historias y Excel VITO).
+
 ## [1.1.0] — 2026-09-15
 
 ### Sobre esta release

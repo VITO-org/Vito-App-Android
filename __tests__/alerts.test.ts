@@ -249,7 +249,7 @@ describe('buildAlertRecord', () => {
     expect(record.id_usuario).toBe('user-1');
     expect(record.tipo).toBe('hipoxia');
     expect(record.severidad).toBe('advertencia');
-    expect(record.titulo).toContain('SpO₂ baja');
+    expect(record.titulo).toContain('Saturación de oxígeno baja');
     expect(record.mensaje).toContain('88%');
     expect(record.mensaje).toContain('90%');
     expect(record.datos).toEqual(expect.objectContaining({
@@ -279,7 +279,8 @@ describe('buildAlertRecord', () => {
 
     const record = buildAlertRecord(input, detection, 'user-1', new Date('2026-08-18T12:00:00Z'));
 
-    expect(record.titulo).toContain('crítica');
+    expect(record.titulo).toBe('Saturación de oxígeno muy baja');
+    expect(record.severidad).toBe('critica');
     expect(record.mensaje).toContain('82%');
     expect(record.mensaje).toContain('85%');
   });
@@ -502,7 +503,7 @@ describe('AlertEngine', () => {
 
     expect(alert).not.toBeNull();
     expect(alert!.severidad).toBe('leve');
-    expect(alert!.titulo).toContain('SpO₂ baja');
+    expect(alert!.titulo).toContain('Saturación de oxígeno baja');
     expect(alert!.datos).toEqual(expect.objectContaining({valor_registrado: 88}));
     expect(deps.inserted).toHaveLength(1);
     expect(onGenerated).toHaveBeenCalledTimes(1);
@@ -582,8 +583,8 @@ describe('AlertEngine', () => {
     const alert = await engine.evaluateSpo2Reading('u1', 95, 'wearable');
 
     expect(alert).toBeNull();
-    expect(deps.markedRead).toHaveLength(1);
-    expect(deps.markedRead[0]).toBe('existing-1');
+    expect(deps.markedRead).toHaveLength(0);
+    expect(deps.markedRead).not.toContain('existing-1');
     expect(onResolved).toHaveBeenCalledTimes(1);
 
     engine.dispose();
@@ -981,8 +982,8 @@ describe('AlertEngine BP', () => {
     const alert = await engine.evaluateBpReading('u1', 120, 80, 'wearable');
 
     expect(alert).toBeNull();
-    expect(deps.markedRead).toHaveLength(1);
-    expect(deps.markedRead[0]).toBe('existing-1');
+    expect(deps.markedRead).toHaveLength(0);
+    expect(deps.markedRead).not.toContain('existing-1');
     expect(onResolved).toHaveBeenCalledTimes(1);
 
     engine.dispose();
@@ -1250,7 +1251,8 @@ describe('AlertEngine HR', () => {
 
     const alert = await engine.evaluateHrReading('u1', 75, 'wearable');
     expect(alert).toBeNull();
-    expect(deps.markedRead).toContain(existingAlert.id);
+    expect(deps.markedRead).toHaveLength(0);
+    expect(deps.markedRead).not.toContain(existingAlert.id);
 
     engine.dispose();
   });

@@ -53,3 +53,12 @@ ml-trainer/models/
 
 *.deb
 *.apk
+
+# ML trainer / datasets (evitar subir basura a dev)
+.ml-trainer-venv/
+ml-trainer/data/*.csv
+ml-trainer/data/cardio_*
+ml-trainer/data/dataset_*
+ml-trainer/data/features*
+informe-prediccion-riesgo.md
+supabase/.temp/
