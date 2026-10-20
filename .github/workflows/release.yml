@@ -170,9 +170,12 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "Vito Health Connect ${{ github.ref_name }}"
+          # Nombre de la release: "Vito vX.Y.Z", consistente con v1.0.0 y v1.1.0.
+          # El TAG (vX.Y.Z) es lo que dispara el pipeline; esto es solo la etiqueta
+          # visible en la pagina de releases, y se puede editar a mano despues.
+          name: "Vito ${{ github.ref_name }}"
           body: |
-            ## Vito Health Connect ${{ github.ref_name }}
+            ## Vito ${{ github.ref_name }}
 
             **Vito Health Connect** es una aplicación móvil de salud para Android que permite a pacientes monitorear y registrar sus signos vitales, visualizar reportes clínicos, y recibir alertas cuando algún parámetro está fuera de rango.
 
