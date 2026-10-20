@@ -67,7 +67,16 @@ jobs:
           TAG="v${PKG_VER}"
           echo "🏷️ Verificando versión: $TAG"
           if git tag --list | grep -q "^${TAG}$"; then
-            echo "❌ ERROR: El tag '$TAG' ya existe en el repositorio."
+            # El tag existe. Se admite SOLO si la release ya fue publicada:
+            # en ese caso el PR es un fix posterior al release (no bumpea
+            # versión) y el tag normalmente ya está. Si el tag existe pero NO
+            # hay release publicada, el tag está reservado y bloquea una
+            # release duplicada.
+            if gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" >/dev/null 2>&1; then
+              echo "✅ El tag '$TAG' ya tiene GitHub Release publicada: se admite el PR (fix posterior al release)."
+              exit 0
+            fi
+            echo "❌ ERROR: El tag '$TAG' ya existe y no tiene GitHub Release publicada."
             echo "   Para subir una release a main debés incrementar la versión en package.json y app.json."
             exit 1
           fi
