@@ -53,6 +53,13 @@ Regla canonica de tags de release para el repositorio:
    los tags que ya tienen GitHub Release publicada: existen APKs descargados por
    el equipo y dependencias de trazabilidad (rollback, auditoria). Un tag
    publicado se queda aunque el commit underlying no sea el ideal.
+   **Excepcion (tag en construccion):** si el pipeline fallo ANTES de publicar
+   la release (no hay GitHub Release ni APK descargado), el tag puede
+   re-apuntarse a un commit con el fix, con OK explicito, y se documenta el
+   motivo. Precedente: `v1.2.0` el 2026-10-19 (el pipeline fallo en
+   `Create GitHub Release` por el bug de extraccion de notas; no existia
+   release ni APK, el tag se re-apunto al commit con el fix y se re-disparo el
+   pipeline). Lo que NO se puede re-apuntar es un tag con release publicada.
 3. **Los tags huerfanos** (no-semver, sin release, sin pipeline, no head de
    ninguna rama) se dan de baja con confirmacion explicita del usuario, en local
    y en origin, y quedan registrados en la nota de sesion. Precedente:
@@ -74,6 +81,12 @@ Regla canonica de tags de release para el repositorio:
 9. **La verificacion previa se ejecuta siempre:** `npm run dod:check` (paridad
    `package.json`/`app.json`, seccion de CHANGELOG, migraciones idempotentes)
    antes de cualquier tag. `scripts/tag-release.sh` la corre y bloquea si falla.
+10. **El gate de version de `ci-pr-main.yml` distingue tres casos:** tag
+    inexistente (release nueva, se admite); tag existente SIN GitHub Release
+    publicada (tag reservado, se bloquea para evitar releases duplicadas); tag
+    existente CON release publicada (PR de fix posterior al release, se
+    admite). Sin esta distincion, ningun PR a `main` que no bumpee la version
+    era mergeable despues de publicada una release.
 
 ## Alternative Rejected
 
