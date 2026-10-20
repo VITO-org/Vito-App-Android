@@ -153,6 +153,13 @@ jobs:
           NOTES=$(awk -v v="$VERSION" '
             $0 ~ "^## \\[" v "\\]" { found=1; next }
             found && /^## \[/ { exit }
+            # Las tablas/listas de Historias de Usuario no se publican en la
+            # release: se omiten el encabezado y su tabla. El detalle por HU
+            # queda en el CHANGELOG del repo.
+            found && /^### .*Historias de Usuario/ { skip_hu=1; next }
+            found && skip_hu && /^\|/ { next }
+            found && skip_hu && /^[[:space:]]*$/ { next }
+            found && skip_hu { skip_hu=0 }
             found { print }
           ' CHANGELOG.md)
           if [ -z "$NOTES" ]; then
