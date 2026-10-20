@@ -19,7 +19,7 @@ según mockups, detalle de signos con buckets horarios, unificación del visual 
 alertas, y las correcciones de cálculo de sueño y pasos que Inflaban los valores
 agregados (doble conteo por sesiones solapadas y suma de acumulados).
 
-### Agregado
+### Funcionalidades nuevas
 
 - **Rediseño de la pantalla de Inicio** (`InicioScreen`): filas con comparativa
   verde/rojo, iconos por severidad, pop-up de detalle y acceso directo a gráficos.
