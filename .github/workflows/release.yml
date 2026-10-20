@@ -141,8 +141,20 @@ jobs:
         id: changelog
         run: |
           VERSION="${GITHUB_REF_NAME#v}"  # Quita la 'v' del tag → ej: 1.2.0
-          # Extrae la sección del CHANGELOG para esta versión
-          NOTES=$(awk "/^## \[$VERSION\]/,/^## \[/" CHANGELOG.md | head -n -1 | tail -n +2)
+          # Extrae el CUERPO de la sección '## [VERSION]' del CHANGELOG.
+          #
+          # BUG ARREGLEADO 2026-10-19: el rango awk "/^## \[$VERSION\]/,/^## \[/"
+          # terminaba en la MISMA línea de inicio (el patrón de cierre también
+          # matchea el heading), por lo que devolvía SIEMPRE vacío. Con el
+          # fallback de notas genéricas eso pasaba inadvertido y la release
+          # v1.1.0 se publicó con "Ver CHANGELOG.md para los cambios de esta
+          # versión". Ahora que el fallback es un fallo, el bug es visible:
+          # se extrae la sección con un estado explícito en lugar de un rango.
+          NOTES=$(awk -v v="$VERSION" '
+            $0 ~ "^## \\[" v "\\]" { found=1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md)
           if [ -z "$NOTES" ]; then
             echo "❌ No se pudo extraer la sección '## [$VERSION]' del CHANGELOG.md."
             echo "   No se publica la release con notas genéricas. Agregá la sección del CHANGELOG y re-tagueá."
