@@ -35,6 +35,10 @@ android/.kotlin/
 # Build reports
 **/build/reports/
 
+# Test coverage reports
+coverage/
+coverage-hu41/
+
 # ML Trainer
 ml-trainer/models/
 
@@ -49,3 +53,12 @@ ml-trainer/models/
 
 *.deb
 *.apk
+
+# ML trainer / datasets (evitar subir basura a dev)
+.ml-trainer-venv/
+ml-trainer/data/*.csv
+ml-trainer/data/cardio_*
+ml-trainer/data/dataset_*
+ml-trainer/data/features*
+informe-prediccion-riesgo.md
+supabase/.temp/

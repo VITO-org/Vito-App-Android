@@ -23,6 +23,70 @@ import java.time.ZoneId
 import java.time.ZonedDateTime
 
 /**
+ * SCRUM-207: fusiona intervalos de sueño solapados o casi-adyacentes.
+ *
+ * Health Connect puede devolver la misma noche dos veces (reloj + teléfono,
+ * o la app del reloj escribiendo duplicado). Sumar sin fusionar duplica el
+ * total (observado: 9.1h vs 4.54h reales, ratio 2x; luego 8.7h vs 4h27).
+ *
+ * Segundo hallazgo (2026-10-09): SleepSessionRecord trae `stages`
+ * (AWAKE / SLEEPING / LIGHT / DEEP / REM / OUT_OF_BED...). Sumar
+ * startTime->endTime mide "tiempo en cama", no sueño real. El reloj muestra
+ * solo etapas dormidas, por eso daba ~2x aunque el merge existiera.
+ *
+ * Función pura (solo java.time) para poder testearla en JVM sin Android.
+ *
+ * @param sessions pares (inicio, fin) de cada sesión.
+ * @param gapTolerance huecos menores o iguales a esto también se fusionan.
+ * @return intervalos fusionados, ordenados por inicio.
+ */
+fun mergeSleepIntervals(
+    sessions: List<Pair<Instant, Instant>>,
+    gapTolerance: Duration = Duration.ofMinutes(5),
+): List<Pair<Instant, Instant>> {
+    val valid = sessions.filter { (start, end) -> end.isAfter(start) }
+    if (valid.isEmpty()) return emptyList()
+    val sorted = valid.sortedBy { it.first }
+    val merged = mutableListOf<Pair<Instant, Instant>>()
+    var curStart = sorted[0].first
+    var curEnd = sorted[0].second
+    for (i in 1 until sorted.size) {
+        val (start, end) = sorted[i]
+        if (!start.isAfter(curEnd.plus(gapTolerance))) {
+            if (end.isAfter(curEnd)) curEnd = end
+        } else {
+            merged.add(curStart to curEnd)
+            curStart = start
+            curEnd = end
+        }
+    }
+    merged.add(curStart to curEnd)
+    return merged
+}
+
+/**
+ * SCRUM-207 (2026-10-09): ¿qué cuenta como "dormido"?
+ * STAGE_TYPE_SLEEPING=2, LIGHT=4, DEEP=5, REM=6.
+ * Se excluyen UNKNOWN=0, AWAKE=1, OUT_OF_BED=3, AWAKE_IN_BED=7.
+ * Pura (ints) para test JVM sin el SDK de Health Connect.
+ */
+fun isSleepStage(stage: Int): Boolean {
+    return stage == 2 || stage == 4 || stage == 5 || stage == 6
+}
+
+/**
+ * Filtra etapas a solo-sueño y las devuelve como intervalos.
+ * Pura para test JVM.
+ */
+fun sleepOnlyIntervals(
+    stages: List<Triple<Instant, Instant, Int>>,
+): List<Pair<Instant, Instant>> {
+    return stages
+        .filter { (start, end, stage) -> end.isAfter(start) && isSleepStage(stage) }
+        .map { (start, end, _) -> start to end }
+}
+
+/**
  * Encapsula toda la lógica de comunicación con Google Health Connect.
  * Extraída y refactorizada desde MainActivity.kt original para ser usada
  * desde el React Native Native Module (VitoHealthModule) y también desde
@@ -86,6 +150,18 @@ class HealthDataProvider(
     }
 
     /**
+     * Ventana "última noche" para sueño: desde ayer 18:00 hasta ahora.
+     * La sesión de anoche empieza el día anterior y todayTimeRange la excluye
+     * (spec 2026-10-10: card en "--" con 0 sesiones). El merge/dedup de
+     * SCRUM-207 se aplica igual sobre lo leído en esta ventana.
+     */
+    private fun lastNightTimeRange(): TimeRangeFilter {
+        val zone = ZoneId.systemDefault()
+        val start = ZonedDateTime.now(zone).toLocalDate().minusDays(1).atTime(18, 0).atZone(zone).toInstant()
+        return TimeRangeFilter.between(start, Instant.now())
+    }
+
+    /**
      * Lee todos los datos de Health Connect del día de hoy.
      *
      * Cada tipo de registro tiene su propio try/catch para que un error
@@ -107,12 +183,16 @@ class HealthDataProvider(
             ),
         )
 
-        // ReadRecords: sueño
+        // ReadRecords: sueño con ventana "última noche" (ayer 18:00→ahora).
+        // Con todayTimeRange la sesión de anoche (inicio día anterior) queda
+        // afuera y la card muestra "--" con 0 sesiones. No toca pasos/distancia.
         val sleepSessions = try {
+            val nightRange = lastNightTimeRange()
+            Log.d(TAG, "Ventana sueño (última noche): $nightRange")
             healthConnectClient.readRecords(
                 ReadRecordsRequest(
                     recordType = SleepSessionRecord::class,
-                    timeRangeFilter = timeRange,
+                    timeRangeFilter = nightRange,
                 ),
             ).records
         } catch (e: Exception) {
@@ -237,7 +317,7 @@ class HealthDataProvider(
         // Usamos ActiveCaloriesBurnedRecord (solo actividad) en vez de
         // TotalCaloriesBurnedRecord (que incluye metabolismo basal ~1000+ kcal).
         val steps = aggregate[StepsRecord.COUNT_TOTAL] ?: 0L
-        val distanceMeters = aggregate[DistanceRecord.DISTANCE_TOTAL]?.inMeters ?: 0.0
+        var distanceMeters = aggregate[DistanceRecord.DISTANCE_TOTAL]?.inMeters ?: 0.0
         var caloriesKcal = aggregate[ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL]?.inKilocalories ?: 0.0
 
         if (steps == 0L && distanceMeters == 0.0 && caloriesKcal > 0.0) {
@@ -245,13 +325,84 @@ class HealthDataProvider(
             caloriesKcal = 0.0
         }
 
+        // Fix distancia imposible (spec 2026-10-09): DISTANCE_TOTAL agrega todas
+        // las fuentes (reloj+teléfono), mismo patrón que pasos/sueño. Se lee el
+        // detalle por origen para diagnosticar y se aplican dos controles con log:
+        // 1) huérfana (steps=0 pero distance>0: ej. viaje en auto) -> 0;
+        // 2) inconsistencia con pasos (>2m/paso es imposible caminando) -> clamp.
+        // No se toca pasos/sueño/calorías.
+        var distanceDetailTotal = 0.0
+        try {
+            val distanceRecords = healthConnectClient.readRecords(
+                ReadRecordsRequest(
+                    recordType = DistanceRecord::class,
+                    timeRangeFilter = timeRange,
+                ),
+            ).records
+            val byOrigin = distanceRecords.groupBy { it.metadata.dataOrigin.packageName }
+            for ((pkg, recs) in byOrigin) {
+                val tot = recs.sumOf { it.distance.inMeters }
+                Log.d(TAG, "Distancia origen $pkg: ${recs.size} records, ${"%.1f".format(tot)}m")
+            }
+            distanceDetailTotal = distanceRecords.sumOf { it.distance.inMeters }
+            Log.d(TAG, "Distancia aggregate=${"%.1f".format(distanceMeters)}m, records=${distanceRecords.size}")
+        } catch (e: Exception) {
+            Log.w(TAG, "Error leyendo detalle de distancia, continuando con aggregate...", e)
+        }
+        // Aggregate DISTANCE_TOTAL en 0 con detalle >0: bug del provider HC en
+        // algunos OEM (visto en Xiaomi: 26 records/337.3m con aggregate 0.0).
+        // El detalle por readRecords es la fuente de verdad -> se adopta.
+        if (distanceMeters == 0.0 && distanceDetailTotal > 0.0) {
+            Log.w(TAG, "Aggregate=0 pero detalle suma ${"%.1f".format(distanceDetailTotal)}m, usando detalle")
+            distanceMeters = distanceDetailTotal
+        }
+        if (steps == 0L && distanceMeters > 0.0) {
+            Log.w(TAG, "Distance=${distanceMeters}m con steps=0 (huérfana, ej. vehículo), forzando a 0.0")
+            distanceMeters = 0.0
+        } else if (steps > 0L && distanceMeters / steps > 2.0) {
+            val capped = steps * 0.8
+            Log.w(TAG, "Distance=${distanceMeters}m inconsistente con steps=$steps (>2m/paso), clamp a ${capped}m")
+            distanceMeters = capped
+        }
+
+        // SCRUM-207: fusionar sesiones solapadas antes de sumar + contar solo
+        // etapas dormidas (no tiempo en cama). Sin esto: 9.1h vs 4.54h, 8.7h vs 4h27.
+        // Si el record trae stages, se suman solo SLEEPING/LIGHT/DEEP/REM;
+        // si viene sin stages (reloj viejo), fallback al intervalo completo.
+        val rawIntervalMinutes = sleepSessions.sumOf { s ->
+            Duration.between(s.startTime, s.endTime).toMinutes()
+        }
+        val sleepStageIntervals = sleepSessions.flatMap { s ->
+            if (s.stages.isNotEmpty()) {
+                sleepOnlyIntervals(
+                    s.stages.map { st -> Triple(st.startTime, st.endTime, st.stage) },
+                )
+            } else {
+                listOf(s.startTime to s.endTime)
+            }
+        }
+        val sessionsWithoutStages = sleepSessions.count { it.stages.isEmpty() }
+        val mergedSleep = mergeSleepIntervals(sleepStageIntervals)
+        val sleepMinutesFinal = mergedSleep.sumOf { (start, end) ->
+            Duration.between(start, end).toMinutes()
+        }
+        Log.d(TAG, "Sueño raw: ${sleepSessions.size} sesiones, ${rawIntervalMinutes}min intervalo total, ${sleepStageIntervals.size} intervalos dormidos pre-merge, $sessionsWithoutStages sin stages")
+        for (s in sleepSessions) {
+            val stageSleepMin = if (s.stages.isNotEmpty()) {
+                sleepOnlyIntervals(s.stages.map { st -> Triple(st.startTime, st.endTime, st.stage) })
+                    .sumOf { (a, b) -> Duration.between(a, b).toMinutes() }
+            } else {
+                Duration.between(s.startTime, s.endTime).toMinutes()
+            }
+            Log.d(TAG, "Sueño sesion ${s.startTime} -> ${s.endTime} (${Duration.between(s.startTime, s.endTime).toMinutes()}min cama, ${stageSleepMin}min dormido, ${s.stages.size} stages, pkg=${s.metadata.dataOrigin.packageName})")
+        }
+        Log.d(TAG, "Sueño fusionado: ${sleepStageIntervals.size} intervalos -> ${mergedSleep.size}, total=${sleepMinutesFinal}min")
+
         return HealthSummary(
             steps = steps,
             distanceMeters = distanceMeters,
             caloriesKcal = caloriesKcal,
-            sleepMinutes = sleepSessions.sumOf { session ->
-                Duration.between(session.startTime, session.endTime).toMinutes()
-            },
+            sleepMinutes = sleepMinutesFinal,
             averageBpm = averageBpm,
             exerciseSessions = exercises.size,
             bloodPressureSystolic = bloodPressureSystolic,

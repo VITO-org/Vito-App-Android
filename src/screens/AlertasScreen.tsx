@@ -1,68 +1,70 @@
-import React, {useState} from 'react';
-import {View, Text, ScrollView, StyleSheet, TouchableOpacity} from 'react-native';
+import React, {useState, useEffect, useCallback} from 'react';
+import {View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl} from 'react-native';
+import {useNavigation} from '@react-navigation/native';
 import Card from '../components/Card';
 import {colors, spacing, fontSize} from '../theme';
+import {severityToColorKey, severityLabel, alertIcon, formatAlertTime, SEVERITY_COLORS, cleanAlertTitle, destinoPorTipoAlerta} from '../utils/alertas';
+import {useHealth} from '../context/HealthProvider';
+import type {Alerta} from '../services/supabase/models';
 
-type TabId = 'todas' | 'no-leidas' | 'resueltas';
-
-interface Alerta {
-  id: string;
-  icon: string;
-  title: string;
-  time: string;
-  description: string;
-  severity: 'danger' | 'warning' | 'success';
-  read: boolean;
-}
-
-const MOCK_ALERTAS: Alerta[] = [
-  {
-    id: '1',
-    icon: '❤️',
-    title: 'Frecuencia cardíaca alta',
-    time: 'Hoy 09:41',
-    description: 'Tu frecuencia cardíaca superó el límite establecido.',
-    severity: 'danger',
-    read: false,
-  },
-  {
-    id: '2',
-    icon: '💊',
-    title: 'Medicación omitida',
-    time: 'Ayer 21:00',
-    description: 'Recordá tomar tu medicación para la presión arterial.',
-    severity: 'warning',
-    read: false,
-  },
-  {
-    id: '3',
-    icon: '📍',
-    title: 'Zona segura',
-    time: 'Ayer 18:30',
-    description: 'Juan salió de la zona segura.',
-    severity: 'success',
-    read: true,
-  },
-];
+type TabId = 'todas' | 'no-leidas' | 'leidas';
 
 const TABS: {id: TabId; label: string}[] = [
   {id: 'todas', label: 'Todas'},
   {id: 'no-leidas', label: 'No leídas'},
-  {id: 'resueltas', label: 'Resueltas'},
+  {id: 'leidas', label: 'Leídas'},
 ];
 
-const SEVERITY_COLORS: Record<Alerta['severity'], {bg: string; dot: string}> = {
-  danger: {bg: colors.dangerLight, dot: colors.danger},
-  warning: {bg: colors.warningLight, dot: colors.warning},
-  success: {bg: colors.successLight, dot: colors.success},
-};
+/**
+ * Check if an alert has been read (leida_en IS NOT NULL).
+ */
+function isAlertRead(alert: Alerta): boolean {
+  return alert.leida_en !== null;
+}
+
+/**
+ * Build a description line for the alert using titulo + mensaje + datos (CA-03).
+ */
+function alertDescription(alert: Alerta): string {
+  const parts: string[] = [];
+
+  // Use the alert's titulo and mensaje
+  if (alert.mensaje) {
+    parts.push(alert.mensaje);
+  }
+
+  // Add escalation info from datos jsonb
+  if (alert.datos && typeof alert.datos === 'object') {
+    const datos = alert.datos as Record<string, unknown>;
+    if (datos.escalada === true) {
+      parts.push('Escalada al responsable de guardia');
+    }
+  }
+
+  return parts.join(' · ');
+}
 
 const AlertasScreen: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabId>('todas');
+  const [refreshing, setRefreshing] = useState(false);
+  const {activeAlerts, refreshAlerts, confirmAlert} = useHealth();
+  const navigation = useNavigation<any>();
 
-  const filtered = MOCK_ALERTAS.filter(a => {
-    if (activeTab === 'no-leidas') return !a.read;
-    if (activeTab === 'resueltas') return a.read;
+  useEffect(() => {
+    refreshAlerts();
+  }, [refreshAlerts]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refreshAlerts();
+    setRefreshing(false);
+  }, [refreshAlerts]);
+
+  const unreadCount = activeAlerts.filter(a => a.leida_en === null).length;
+  const filtered = activeAlerts.filter(a => {
+    const read = isAlertRead(a);
+    if (activeTab === 'no-leidas') return !read;
+    if (activeTab === 'leidas') return read;
     return true;
   });
 
@@ -73,43 +75,89 @@ const AlertasScreen: React.FC = () => {
 
       {/* Tabs */}
       <View style={styles.tabRow}>
-        {TABS.map(tab => (
+        {TABS.map(tab => {
+          const label = tab.id === 'no-leidas' ? `No leídas (${unreadCount})` : tab.label;
+          return (
           <TouchableOpacity
             key={tab.id}
             onPress={() => setActiveTab(tab.id)}
             style={[styles.tab, activeTab === tab.id && styles.tabActive]}>
             <Text style={[styles.tabText, activeTab === tab.id && styles.tabTextActive]}>
-              {tab.label}
+              {label}
             </Text>
           </TouchableOpacity>
-        ))}
+          );
+        })}
       </View>
 
       {/* Lista */}
-      <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
-        {filtered.map(alerta => {
-          const sev = SEVERITY_COLORS[alerta.severity];
+      <ScrollView
+        style={styles.list}
+        contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+        }>
+        {filtered.length === 0 && (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>
+              {activeTab === 'todas'
+                ? 'No hay alertas activas'
+                : activeTab === 'no-leidas'
+                ? 'No hay alertas sin leer'
+                : 'No hay alertas leídas'}
+            </Text>
+          </View>
+        )}
+
+        {filtered.map(alert => {
+          const colorKey = severityToColorKey(alert.severidad);
+          const sev = SEVERITY_COLORS[colorKey];
+          const read = isAlertRead(alert);
+
           return (
-            <Card key={alerta.id} style={[styles.alertCard, {borderLeftColor: sev.dot, borderLeftWidth: 3}]}>
-              <View style={styles.alertRow}>
-                <View style={styles.alertIcon}>
-                  <Text style={styles.alertEmoji}>{alerta.icon}</Text>
+            <Card key={alert.id} style={styles.alertCard as any}>
+              <TouchableOpacity
+                onPress={() =>
+                  navigation.navigate('DetalleSigno', {
+                    ...destinoPorTipoAlerta(alert.tipo),
+                    alertId: alert.id,
+                    alertType: alert.tipo,
+                    severity: alert.severidad,
+                  })
+                }
+                accessibilityRole="button"
+                accessibilityLabel={`Ver gráficos de ${cleanAlertTitle(alert.titulo)}`}
+                activeOpacity={0.7}>
+              <View style={[styles.alertRow, {borderLeftColor: sev.dot, borderLeftWidth: 3, paddingLeft: 12}]}>
+                <View style={[styles.alertIcon, {backgroundColor: sev.bg}]}>
+                  <Text style={styles.alertEmoji}>{alertIcon(alert.tipo)}</Text>
                 </View>
                 <View style={styles.alertBody}>
-                  <Text style={styles.alertTitle}>{alerta.title}</Text>
-                  <Text style={styles.alertTime}>{alerta.time}</Text>
-                  <Text style={styles.alertDesc}>{alerta.description}</Text>
+                  <Text style={styles.alertTitle}>{cleanAlertTitle(alert.titulo)}</Text>
+                  <Text style={styles.alertTime}>{formatAlertTime(alert.created_at)}</Text>
+                  <Text style={styles.alertDesc}>{alertDescription(alert)}</Text>
+                  {alert.datos && typeof alert.datos === 'object' && (alert.datos as Record<string, unknown>).escalada === true && (
+                    <Text style={styles.escalatedBadge}>⬆ Escalada</Text>
+                  )}
+                  {severityLabel(alert.severidad) && (
+                    <Text style={[styles.severityBadgeText, {color: sev.text}]}>
+                      {severityLabel(alert.severidad)}
+                    </Text>
+                  )}
                 </View>
-                {!alerta.read && <View style={[styles.unreadDot, {backgroundColor: sev.dot}]} />}
+                {!read && <View style={[styles.unreadDot, {backgroundColor: sev.dot}]} />}
               </View>
+              </TouchableOpacity>
+              {!read && (
+                <TouchableOpacity
+                  style={styles.confirmButton}
+                  onPress={() => confirmAlert(alert.id)}>
+                  <Text style={styles.confirmButtonText}>Marcar como leída</Text>
+                </TouchableOpacity>
+              )}
             </Card>
           );
         })}
-
-        {/* Botón inferior */}
-        <TouchableOpacity style={styles.historyButton}>
-          <Text style={styles.historyText}>Ver historial completo</Text>
-        </TouchableOpacity>
 
         <View style={{height: 24}} />
       </ScrollView>
@@ -175,7 +223,6 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -201,6 +248,18 @@ const styles = StyleSheet.create({
     marginTop: 4,
     lineHeight: 18,
   },
+  escalatedBadge: {
+    fontSize: fontSize.caption,
+    color: colors.danger,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  severityBadgeText: {
+    fontSize: fontSize.badge,
+    color: colors.textSecondary,
+    fontWeight: '600',
+    marginTop: 4,
+  },
   unreadDot: {
     width: 10,
     height: 10,
@@ -208,17 +267,31 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
 
-  // ── Botón ──
-  historyButton: {
-    alignSelf: 'center',
-    marginTop: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
+  // ── Confirm button ──
+  confirmButton: {
+    marginTop: 10,
+    alignSelf: 'flex-start',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: colors.backgroundLight,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  historyText: {
-    fontSize: fontSize.body,
+  confirmButtonText: {
+    fontSize: fontSize.caption,
     color: colors.primary,
     fontWeight: '600',
+  },
+
+  // ── Empty state ──
+  emptyContainer: {
+    alignItems: 'center',
+    paddingTop: 48,
+  },
+  emptyText: {
+    fontSize: fontSize.body,
+    color: colors.textSecondary,
   },
 });
 

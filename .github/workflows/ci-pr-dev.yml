@@ -71,12 +71,10 @@ jobs:
 
       - name: Type-check
         run: npx tsc --noEmit
-        continue-on-error: true
 
       - name: Unit tests (Jest)
         id: jest
         run: npx jest --passWithNoTests
-        continue-on-error: true
 
   android-build:
     runs-on: ubuntu-latest
@@ -84,6 +82,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.11.0'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Gradle cache
         uses: actions/cache@v4
@@ -101,7 +108,16 @@ jobs:
           java-version: '17'
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          # Evitar default 'tools platform-tools': 'tools' está obsoleto y
+          # sdkmanager falla con 'Failed to find package tools' (v3 y v4).
+          packages: ''
+          log-accepted-android-sdk-licenses: false
+
+      - name: Install required SDK packages
+        run: |
+          sdkmanager --install "platform-tools" "platforms;android-36" "build-tools;35.0.0"
 
       - name: Fix gradlew line endings
         run: sed -i 's/\r$//' android/gradlew
@@ -109,12 +125,32 @@ jobs:
       - name: Android unit tests
         id: android_test
         run: cd android && ./gradlew testDebugUnitTest --no-daemon
-        continue-on-error: true
 
       - name: Build Android (debug)
         id: build
         run: cd android && ./gradlew assembleDebug --no-daemon --parallel --build-cache
-        continue-on-error: true
+
+      - name: Build Android (release)
+        id: build_release
+        if: always()
+        run: cd android && ./gradlew assembleRelease --no-daemon --parallel --build-cache
+
+      - name: Upload APK (debug)
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload APK (release)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 14
 
   discord-notify:
     needs: [jira-sync, js-lint-test, android-build]

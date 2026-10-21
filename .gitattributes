@@ -1,3 +1,19 @@
+# Normalizar line endings: todo texto a LF en el repo y en el working tree
+* text=auto eol=lf
+
+# Excepciones que necesitan CRLF (scripts de Windows)
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binales explícitos (que git jamás los toque)
+*.png binary
+*.jpg binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+
 # Gradle wrapper scripts — must stay executable with LF endings on all OS
 android/gradlew text eol=lf
 

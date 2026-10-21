@@ -23,7 +23,7 @@ llm:
 
 integrations:
   jira:
-    enabled: false
-    base_url: ""
+    enabled: true
+    base_url: "https://vitoproyecto-1775921969007.atlassian.net"
     email_env: JIRA_EMAIL
     token_env: JIRA_API_TOKEN

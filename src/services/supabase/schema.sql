@@ -82,6 +82,29 @@ CREATE INDEX idx_datos_reloj_usuario_fecha
   ON datos_reloj(id_usuario, recorded_at DESC);
 
 -- ============================================
+-- 4b. DATO_SALUD_ML (series de tiempo normalizado para ML)
+--     Carga paralela a datos_reloj: una fila por métrica no nula.
+-- ============================================
+CREATE TYPE fuente_dato AS ENUM ('manual', 'dispositivo', 'integracion');
+
+CREATE TABLE dato_salud_ml (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id_usuario UUID NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
+  tipo_metrica VARCHAR(50) NOT NULL,
+  valor NUMERIC(12,4) NOT NULL,
+  unidad VARCHAR(30) NOT NULL,
+  fuente fuente_dato NOT NULL,
+  recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_dato_salud_ml_usuario_metrica_fecha
+  ON dato_salud_ml (id_usuario, tipo_metrica, recorded_at DESC);
+
+CREATE INDEX idx_dato_salud_ml_fecha
+  ON dato_salud_ml (recorded_at DESC);
+
+-- ============================================
 -- 5. BASELINE_CLINICO
 -- ============================================
 CREATE TABLE baseline_clinico (
@@ -188,3 +211,184 @@ CREATE TABLE prediccion_riesgo (
 
 CREATE INDEX idx_prediccion_riesgo_usuario
   ON prediccion_riesgo(id_usuario, created_at DESC);
+
+-- ============================================
+-- 10. ALERTA (HU-41 — Sistema de Alertas Inteligentes)
+--     Nuevo schema: titulo, mensaje, datos jsonb, leida_en, FKs.
+--     Ciclo de vida: leída/no leída (leida_en null = no leída).
+-- ============================================
+CREATE TABLE alerta (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    id_usuario uuid NOT NULL REFERENCES public.usuario(id),
+    id_dato_reloj uuid REFERENCES public.datos_reloj(id),
+    id_prediccion_riesgo uuid REFERENCES public.prediccion_riesgo(id),
+    tipo varchar(50) NOT NULL,
+    severidad varchar(20) NOT NULL DEFAULT 'INFO',
+    titulo varchar(150) NOT NULL,
+    mensaje text NOT NULL,
+    datos jsonb,
+    leida_en timestamptz,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    expira_en timestamptz
+);
+
+CREATE INDEX idx_alerta_usuario_created
+  ON alerta(id_usuario, created_at DESC);
+
+CREATE INDEX idx_alerta_usuario_leida
+  ON alerta(id_usuario, leida_en)
+  WHERE leida_en IS NULL;
+
+CREATE INDEX idx_alerta_tipo
+  ON alerta(tipo);
+
+-- ============================================
+-- 11. DISPOSITIVO_USUARIO (tokens FCM para push)
+-- ============================================
+CREATE TABLE dispositivo_usuario (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    id_usuario uuid NOT NULL REFERENCES public.usuario(id),
+    fcm_token text NOT NULL,
+    plataforma varchar(20) NOT NULL,
+    activo boolean NOT NULL DEFAULT true,
+    last_seen_at timestamptz DEFAULT now(),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE(id_usuario, fcm_token)
+);
+
+CREATE INDEX idx_dispositivo_usuario_activo
+  ON dispositivo_usuario(id_usuario)
+  WHERE activo = true;
+
+-- ============================================
+-- 12. PREFERENCIA_NOTIFICACION
+-- ============================================
+CREATE TABLE preferencia_notificacion (
+    id_usuario uuid PRIMARY KEY REFERENCES public.usuario(id),
+    push_habilitado boolean DEFAULT true,
+    alertas_criticas boolean DEFAULT true,
+    alertas_info boolean DEFAULT true,
+    updated_at timestamptz DEFAULT now()
+);
+
+-- ============================================
+-- 13. NOTIFICACION_ENTREGA (Fase 2 — registro de entregas push)
+-- ============================================
+CREATE TABLE notificacion_entrega (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    id_alerta uuid REFERENCES alerta(id),
+    id_dispositivo uuid REFERENCES dispositivo_usuario(id),
+    id_usuario uuid REFERENCES usuario(id),
+    estado varchar(20) NOT NULL DEFAULT 'enviada', -- 'enviada', 'recibida', 'leida'
+    enviado_en timestamptz,
+    recibida_en timestamptz,
+    leida_en timestamptz,
+    error_mensaje text,
+    created_at timestamptz DEFAULT now()
+);
+
+CREATE INDEX idx_notificacion_entrega_alerta
+  ON notificacion_entrega(id_alerta);
+
+CREATE INDEX idx_notificacion_entrega_usuario
+  ON notificacion_entrega(id_usuario);
+
+-- ============================================
+-- 14. BASELINE_PERSONALIZADO (HU-98 — baseline personalizado por paciente)
+--     Una fila por usuario con stats por métrica (media, desv. estándar,
+--     P25, P75). Referida como "§9" en el documento de diseño HU-98.
+--     RLS + funciones de cálculo: ver scripts/migrations/2026-08-23_hu98_baseline_personalizado.sql
+-- ============================================
+CREATE TABLE baseline_personalizado (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id_usuario UUID NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
+
+  -- ── FC (lpm) ──
+  hr_media NUMERIC(6,2),
+  hr_desv_std NUMERIC(6,2),
+  hr_p25 NUMERIC(6,2),
+  hr_p75 NUMERIC(6,2),
+  hr_n_muestras INTEGER,
+
+  -- ── PA sistólica (mmHg) ──
+  bp_sist_media NUMERIC(6,2),
+  bp_sist_desv_std NUMERIC(6,2),
+  bp_sist_p25 NUMERIC(6,2),
+  bp_sist_p75 NUMERIC(6,2),
+  bp_sist_n_muestras INTEGER,
+
+  -- ── PA diastólica (mmHg) ──
+  bp_diast_media NUMERIC(6,2),
+  bp_diast_desv_std NUMERIC(6,2),
+  bp_diast_p25 NUMERIC(6,2),
+  bp_diast_p75 NUMERIC(6,2),
+  bp_diast_n_muestras INTEGER,
+
+  -- ── SpO2 (%) ──
+  spo2_media NUMERIC(5,2),
+  spo2_desv_std NUMERIC(5,2),
+  spo2_p25 NUMERIC(5,2),
+  spo2_p75 NUMERIC(5,2),
+  spo2_n_muestras INTEGER,
+
+  -- ── Temperatura (°C) ──
+  temp_media NUMERIC(5,2),
+  temp_desv_std NUMERIC(5,2),
+  temp_p25 NUMERIC(5,2),
+  temp_p75 NUMERIC(5,2),
+  temp_n_muestras INTEGER,
+
+  -- ── Metadata del cálculo ──
+  dias_historial INTEGER,
+  ventana_dias INTEGER NOT NULL DEFAULT 28,
+  es_valido BOOLEAN NOT NULL DEFAULT FALSE,
+
+  ultima_actualizacion TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Índice único sobre id_usuario: lookup + soporte de upsert (ON CONFLICT).
+CREATE UNIQUE INDEX idx_baseline_personalizado_usuario
+  ON baseline_personalizado(id_usuario);
+
+CREATE INDEX idx_baseline_personalizado_pendientes
+  ON baseline_personalizado(ultima_actualizacion);
+
+-- ============================================
+-- 15. CONTACTO_CONFIANZA (HU-16/HU-54 — registro de contactos de confianza)
+--     Una fila por contacto del usuario (familiar / médico / otro) con
+--     la frecuencia de notificación preferida por contacto.
+--     HU-54 agrega: tipos_evento (jsonb), canal, estado_opt_in (dato, sin flujo),
+--     es_principal (constraint parcial único: un solo principal por usuario).
+--     RLS (select/insert/update/delete own + service_role_all): ver
+--     scripts/migrations/2026-09-08_hu16_contacto_confianza.sql y
+--     scripts/migrations/2026-09-09_hu54_configuracion_notificaciones_contacto.sql
+-- ============================================
+CREATE TABLE contacto_confianza (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  id_usuario uuid NOT NULL REFERENCES public.usuario(id) ON DELETE CASCADE,
+  nombre varchar(120) NOT NULL,
+  relacion varchar(20) NOT NULL CHECK (relacion IN ('familiar', 'medico', 'otro')),
+  telefono varchar(30) NOT NULL,
+  email varchar(255) NOT NULL,
+  frecuencia_notificacion varchar(20) NOT NULL DEFAULT 'inmediata'
+    CHECK (frecuencia_notificacion IN ('inmediata', 'diaria', 'semanal', 'sin_notificaciones')),
+  tipos_evento jsonb NOT NULL DEFAULT '["fisiologico"]',
+  canal varchar(20) NOT NULL DEFAULT 'app_interna'
+    CHECK (canal IN ('app_interna', 'whatsapp')),
+  estado_opt_in varchar(20) NOT NULL DEFAULT 'pendiente'
+    CHECK (estado_opt_in IN ('pendiente', 'confirmado', 'rechazado', 'vencido')),
+  es_principal boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_contacto_confianza_usuario
+  ON contacto_confianza(id_usuario);
+
+CREATE UNIQUE INDEX contacto_confianza_un_principal
+  ON contacto_confianza(id_usuario)
+  WHERE es_principal = true;
+
+COMMENT ON TABLE public.contacto_confianza IS 'Contactos de confianza del usuario (HU-16/HU-54). RLS: solo el dueño (auth.uid()=id_usuario) puede select/insert/update/delete.';

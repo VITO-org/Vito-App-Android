@@ -2,13 +2,13 @@ import React from 'react';
 import {View, Text, ScrollView, StyleSheet, TouchableOpacity} from 'react-native';
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {useHealth} from '../context/HealthProvider';
-import {colors, spacing, fontSize, shadows} from '../theme';
+import {colors, spacing, fontSize} from '../theme';
 import {
   buildSignosFromSummary,
   getSignosVitales,
   getMetricasBienestar,
 } from '../utils/signosVitales';
-import AppIcon, {type AppIconName} from '../components/AppIcon';
+import SignoIcon from '../components/SignoIcon';
 import FlechaIcon from '../components/FlechaIcon';
 import type {RootStackParamList} from '../navigation/RootNavigator';
 
@@ -22,9 +22,9 @@ type Props = NativeStackScreenProps<RootStackParamList, 'TodosLosSignos'>;
  * Único punto de render — los datos vienen de buildSignosFromSummary.
  */
 const TodosLosSignosScreen: React.FC<Props> = ({navigation}) => {
-  const {summary, loading} = useHealth();
+  const {summary, loading, lastSync} = useHealth();
 
-  const allSignos = buildSignosFromSummary(summary);
+  const allSignos = buildSignosFromSummary(summary, lastSync);
   const signosVitales = getSignosVitales(allSignos);
   const bienestar = getMetricasBienestar(allSignos);
 
@@ -69,15 +69,17 @@ const TodosLosSignosScreen: React.FC<Props> = ({navigation}) => {
 
               return (
                 <Card key={s.id} style={styles.resumenCard} {...cardProps}>
-                  <View style={[styles.iconCircle, {backgroundColor: s.iconBgColor + '20'}]}>
-                    {s.iconName ? (
-                      <AppIcon name={s.iconName as AppIconName} size={s.iconSize ?? 22} />
-                    ) : (
-                      <Text style={styles.iconEmoji}>{s.icon}</Text>
-                    )}
-                  </View>
-                  <Text style={styles.resumenValue}>{s.value}</Text>
-                  <Text style={styles.resumenUnit}>{s.unit}</Text>
+                  <SignoIcon name={s.iconName} emoji={s.icon} style={styles.iconEmoji} />
+                  <Text
+                    style={styles.resumenValue}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.7}>
+                    {s.value}
+                    {s.unit ? <Text style={styles.resumenUnit}> {s.unit}</Text> : null}
+                    {s.value2 ? <Text> {s.value2}</Text> : null}
+                    {s.unit2 ? <Text style={styles.resumenUnit}> {s.unit2}</Text> : null}
+                  </Text>
                   <Text style={styles.resumenLabel}>{s.label}</Text>
                   {s.rangeLabel ? (
                     <Text style={styles.resumenRange}>{s.rangeLabel}</Text>
@@ -146,24 +148,17 @@ const styles = StyleSheet.create({
     padding: 14,
     width: '48%',
     marginBottom: spacing.gridGap,
-    ...shadows.card,
-  },
-  iconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 10,
+    alignItems: 'flex-start',
   },
   iconEmoji: {
-    fontSize: 18,
+    fontSize: 30,
   },
   resumenValue: {
     fontSize: 26,
     fontWeight: '700',
     color: colors.textPrimary,
     lineHeight: 30,
+    textAlign: 'left',
   },
   resumenUnit: {
     fontSize: fontSize.caption,
@@ -174,11 +169,13 @@ const styles = StyleSheet.create({
     fontSize: fontSize.metricLabel,
     color: colors.textSecondary,
     marginTop: 6,
+    textAlign: 'left',
   },
   resumenRange: {
     fontSize: fontSize.caption,
     color: colors.textSecondary,
     marginTop: 2,
+    textAlign: 'left',
   },
 });
 

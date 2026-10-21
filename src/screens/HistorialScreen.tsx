@@ -9,15 +9,15 @@ import {
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
-import {colors, fontSize, spacing, shadows} from '../theme';
+import {colors, fontSize, spacing} from '../theme';
 import Card from '../components/Card';
-import AppIcon from '../components/AppIcon';
+import SignoIcon from '../components/SignoIcon';
 import FlechaIcon from '../components/FlechaIcon';
 import {useSupabase} from '../context/SupabaseProvider';
 import {useHealth} from '../context/HealthProvider';
 import {getDatosReloj} from '../services/supabase/api';
 import {getDailyAveragesForRange, type DailyAverages} from '../services/HealthDataCache';
-import type {DatoReloj} from '../services/supabase/models';
+import type {DatosReloj} from '../services/supabase/models';
 import type {HealthSummary} from '../types/health';
 import {NORMAL_RANGES} from '../data/mockReportes';
 import {buildSignosFromResumen, type Resumen} from '../utils/signosVitales';
@@ -42,16 +42,19 @@ const PERIODOS: {key: Periodo; label: string; dias: number}[] = [
   {key: '90d', label: '90 días', dias: 90},
 ];
 
-function calcularResumen(datos: DatoReloj[]): Resumen {
+function calcularResumen(datos: DatosReloj[]): Resumen {
   const acc = {
     fc: [] as number[],
     sist: [] as number[],
     diast: [] as number[],
     spo2: [] as number[],
     temp: [] as number[],
-    pasos: [] as number[],
     sueno: [] as number[],
   };
+  // SCRUM-207: actividad_pasos es total acumulado del día al momento de la
+  // lectura (HC COUNT_TOTAL), no incremental. Se agrupa por día y se toma el
+  // MÁXIMO por día; el total del período es la suma de máximos diarios.
+  const pasosPorDia = new Map<string, number>();
 
   for (const d of datos) {
     if (d.frec_cardiaca_bpm != null) acc.fc.push(d.frec_cardiaca_bpm);
@@ -59,9 +62,15 @@ function calcularResumen(datos: DatoReloj[]): Resumen {
     if (d.bp_diastolica != null) acc.diast.push(d.bp_diastolica);
     if (d.spo2_pct != null) acc.spo2.push(d.spo2_pct);
     if (d.temperatura != null) acc.temp.push(d.temperatura);
-    if (d.actividad_pasos != null) acc.pasos.push(d.actividad_pasos);
+    if (d.actividad_pasos != null) {
+      const dayKey = d.recorded_at ? d.recorded_at.slice(0, 10) : 'unknown';
+      const prev = pasosPorDia.get(dayKey) ?? 0;
+      pasosPorDia.set(dayKey, Math.max(prev, d.actividad_pasos));
+    }
     if (d.horas_sueno != null) acc.sueno.push(d.horas_sueno);
   }
+
+  const pasosDiarios = Array.from(pasosPorDia.values()).filter(v => v > 0);
 
   const avg = (arr: number[]) =>
     arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
@@ -98,9 +107,9 @@ function calcularResumen(datos: DatoReloj[]): Resumen {
       count: acc.temp.length,
     },
     pasos: {
-      avg: avg(acc.pasos),
-      total: acc.pasos.reduce((a, b) => a + b, 0),
-      count: acc.pasos.length,
+      avg: avg(pasosDiarios),
+      total: pasosDiarios.reduce((a, b) => a + b, 0),
+      count: pasosDiarios.length,
     },
     sueno: {
       avg: avg(acc.sueno),
@@ -133,7 +142,7 @@ const HistorialScreen: React.FC = () => {
 
   const [periodo, setPeriodo] = useState<Periodo>('7d');
   const [loading, setLoading] = useState(true);
-  const [datos, setDatos] = useState<DatoReloj[]>([]);
+  const [datos, setDatos] = useState<DatosReloj[]>([]);
   const [cacheDays, setCacheDays] = useState<{date: string; averages: DailyAverages}[]>([]);
   const [usingCache, setUsingCache] = useState(false);
 
@@ -153,7 +162,7 @@ const HistorialScreen: React.FC = () => {
       const desde = new Date(Date.now() - dias * 24 * 60 * 60 * 1000);
 
       // 1️⃣ Intentar desde Supabase (datos_reloj)
-      let dbData: DatoReloj[] = [];
+      let dbData: DatosReloj[] = [];
       try {
         const result = await getDatosReloj(userId, {
           from: desde.toISOString(),
@@ -306,7 +315,7 @@ const HistorialScreen: React.FC = () => {
 
   // ─── Últimas lecturas ───
   // Si hay datos de DB, mostrar individuales; si no, mostrar promedios diarios del caché
-  const ultimasLecturas: DatoReloj[] = datos.length > 0
+  const ultimasLecturas: DatosReloj[] = datos.length > 0
     ? [...datos]
         .sort((a, b) => new Date(b.recorded_at ?? 0).getTime() - new Date(a.recorded_at ?? 0).getTime())
         .slice(0, 20)
@@ -325,6 +334,7 @@ const HistorialScreen: React.FC = () => {
             nivel_estres: null,
             actividad_pasos: d.averages.steps ? Math.round(d.averages.steps) : null,
             horas_sueno: d.averages.sleepMinutes > 0 ? d.averages.sleepMinutes / 60 : null,
+            sospechoso: null,
             recorded_at: d.date + 'T12:00:00',
           }))
       : [];
@@ -384,9 +394,7 @@ const HistorialScreen: React.FC = () => {
               const tieneDetalle = !['pasos', 'sueno'].includes(signo.id);
               const content = (
                 <>
-                  <View style={[styles.iconCircle, {backgroundColor: signo.iconBgColor + '20'}]}>
-                    <AppIcon name={signo.iconName!} size={signo.iconSize!} />
-                  </View>
+                  <SignoIcon name={signo.iconName} emoji={signo.icon} style={styles.resumenEmoji} />
                   <Text style={styles.resumenValue}>{signo.value}</Text>
                   <Text style={styles.resumenUnit}>{signo.unit}</Text>
                   <Text style={styles.resumenLabel}>{signo.label}</Text>
@@ -583,14 +591,10 @@ const styles = StyleSheet.create({
     padding: 14,
     width: '48%',
     marginBottom: spacing.gridGap,
-    ...shadows.card, // needs import
+    alignItems: 'flex-start',
   },
-  iconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
+  resumenEmoji: {
+    fontSize: 30,
     marginBottom: 10,
   },
   resumenValue: {
@@ -598,21 +602,25 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.textPrimary,
     lineHeight: 30,
+    textAlign: 'left',
   },
   resumenUnit: {
     fontSize: fontSize.caption,
     color: colors.textSecondary,
     marginTop: 1,
+    textAlign: 'left',
   },
   resumenLabel: {
     fontSize: fontSize.metricLabel,
     color: colors.textSecondary,
     marginTop: 6,
+    textAlign: 'left',
   },
   resumenRange: {
     fontSize: fontSize.caption,
     color: colors.textSecondary,
     marginTop: 2,
+    textAlign: 'left',
   },
 
   // ── Últimas lecturas ──

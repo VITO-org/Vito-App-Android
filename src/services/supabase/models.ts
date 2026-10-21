@@ -9,6 +9,9 @@ export type SexoBiologico = 'M' | 'F' | 'otro';
 export type TipoPatologia = 'ninguna' | 'diabetes' | 'hipertension' | 'alzheimer' | 'otra';
 export type CatSintoma = 'fisico' | 'emocional';
 export type OrigenSintoma = 'chat_ia' | 'manual';
+/** Origen de un registro de datos_reloj (HU-25 CA-02/CA-03). */
+export type OrigenDato = 'wearable' | 'manual';
+export type FuenteDato = 'manual' | 'dispositivo' | 'integracion';
 
 // ─── TABLA: usuario ───
 export interface Usuario {
@@ -45,6 +48,8 @@ export interface PerfilUsuario {
   altura_cm: number | null;
   patologia: TipoPatologia | null;
   patologia_descripcion: string | null;
+  /** Intervalo de sincronización automática en minutos (HU-25 CA-01). NULL => default 10 min en la app. */
+  intervalo_sync_min?: number | null;
 }
 export type PerfilUsuarioInsert = Omit<PerfilUsuario, 'id'> & { id?: string };
 
@@ -62,8 +67,45 @@ export interface DatosReloj {
   horas_sueno: number | null;
   recorded_at: string | null;
   sospechoso: boolean | null;
+  /** Origen de dato: 'wearable' | 'manual' (HU-25, versionado/auditoría). Nullable para no romper lecturas previas a la migración. */
+  origen?: OrigenDato | null;
+  /** id del registro wearable que ganó el conflicto y reemplazó a este (CA-03). */
+  reemplazado_por?: string | null;
 }
-export type DatosRelojInsert = Omit<DatosReloj, 'id'> & { id?: string };
+export type DatosRelojInsert = {
+  id?: string;
+  id_usuario: string;
+  bp_sistolica?: number | null;
+  bp_diastolica?: number | null;
+  frec_cardiaca_bpm?: number | null;
+  spo2_pct?: number | null;
+  temperatura?: number | null;
+  nivel_estres?: number | null;
+  actividad_pasos?: number | null;
+  horas_sueno?: number | null;
+  recorded_at?: string | null;
+  sospechoso?: boolean | null;
+  /** Origen de dato: 'wearable' | 'manual' (HU-25 CA-02/CA-03, versionado/auditoría). Simetría con DatosReloj. */
+  origen?: OrigenDato | null;
+  /** id del registro wearable que ganó el conflicto y reemplazó a este (HU-25 CA-03). Simetría con DatosReloj. */
+  reemplazado_por?: string | null;
+};
+
+// ─── TABLA: dato_salud_ml (series de tiempo normalizado para ML) ───
+export interface DatoSaludML {
+  id: string;
+  id_usuario: string;
+  tipo_metrica: string;
+  valor: number;
+  unidad: string;
+  fuente: FuenteDato;
+  recorded_at: string;
+  created_at: string;
+}
+export type DatoSaludMLInsert = Omit<DatoSaludML, 'id' | 'created_at'> & {
+  id?: string;
+  created_at?: string;
+};
 
 // ─── TABLA: baseline_clinico ───
 export interface BaselineClinico {
@@ -81,6 +123,58 @@ export interface BaselineClinico {
   updated_at: string | null;
 }
 export type BaselineClinicoInsert = Omit<BaselineClinico, 'id'> & { id?: string };
+
+// ─── TABLA: baseline_personalizado (HU-98 — baseline por paciente) ───
+/**
+ * Estadísticas históricas del propio paciente (media, desviación estándar,
+ * P25, P75) por métrica, calculadas server-side sobre los últimos 28 días
+ * de datos_reloj (excluyendo lecturas sospechosas).
+ * `es_valido=false` => la app hace fallback a los rangos clínicos estándar.
+ */
+export interface BaselinePersonalizado {
+  id: string;
+  id_usuario: string;
+  // ── FC (lpm) ──
+  hr_media: number | null;
+  hr_desv_std: number | null;
+  hr_p25: number | null;
+  hr_p75: number | null;
+  hr_n_muestras: number | null;
+  // ── PA sistólica (mmHg) ──
+  bp_sist_media: number | null;
+  bp_sist_desv_std: number | null;
+  bp_sist_p25: number | null;
+  bp_sist_p75: number | null;
+  bp_sist_n_muestras: number | null;
+  // ── PA diastólica (mmHg) ──
+  bp_diast_media: number | null;
+  bp_diast_desv_std: number | null;
+  bp_diast_p25: number | null;
+  bp_diast_p75: number | null;
+  bp_diast_n_muestras: number | null;
+  // ── SpO2 (%) ──
+  spo2_media: number | null;
+  spo2_desv_std: number | null;
+  spo2_p25: number | null;
+  spo2_p75: number | null;
+  spo2_n_muestras: number | null;
+  // ── Temperatura (°C) ──
+  temp_media: number | null;
+  temp_desv_std: number | null;
+  temp_p25: number | null;
+  temp_p75: number | null;
+  temp_n_muestras: number | null;
+  // ── Metadata del cálculo ──
+  /** Días distintos con datos dentro de la ventana de cálculo. */
+  dias_historial: number | null;
+  /** Ventana usada para el cálculo, en días. */
+  ventana_dias: number | null;
+  /** true cuando hay >= min días y >= min muestras → umbrales aplicables. */
+  es_valido: boolean | null;
+  ultima_actualizacion: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
 
 // ─── TABLA: sintomas (catálogo controlado) ───
 export interface Sintoma {
@@ -164,6 +258,141 @@ export interface PrediccionRiesgo {
 export type PrediccionRiesgoInsert = Omit<PrediccionRiesgo, 'id' | 'created_at'> & {
   id?: string;
   created_at?: string;
+};
+
+// ─── TABLA: alerta (HU-41 — Sistema de Alertas Inteligentes) ───
+export type TipoAlerta = 'hipoxia' | 'hipertension' | 'hipotension' | 'taquicardia' | 'bradicardia';
+export type SeveridadAlerta = 'INFO' | 'leve' | 'advertencia' | 'critica';
+
+/**
+ * Datos flexibles almacenados en el jsonb `datos` de cada alerta.
+ * Permite guardar contexto extra sin cambiar el schema de la tabla.
+ * Extiende Record<string, unknown> para ser compatible con AlertRecord.datos.
+ */
+export interface AlertaDatos extends Record<string, unknown> {
+  /** SpO2 value that triggered the alert (percentage). */
+  valor_registrado?: number;
+  /** Threshold that was exceeded (percentage). */
+  umbral_configurado?: number;
+  /** Device or source that produced the reading. */
+  dispositivo_origen?: string;
+  /** Whether the alert was escalated (time-based). */
+  escalada?: boolean;
+  /** ISO timestamp when the alert was escalated. */
+  escalated_at?: string;
+  /** Contact to whom the alert was escalated. */
+  escalated_to?: string;
+  // ── HU-43: BP-specific datos ──
+  /** Systolic BP that triggered the alert (mmHg). */
+  bp_sistolica?: number;
+  /** Diastolic BP that triggered the alert (mmHg). */
+  bp_diastolica?: number;
+  /** Systolic threshold exceeded (mmHg). */
+  umbral_sist?: number | null;
+  /** Diastolic threshold exceeded (mmHg). */
+  umbral_diast?: number | null;
+  /** Whether this is a combined alert (both values out of range). */
+  is_combined?: boolean;
+  /** Special measurement context ('normal', 'post_medicacion', 'reposo_nocturno'). */
+  contexto?: string;
+  // ── HU-98: baseline personalizado ──
+  /** Origen de los umbrales usados ('personalizado' | 'estandar'). */
+  umbral_origen?: string;
+}
+
+export interface Alerta {
+  id: string;
+  id_usuario: string;
+  id_dato_reloj: string | null;
+  id_prediccion_riesgo: string | null;
+  tipo: TipoAlerta;
+  severidad: SeveridadAlerta;
+  titulo: string;
+  mensaje: string;
+  datos: AlertaDatos | null;
+  leida_en: string | null;
+  created_at: string;
+  expira_en: string | null;
+}
+export type AlertaInsert = Omit<Alerta, 'id' | 'created_at'> & { id?: string; created_at?: string };
+
+// ─── TABLA: dispositivo_usuario (tokens FCM para push) ───
+export interface DispositivoUsuario {
+  id: string;
+  id_usuario: string;
+  fcm_token: string;
+  plataforma: string;
+  activo: boolean;
+  last_seen_at: string | null;
+  created_at: string;
+}
+export type DispositivoUsuarioInsert = Omit<DispositivoUsuario, 'id' | 'created_at'> & { id?: string; created_at?: string };
+
+// ─── TABLA: preferencia_notificacion ───
+export interface PreferenciaNotificacion {
+  id_usuario: string;
+  push_habilitado: boolean | null;
+  alertas_criticas: boolean | null;
+  alertas_info: boolean | null;
+  horario_silencioso_inicio: string | null; // TIME stored as string 'HH:MM:SS'
+  horario_silencioso_fin: string | null;    // TIME stored as string 'HH:MM:SS'
+  updated_at: string | null;
+}
+export type PreferenciaNotificacionInsert = Omit<PreferenciaNotificacion, 'updated_at'> & { updated_at?: string };
+
+// ─── TABLA: notificacion_entrega (registro de entregas push) ───
+// 'fallida' la escribe la Edge Function evaluar-evento server-side
+// (token revocado / error Expo / excepción de red). La app local sólo
+// usa 'enviada' | 'recibida' | 'leida'.
+export type EstadoNotificacion = 'enviada' | 'recibida' | 'leida' | 'fallida';
+
+export interface NotificacionEntrega {
+  id: string;
+  id_alerta: string | null;
+  id_dispositivo: string | null;
+  id_usuario: string | null;
+  estado: EstadoNotificacion;
+  enviado_en: string | null;
+  recibida_en: string | null;
+  leida_en: string | null;
+  error_mensaje: string | null;
+  created_at: string | null;
+}
+export type NotificacionEntregaInsert = Omit<NotificacionEntrega, 'id' | 'created_at'> & {
+  estado?: EstadoNotificacion;
+};
+
+// ─── TABLA: contacto_confianza (HU-16 / HU-54 — registro de contactos de confianza) ───
+export type RelacionContacto = 'familiar' | 'medico' | 'otro';
+export type FrecuenciaNotificacion = 'inmediata' | 'diaria' | 'semanal' | 'sin_notificaciones';
+export type CanalNotificacion = 'app_interna' | 'whatsapp';
+export type TipoEventoNotificacion = 'fisiologico' | 'medicacion' | 'estado_animo';
+export type EstadoOptIn = 'pendiente' | 'confirmado' | 'rechazado' | 'vencido';
+
+export interface ContactoConfianza {
+  id: string;
+  id_usuario: string;
+  nombre: string;
+  relacion: RelacionContacto;
+  telefono: string;
+  email: string;
+  frecuencia_notificacion: FrecuenciaNotificacion;
+  tipos_evento: TipoEventoNotificacion[];
+  canal: CanalNotificacion;
+  estado_opt_in: EstadoOptIn;
+  es_principal: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+}
+export type ContactoConfianzaInsert = Omit<
+  ContactoConfianza,
+  'id' | 'created_at' | 'updated_at' | 'estado_opt_in'
+> & {
+  id?: string;
+  created_at?: string;
+  updated_at?: string;
+  /** Dato con default 'pendiente' en DB; el alta no lo envía. */
+  estado_opt_in?: EstadoOptIn;
 };
 
 // ─── Application-level types ───

@@ -44,7 +44,7 @@ export const PermissionButton: React.FC<PermissionButtonProps> = ({
 
 const styles = StyleSheet.create({
   button: {
-    backgroundColor: colors.accent,
+    backgroundColor: colors.primary,
     paddingVertical: 14,
     paddingHorizontal: 32,
     borderRadius: 12,

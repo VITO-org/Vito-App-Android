@@ -23,14 +23,12 @@ export default function ResumenEstadistico({values, unit, normalRange}: ResumenE
         {label: 'Promedio', value: '--', isAlert: false},
         {label: 'Máximo', value: '--', isAlert: false},
         {label: 'Mínimo', value: '--', isAlert: false},
-        {label: 'Registros', value: '0', isAlert: false},
       ];
     }
 
     const promedio = values.reduce((a, b) => a + b, 0) / values.length;
     const maximo = Math.max(...values);
     const minimo = Math.min(...values);
-    const cantidad = values.length;
 
     const fmt = (v: number) => {
       const s = v % 1 === 0 ? String(v) : v.toFixed(1);
@@ -43,7 +41,6 @@ export default function ResumenEstadistico({values, unit, normalRange}: ResumenE
       {label: 'Promedio', value: fmt(promedio), isAlert: promedioFuera},
       {label: 'Máximo', value: fmt(maximo), isAlert: false},
       {label: 'Mínimo', value: fmt(minimo), isAlert: false},
-      {label: 'Registros', value: String(cantidad), isAlert: false},
     ];
   }, [values, unit, normalRange]);
 
