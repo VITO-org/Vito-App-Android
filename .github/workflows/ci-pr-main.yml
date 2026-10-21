@@ -104,6 +104,11 @@ jobs:
     name: 🧪 Quality & Release Build Check
     runs-on: ubuntu-latest
     needs: release-gate
+    env:
+      # Variables EXPO_PUBLIC_* → inlineadas en el bundle JS por babel-preset-expo.
+      # Necesarias en builds `release` porque el bundle JS va embebido en el APK.
+      EXPO_PUBLIC_CHAT_AUTH_HEADER_NAME: ${{ secrets.EXPO_PUBLIC_CHAT_AUTH_HEADER_NAME }}
+      EXPO_PUBLIC_CHAT_AUTH_HEADER_VALUE: ${{ secrets.EXPO_PUBLIC_CHAT_AUTH_HEADER_VALUE }}
 
     steps:
       - name: Checkout repository

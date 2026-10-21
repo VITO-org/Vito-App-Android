@@ -13,7 +13,9 @@ import {useSupabase} from '../context/SupabaseProvider';
 import {colors, fontSize, shadows, spacing} from '../theme';
 
 const CHAT_WEBHOOK_URL =
-  'https://vitoia.app.n8n.cloud/webhook/chat-agent';
+  'https://primary-production-7732.up.railway.app/webhook/chat-agent';
+const CHAT_AUTH_HEADER_NAME = process.env.EXPO_PUBLIC_CHAT_AUTH_HEADER_NAME;
+const CHAT_AUTH_HEADER_VALUE = process.env.EXPO_PUBLIC_CHAT_AUTH_HEADER_VALUE;
 
 type ChatMessage = {
   id: string;
@@ -93,10 +95,16 @@ const VITOScreen: React.FC = () => {
       if (!userId) {
         throw new Error('No hay una sesión de usuario activa.');
       }
+      if (!CHAT_AUTH_HEADER_NAME || !CHAT_AUTH_HEADER_VALUE) {
+        throw new Error('La autenticación del chat no está configurada.');
+      }
 
       const response = await fetch(CHAT_WEBHOOK_URL, {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          [CHAT_AUTH_HEADER_NAME]: CHAT_AUTH_HEADER_VALUE,
+        },
         body: JSON.stringify({
           userId,
           conversationId: userId,

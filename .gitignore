@@ -18,6 +18,8 @@ externalNativeBuild/
 node_modules/
 **/node_modules/
 .expo/
+.env*
+!.env.example
 *.jsbundle
 *.bundle
 metro-.log
@@ -50,6 +52,7 @@ ml-trainer/models/
 .cortex/memory/
 .cortex/sessions/
 .cortex/vault/.cortex_index.json
+.cortex/session.lock
 
 *.deb
 *.apk

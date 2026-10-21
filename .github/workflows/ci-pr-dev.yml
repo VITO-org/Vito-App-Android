@@ -79,6 +79,12 @@ jobs:
   android-build:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' || contains(github.event.head_commit.modified, 'android/') || contains(github.event.head_commit.added, 'android/') || contains(github.event.head_commit.removed, 'android/')
+    env:
+      # Variables EXPO_PUBLIC_* → inlineadas en el bundle JS por babel-preset-expo.
+      # El bundle se embebe en la variante `release` (debuggableVariants default:
+      # ['debug','debugOptimized']), por eso deben estar presentes en el build.
+      EXPO_PUBLIC_CHAT_AUTH_HEADER_NAME: ${{ secrets.EXPO_PUBLIC_CHAT_AUTH_HEADER_NAME }}
+      EXPO_PUBLIC_CHAT_AUTH_HEADER_VALUE: ${{ secrets.EXPO_PUBLIC_CHAT_AUTH_HEADER_VALUE }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -121,6 +127,12 @@ jobs:
 
       - name: Fix gradlew line endings
         run: sed -i 's/\r$//' android/gradlew
+
+      - name: Verificar config del chat (EXPO_PUBLIC_*)
+        run: |
+          if [ -z "$EXPO_PUBLIC_CHAT_AUTH_HEADER_NAME" ] || [ -z "$EXPO_PUBLIC_CHAT_AUTH_HEADER_VALUE" ]; then
+            echo "::warning title=Chat sin credencial::EXPO_PUBLIC_CHAT_AUTH_HEADER_NAME/VALUE no están configurados en Settings → Secrets → Actions. El APK compila, pero el chat va a fallar en runtime con 'La autenticación del chat no está configurada.'"
+          fi
 
       - name: Android unit tests
         id: android_test
