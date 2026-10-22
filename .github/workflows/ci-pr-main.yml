@@ -109,6 +109,10 @@ jobs:
       # Necesarias en builds `release` porque el bundle JS va embebido en el APK.
       EXPO_PUBLIC_CHAT_AUTH_HEADER_NAME: ${{ secrets.EXPO_PUBLIC_CHAT_AUTH_HEADER_NAME }}
       EXPO_PUBLIC_CHAT_AUTH_HEADER_VALUE: ${{ secrets.EXPO_PUBLIC_CHAT_AUTH_HEADER_VALUE }}
+      # `direct` = la app llama al webhook y manda el header de arriba.
+      # `proxy`  = la app delega en la Edge Function `chat-vito`, que deja el
+      #            secreto en el servidor (supabase secrets).
+      EXPO_PUBLIC_CHAT_TRANSPORT: direct
 
     steps:
       - name: Checkout repository

@@ -10,12 +10,9 @@ import {
   View,
 } from 'react-native';
 import {useSupabase} from '../context/SupabaseProvider';
+import {sendChatMessage} from '../services/chat';
+import {supabase} from '../services/supabase/client';
 import {colors, fontSize, shadows, spacing} from '../theme';
-
-const CHAT_WEBHOOK_URL =
-  'https://primary-production-7732.up.railway.app/webhook/chat-agent';
-const CHAT_AUTH_HEADER_NAME = process.env.EXPO_PUBLIC_CHAT_AUTH_HEADER_NAME;
-const CHAT_AUTH_HEADER_VALUE = process.env.EXPO_PUBLIC_CHAT_AUTH_HEADER_VALUE;
 
 type ChatMessage = {
   id: string;
@@ -30,37 +27,6 @@ const INITIAL_MESSAGES: ChatMessage[] = [
     text: '¡Hola! Soy Vittito, tu asistente de salud. ¿Cómo te sentís hoy?',
   },
 ];
-
-/** Returns text from the response formats most commonly returned by n8n. */
-const extractAgentMessage = (payload: unknown): string | null => {
-  if (typeof payload === 'string' && payload.trim()) {
-    return payload.trim();
-  }
-
-  if (Array.isArray(payload)) {
-    for (const item of payload) {
-      const message = extractAgentMessage(item);
-      if (message) {
-        return message;
-      }
-    }
-    return null;
-  }
-
-  if (payload && typeof payload === 'object') {
-    const response = payload as Record<string, unknown>;
-    for (const key of ['output', 'response', 'message', 'text', 'answer']) {
-      const message = extractAgentMessage(response[key]);
-      if (message) {
-        return message;
-      }
-    }
-
-    return extractAgentMessage(response.data);
-  }
-
-  return null;
-};
 
 const createMessage = (author: ChatMessage['author'], text: string): ChatMessage => ({
   id: `${author}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -95,40 +61,20 @@ const VITOScreen: React.FC = () => {
       if (!userId) {
         throw new Error('No hay una sesión de usuario activa.');
       }
-      if (!CHAT_AUTH_HEADER_NAME || !CHAT_AUTH_HEADER_VALUE) {
-        throw new Error('La autenticación del chat no está configurada.');
-      }
 
-      const response = await fetch(CHAT_WEBHOOK_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          [CHAT_AUTH_HEADER_NAME]: CHAT_AUTH_HEADER_VALUE,
-        },
-        body: JSON.stringify({
+      const agentMessage = await sendChatMessage(
+        {
           userId,
           conversationId: userId,
-          type: 'text',
-          text: message,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`El agente respondió con estado ${response.status}`);
-      }
-
-      const rawResponse = await response.text();
-      let payload: unknown = rawResponse;
-      try {
-        payload = JSON.parse(rawResponse);
-      } catch {
-        // Some n8n workflows respond with plain text; it is a valid chat reply.
-      }
-
-      const agentMessage = extractAgentMessage(payload);
-      if (!agentMessage) {
-        throw new Error('La respuesta del agente no contiene un mensaje legible.');
-      }
+          message,
+        },
+        {
+          // Transporte `proxy`: el cliente de Supabase adjunta el JWT de la
+          // sesión y la Edge Function deriva el userId del token validado.
+          invokeFunction: (name, options) =>
+            supabase.functions.invoke(name, options),
+        },
+      );
 
       setMessages(current => [
         ...current,
