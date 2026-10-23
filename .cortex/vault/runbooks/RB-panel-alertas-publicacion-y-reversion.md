@@ -79,8 +79,13 @@ deja el panel o la app sin funcionar.
 ### Paso 1 — Deploy de la Edge Function del gate
 
 ```bash
-supabase functions deploy panel-acceso --no-verify-jwt
-supabase secrets set PANEL_PASSCODE="<passcode largo y aleatorio>"
+# Proyecto: rkgbedehkfpiylaubjbo (vito-db-staging)
+supabase secrets set PANEL_PASSCODE="<passcode largo y aleatorio>" \
+  --project-ref rkgbedehkfpiylaubjbo
+
+supabase functions deploy panel-acceso \
+  --no-verify-jwt --use-api \
+  --project-ref rkgbedehkfpiylaubjbo
 ```
 
 > `--no-verify-jwt` es necesario: el panel invoca la función con la
@@ -95,14 +100,21 @@ supabase secrets set PANEL_USUARIOS="uuid1,uuid2,uuid3,uuid4"
 
 ### Paso 2 — Migración RLS parte 1 (segura)
 
-```bash
-supabase db push            # o pegar el archivo en el SQL Editor
-# supabase/migrations/20261020000000_rls_panel_alertas_parte1_segura.sql
+> ⚠️ **NO usar `supabase db push` en este repo todavía.** La carpeta
+> `supabase/migrations/` también contiene la parte 2, y `db push` aplica
+> todas las migraciones pendientes: correría el lockdown y rompería la
+> app publicada. Pegá **solo** el archivo de la parte 1 en el SQL Editor.
+
+Pegar y ejecutar en el SQL Editor de Supabase **solo**:
+
+```text
+supabase/migrations/20261020000000_rls_panel_alertas_parte1_segura.sql
 ```
 
 Crea las policies `*_own` por `auth.uid()` (aditivas) y **cierra la
 lectura anónima de `perfil_usuario`** (PII). No rompe la app: la app
-lee su perfil con el access token de sesión.
+publicada lee su perfil con el access token de sesión
+(`SupabaseProvider.loadProfile` → `api.getProfile(..., access_token)`).
 
 ### Paso 3 — Mergear el fix de autenticación de la app y verificar
 
@@ -120,9 +132,16 @@ Verificar en un dispositivo real, con usuario de prueba:
 
 ### Paso 4 — Migración RLS parte 2 (lock-down)
 
-```bash
-# supabase/migrations/20261020000100_rls_panel_alertas_parte2_lockdown.sql
-```
+> ⛔ **NO aplicar todavía.** La app publicada en `main` no manda el access
+> token en `datos_reloj`, `alerta`, `dispositivo_usuario` ni
+> `preferencia_notificacion` (`getDatosReloj` sigue usando supabase-js con
+> la anon key). Si se aplica el lockdown antes de desplegar el fix de auth
+> de la app, se rompen el historial, el sync y los push.
+>
+> Aplicar **solo** después de que el paso 3 esté desplegado en la app que
+> usan los testers y verificado en un dispositivo real. Pegar **solo**
+> `supabase/migrations/20261020000100_rls_panel_alertas_parte2_lockdown.sql`
+> en el SQL Editor (no `db push`).
 
 Habilita RLS en `datos_reloj` y `dispositivo_usuario` y cierra las
 policies `anon` de `alerta`, `notificacion_entrega` y
