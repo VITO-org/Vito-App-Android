@@ -252,21 +252,23 @@ export async function insertDatosRelojBatch(
 export async function getDatosReloj(
   userId: string,
   options?: { from?: string; to?: string; limit?: number; origen?: OrigenDato },
+  accessToken?: string | null,
 ): Promise<DatosReloj[]> {
-  let query = supabase
-    .from('datos_reloj')
-    .select('*')
-    .eq('id_usuario', userId)
-    .order('recorded_at', { ascending: false });
+  // rawRestFetch (y no supabase-js) para poder mandar el access token de
+  // sesión: con el cliente anónimo la consulta cae en el rol non, que ve
+  // toda la base. Con el token, el RLS aplica la policy propia por auth.uid().
+  const query = [
+    'select=*',
+    `id_usuario=eq.${userId}`,
+    'order=recorded_at.desc',
+    ...(options?.origen ? [`origen=eq.${options.origen}`] : []),
+    ...(options?.from ? [`recorded_at=gte.${options.from}`] : []),
+    ...(options?.to ? [`recorded_at=lte.${options.to}`] : []),
+    ...(options?.limit ? [`limit=${options.limit}`] : []),
+  ].join('&');
 
-  if (options?.origen) query = query.eq('origen', options.origen);
-  if (options?.from) query = query.gte('recorded_at', options.from);
-  if (options?.to) query = query.lte('recorded_at', options.to);
-  if (options?.limit) query = query.limit(options.limit);
-
-  const { data, error } = await query;
-  if (error) throw error;
-  return (data as DatosReloj[]) ?? [];
+  const rows = await rawRestFetch<DatosReloj[]>('datos_reloj', { query, accessToken });
+  return rows ?? [];
 }
 
 /**

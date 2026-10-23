@@ -136,18 +136,21 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!session?.user?.id) return;
 
     try {
-      const dispositivo = await registerDispositivo({
-        id_usuario: session.user.id,
-        fcm_token: token,
-        plataforma: Platform.OS === 'android' ? 'android' : 'ios',
-        activo: true,
-        last_seen_at: new Date().toISOString(),
-      });
+      const dispositivo = await registerDispositivo(
+        {
+          id_usuario: session.user.id,
+          fcm_token: token,
+          plataforma: Platform.OS === 'android' ? 'android' : 'ios',
+          activo: true,
+          last_seen_at: new Date().toISOString(),
+        },
+        session?.access_token ?? null,
+      );
       setDispositivoId(dispositivo.id);
     } catch (err) {
       console.error('Error registering push token:', err);
     }
-  }, [session?.user?.id]);
+  }, [session?.user?.id, session?.access_token]);
 
   // Get push token
   const getPushToken = useCallback(async () => {
@@ -172,7 +175,7 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!session?.user?.id) return;
 
     try {
-      const prefs = await getPreferenciaNotificacion(session.user.id);
+      const prefs = await getPreferenciaNotificacion(session.user.id, session?.access_token ?? null);
       if (prefs) {
         setPreferences({
           push_habilitado: prefs.push_habilitado ?? true,
@@ -185,7 +188,7 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
     } catch (err) {
       console.error('Error loading notification preferences:', err);
     }
-  }, [session?.user?.id]);
+  }, [session?.user?.id, session?.access_token]);
 
   // Update preferences
   const updatePreferences = useCallback(async (newPrefs: Partial<NotificationPreferences>) => {
@@ -195,16 +198,19 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
     setPreferences(updatedPrefs);
 
     try {
-      await upsertPreferenciaNotificacion({
-        id_usuario: session.user.id,
-        ...updatedPrefs,
-        updated_at: new Date().toISOString(),
-      });
+      await upsertPreferenciaNotificacion(
+        {
+          id_usuario: session.user.id,
+          ...updatedPrefs,
+          updated_at: new Date().toISOString(),
+        },
+        session?.access_token ?? null,
+      );
     } catch (err) {
       console.error('Error updating notification preferences:', err);
       setPreferences(preferences);
     }
-  }, [session?.user?.id, preferences]);
+  }, [session?.user?.id, session?.access_token, preferences]);
 
   // Update only the quiet hours
   const updateHorarioSilencioso = useCallback(async (inicio: string, fin: string) => {
@@ -218,16 +224,19 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
     setPreferences(updatedPrefs);
 
     try {
-      await upsertPreferenciaNotificacion({
-        id_usuario: session.user.id,
-        ...updatedPrefs,
-        updated_at: new Date().toISOString(),
-      });
+      await upsertPreferenciaNotificacion(
+        {
+          id_usuario: session.user.id,
+          ...updatedPrefs,
+          updated_at: new Date().toISOString(),
+        },
+        session?.access_token ?? null,
+      );
     } catch (err) {
       console.error('Error updating quiet hours:', err);
       setPreferences(preferences);
     }
-  }, [session?.user?.id, preferences]);
+  }, [session?.user?.id, session?.access_token, preferences]);
 
   // Initialize on mount
   useEffect(() => {

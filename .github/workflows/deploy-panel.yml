@@ -7,6 +7,11 @@ on:
       - 'vito-alert-dashboard/**'
       - '.github/workflows/deploy-panel.yml'
 
+# Un solo deploy a la vez: evita que dos pushes se pisen el artefacto de Pages.
+concurrency:
+  group: pages-panel-alertas
+  cancel-in-progress: true
+
 jobs:
   build-deploy:
     runs-on: ubuntu-latest
@@ -14,13 +19,79 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm install
+
+      # Las credenciales NO viajan en el repo: se leen de secrets.
+      # Si falta alguna el deploy falla acá (fail-fast), en vez de publicar
+      # un bundle roto.
+      - name: Verificar credenciales en secrets
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_PROFILES_TABLE: ${{ secrets.VITE_PROFILES_TABLE }}
+        run: |
+          set -euo pipefail
+          faltan=()
+          [ -n "${VITE_SUPABASE_URL}" ] || faltan+=("VITE_SUPABASE_URL")
+          [ -n "${VITE_SUPABASE_ANON_KEY}" ] || faltan+=("VITE_SUPABASE_ANON_KEY")
+          [ -n "${VITE_PROFILES_TABLE}" ] || faltan+=("VITE_PROFILES_TABLE")
+          if [ "${#faltan[@]}" -gt 0 ]; then
+            echo "::error::Faltan secrets de Actions: ${faltan[*]}. Configuralos en Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          echo "Credenciales presentes en secrets."
+
+      # .env efímero en el runner. Nunca se commitea: el repo ya no lo tiene.
+      - name: Generar .env efimero desde secrets
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_PROFILES_TABLE: ${{ secrets.VITE_PROFILES_TABLE }}
+        run: |
+          set -euo pipefail
+          umask 077
+          {
+            echo "VITE_SUPABASE_URL=${VITE_SUPABASE_URL}"
+            echo "VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}"
+            echo "VITE_PROFILES_TABLE=${VITE_PROFILES_TABLE}"
+          } > vito-alert-dashboard/.env
+          echo ".env efimero generado en el runner (no se commitea)."
+
+      - name: Instalar dependencias
+        run: npm ci
         working-directory: vito-alert-dashboard
-      - run: npm run build
+
+      - name: Build
+        run: npm run build
         working-directory: vito-alert-dashboard
+
+      # Detecta la regresion tipica: que el bundle publicado termine
+      # embebiendo una credencial que NO es la del secret configurado
+      # (tipico: alguien commitea un .env viejo y Vite lo pisa).
+      - name: Verificar credencial embebida en el bundle
+        env:
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          set -euo pipefail
+          CRED=$(grep -ohE 'sb_publishable_[A-Za-z0-9_-]{10,}|eyJ[A-Za-z0-9_-]{100,}' vito-alert-dashboard/dist/assets/*.js | sort -u || true)
+          COUNT=$(printf '%s' "$CRED" | grep -c . || true)
+          if [ "$COUNT" -eq 0 ]; then
+            echo "::error::No se encontro ninguna credencial en el bundle: revisa que las variables VITE_ se inyecten."
+            exit 1
+          fi
+          if [ "$COUNT" -gt 1 ]; then
+            echo "::error::El bundle contiene mas de una credencial: hay una key vieja compilada dentro."
+            exit 1
+          fi
+          if [ "$CRED" != "$VITE_SUPABASE_ANON_KEY" ]; then
+            echo "::error::El bundle contiene una credencial distinta de la configurada en secrets."
+            exit 1
+          fi
+          echo "OK: el bundle contiene exactamente la credencial de secrets."
+
       - uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}

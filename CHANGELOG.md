@@ -7,7 +7,17 @@ Cada PR futuro agrega su entrada bajo `Unreleased`. Ver DoD de releases:
 ## [Unreleased]
 
 ### Agregado
-- (Tus cambios acá: `### Agregado/Cambiado/Corregido/Quitado` por PR)
+- **Panel de alertas (dashboard)**: Edge Function `panel-acceso` como gate de acceso server-side del panel QA (passcode validado contra secret en Supabase, nunca en el bundle del navegador) + operaciones privilegiadas con `service_role`.
+- **Panel de alertas (dashboard)**: runbook de publicación y reversión (`RB-panel-alertas-publicacion-y-reversion.md`) con el orden de despliegue, los pasos manuales en Supabase y el procedimiento de rollback de Pages.
+- **Migraciones RLS**: `rls_panel_alertas_parte1_segura` (cierra la lectura anónima de `perfil_usuario` y `notificacion_entrega`, que la app no usa con la anon key) y `rls_panel_alertas_parte2_lockdown` (lock-down completo por `auth.uid()`, con precondición documentada).
+
+### Cambiado
+- **Panel de alertas (dashboard)**: la credencial de Supabase sale del repositorio. `.env` dejó de estar versionado, el build de CI genera un `.env` efímero desde secrets de GitHub Actions y falla rápido (fail-fast) si falta alguno. El deploy verifica además que el bundle publicado contenga exactamente la credencial configurada.
+- **Panel de alertas (dashboard)**: `VITE_PROFILES_TABLE` pasa a `perfil_usuario` (la tabla `perfiles` nunca existió; el error hacía que el panelpublished cayera siempre a la lista de usuarios embebida).
+- **`panel-admin/supabase-setup.sql`**: deja de documentar como procedimiento válido el RLS deshabilitado y las policies `anon` con `USING (true)`; apunta al modelo de autorización vigente.
+
+### Corregido
+- **Panel de alertas (dashboard)**: la credencial de Supabase estaba commiteada en la rama `test` y por lo tanto compilada dentro del bundle publicado en GitHub Pages. Se considera filtrada y hay que rotarla.
 
 ## [1.1.0] — 2026-09-15
 
