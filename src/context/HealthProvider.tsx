@@ -94,7 +94,11 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [syncIntervalMin, setSyncIntervalMin] = useState(DEFAULT_SYNC_INTERVAL_MIN);
   const [activeAlerts, setActiveAlerts] = useState<Alerta[]>([]);
-  const {getUserId} = useSupabase();
+  const {getUserId, session} = useSupabase();
+  // Access token de sesion. Sin esto, la app opera con el rol `anon`, que ve
+  // toda la base; con el token, el RLS puede aplicar las policies propias
+  // por `auth.uid()`.
+  const accessToken = session?.access_token ?? null;
 
   // Referencia para el intervalo de auto-refresh
   const autoRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -108,18 +112,18 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
     const userId = getUserId();
     if (!userId) return;
     try {
-      const alerts = await getAlertas(userId);
+      const alerts = await getAlertas(userId, undefined, accessToken);
       setActiveAlerts(alerts);
     } catch {
       // Best-effort: don't crash the app if alerts can't be loaded
     }
-  }, [getUserId]);
+  }, [getUserId, accessToken]);
 
   // Cargar intervalo configurable desde perfil_usuario.intervalo_sync_min (HU-25 CA-01)
   useEffect(() => {
     const userId = getUserId();
     if (!userId) return;
-    getProfile(userId)
+    getProfile(userId, accessToken)
       .then(profile => {
         const config = profile?.intervalo_sync_min;
         if (config != null && config > 0) {
@@ -130,7 +134,7 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
       .catch(() => {
         // Configuración no disponible → se mantiene el default
       });
-  }, [getUserId]);
+  }, [getUserId, accessToken]);
 
   // ── HU-41: Initialize AlertEngine and load active alerts ──
   useEffect(() => {
@@ -152,28 +156,28 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
             datos: alertInsert.datos ?? null,
             leida_en: null,
             expira_en: alertInsert.expira_en ?? null,
-          });
+          }, accessToken);
           return {
             ...row,
             status: row.leida_en ? 'leida' as const : 'activa' as const,
           };
         },
         getActiveAlerts: async (uid) => {
-          const rows = await getAlertasActivas(uid);
+          const rows = await getAlertasActivas(uid, accessToken);
           return rows.map(r => ({
             ...r,
             status: r.leida_en ? 'leida' as const : 'activa' as const,
           }));
         },
         markAlertRead: async (alertId) => {
-          await marcarAlertaLeida(alertId);
+          await marcarAlertaLeida(alertId, accessToken);
         },
         updateAlertDatos: async (alertId, datos) => {
-          await updateAlertaDatos(alertId, datos as any);
+          await updateAlertaDatos(alertId, datos as any, accessToken);
         },
         // HU-42 CA-04: historial de FC de los últimos 5 min para calcular tendencia
         getRecentHeartRates: async (uid, fromIso) => {
-          const rows = await getDatosReloj(uid, {from: fromIso, limit: 20});
+          const rows = await getDatosReloj(uid, {from: fromIso, limit: 20}, accessToken);
           return rows
             .filter(r => r.frec_cardiaca_bpm != null && r.recorded_at != null)
             .map(r => ({
@@ -184,7 +188,7 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
         // HU-98: baseline personalizado para umbrales adaptativos (fallback estándar si falla)
         getPersonalizedBaseline: async (uid) => {
           try {
-            return await getBaselinePersonalizado(uid);
+            return await getBaselinePersonalizado(uid, accessToken);
           } catch {
             return null;
           }
@@ -216,7 +220,7 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
       alertEngineRef.current?.dispose();
       alertEngineRef.current = null;
     };
-  }, [getUserId]);
+  }, [getUserId, accessToken, refreshAlerts]);
 
   // Check Health Connect availability on mount
   useEffect(() => {
@@ -253,7 +257,6 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
     setLoading(true);
     setError(null);
     setErrorSeverity(null);
-    const userId = getUserId();
     try {
       const data = await getHealthData();
       setSummary(data);
@@ -270,9 +273,11 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
         // ── HU-25: Sincronizar con Supabase (datos_reloj) ──
         try {
           const result = await syncWearableToBackend(userId, data, {
-            insertDatosReloj,
-            getDatosRelojInWindow: (uid, from, to) => getDatosReloj(uid, {from, to}),
-            markDatosRelojReemplazado,
+            insertDatosReloj: (dato) => insertDatosReloj(dato, accessToken),
+            getDatosRelojInWindow: (uid, from, to) =>
+              getDatosReloj(uid, {from, to}, accessToken),
+            markDatosRelojReemplazado: (id, reemplazadoPor) =>
+              markDatosRelojReemplazado(id, reemplazadoPor, accessToken),
           });
           if (result.conflictResolved) {
             console.warn(
@@ -367,7 +372,7 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
     } finally {
       setLoading(false);
     }
-  }, [getUserId]);
+  }, [getUserId, accessToken]);
 
   const requestPermissionsAndLoad = useCallback(async () => {
     setError(null);
