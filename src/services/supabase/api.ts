@@ -436,9 +436,10 @@ export async function insertDatoSaludMLBatch(
 export async function insertDatosRelojYML(
   dato: DatosRelojInsert,
   fuente: FuenteDato = 'dispositivo',
+  accessToken?: string | null,
 ): Promise<{ datoReloj: DatosReloj; datosML: DatoSaludML[] }> {
   const datosML = expandDatosRelojToDatoSaludML(dato, fuente);
-  const datoReloj = await insertDatosReloj(dato);
+  const datoReloj = await insertDatosReloj(dato, accessToken);
 
   try {
     const datosMLInsertados = await insertDatoSaludMLBatch(datosML);
@@ -715,6 +716,7 @@ export async function syncHealthSummaryToSupabase(
     averageBpm: number | null;
     exerciseSessions: number;
   },
+  accessToken?: string | null,
 ): Promise<DatosReloj> {
   const now = new Date().toISOString();
   const hr = normalizeVital('frecuencia_cardiaca', summary.averageBpm);
@@ -734,7 +736,7 @@ export async function syncHealthSummaryToSupabase(
     origen: 'wearable',
   };
 
-  return (await insertDatosRelojYML(dato, 'dispositivo')).datoReloj;
+  return (await insertDatosRelojYML(dato, 'dispositivo', accessToken)).datoReloj;
 }
 
 // ═══════════════════════════════════════════

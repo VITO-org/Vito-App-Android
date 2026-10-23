@@ -308,7 +308,7 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({children}) => {
             recorded_at: new Date().toISOString(),
             sospechoso: hr.sospechoso || spo2.sospechoso || temp.sospechoso,
           };
-          await insertDatosRelojYML(lectura, 'dispositivo');
+          await insertDatosRelojYML(lectura, 'dispositivo', accessToken);
         } catch (syncErr) {
           if (syncErr instanceof SyncMLPartialError) {
             console.warn(
