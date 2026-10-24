@@ -18,8 +18,6 @@ import {useHealth} from '../context/HealthProvider';
 import {getDatosReloj} from '../services/supabase/api';
 import {getDailyAveragesForRange, type DailyAverages} from '../services/HealthDataCache';
 import type {DatosReloj} from '../services/supabase/models';
-import type {HealthSummary} from '../types/health';
-import {NORMAL_RANGES} from '../data/mockReportes';
 import {buildSignosFromResumen, type Resumen} from '../utils/signosVitales';
 
 // ─── Tipos ───
@@ -136,7 +134,7 @@ function formatearFecha(iso: string): string {
 // ─── Screen ───
 
 const HistorialScreen: React.FC = () => {
-  const {getUserId} = useSupabase();
+  const {getUserId, session} = useSupabase();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const {summary: healthSummary} = useHealth();
 
@@ -168,7 +166,7 @@ const HistorialScreen: React.FC = () => {
           from: desde.toISOString(),
           to: new Date().toISOString(),
           limit: 2000,
-        });
+        }, session?.access_token);
         dbData = result;
       } catch {
         dbData = [];
@@ -195,7 +193,7 @@ const HistorialScreen: React.FC = () => {
 
     fetchData();
     return () => { cancelled = true; };
-  }, [periodo, getUserId]);
+  }, [periodo, getUserId, session?.access_token]);
 
   // ─── Resumen desde DB ───
   const resumenBD = useCallback(() => calcularResumen(datos), [datos])();
@@ -238,16 +236,11 @@ const HistorialScreen: React.FC = () => {
     if (allDays.length === 0) return null;
 
     // Agregar todos los días
-    const n = allDays.length;
-
     const sumMetric = (key: keyof DailyAverages): number =>
       allDays.reduce((acc, d) => {
         const v = d.averages[key];
         return acc + (typeof v === 'number' ? v : 0);
       }, 0);
-
-    const avgMetric = (key: keyof DailyAverages): number =>
-      sumMetric(key) / n;
 
     // Para valores que pueden ser null, sacar el promedio no-nulo
     const avgNullable = (key: keyof DailyAverages): number => {

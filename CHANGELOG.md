@@ -9,6 +9,48 @@ Cada PR futuro agrega su entrada bajo `Unreleased`. Ver DoD de releases:
 ### Agregado
 - (Tus cambios acá: `### Agregado/Cambiado/Corregido/Quitado` por PR)
 
+## [1.2.1] — 2026-10-24
+
+### Sobre esta release
+
+**Release 1.2.1 — Corrección de seguridad y aislamiento de datos.** Esta versión
+corrige el envío del token de sesión en las consultas de la app y completa el
+bloqueo de acceso anónimo a los datos de pacientes en Supabase.
+
+### Corregido
+
+- **Autenticación de consultas**: `HealthProvider`, `NotificationsProvider`,
+  `HistorialScreen`, `DetalleSignoScreen` y la sincronización Health Connect
+  ahora envían el `access_token` de la sesión en todas las operaciones sobre
+  `datos_reloj`, `alerta`, `dispositivo_usuario`, `preferencia_notificacion`
+  y `notificacion_entrega`.
+- **Historial y detalle de signos**: siguen cargando los datos del usuario
+  autenticado después del bloqueo de RLS.
+- **Sincronización Health Connect**: `insertDatosRelojYML` propaga el token
+  para que la escritura en `datos_reloj` siga funcionando con RLS activo.
+
+### Seguridad
+
+- **RLS activo** en las 6 tablas de pacientes: `alerta`, `datos_reloj`,
+  `dispositivo_usuario`, `notificacion_entrega`, `preferencia_notificacion`
+  y `suggestion`.
+- **Policies anónimas eliminadas**: se removieron `anon_select_alertas`,
+  `"Dashboard puede crear alertas"`, `anon_select_notificacion_entrega`,
+  `anon_select_preferencia_notificacion`, `anon_upsert_preferencia_notificacion`,
+  `anon_update_preferencia_notificacion` y `anon_select_suggestions`.
+- **Privilegios de `anon` revocados**: la publishable key pública ya no puede
+  leer ni escribir esas tablas (responde 404). El rol `authenticated` conserva
+  acceso solo a sus propias filas.
+- **Verificación de aislamiento**: dos usuarios de prueba ven exclusivamente
+  sus propios datos.
+
+### Infraestructura
+
+- Migración `20261023000000_rls_panel_alertas_parte3_cierre_total.sql`.
+- Las partes 1 y 2 del cierre RLS fueron aplicadas en Supabase desde la rama
+  `test`; esta release incluye el cierre total y el fix de la app.
+- Sin cambios de funcionalidad visibles para el usuario.
+
 ## [1.2.0] — 2026-10-19
 
 ### Sobre esta release
