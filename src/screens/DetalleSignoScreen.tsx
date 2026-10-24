@@ -44,7 +44,6 @@ const MONTH_X_LABELS = ['7', '14', '21', '28'];
 const INITIAL_SPACING = 8;
 // El eje termina con aire; el label final llega al borde por su alineación, no por endSpacing.
 const END_SPACING = 10;
-const TRAILING_RIGHT_AIR = 24;
 
 type ChartPoint = {
   value?: number;
@@ -168,7 +167,7 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
   const [normalMin, setNormalMin] = useState(NORMAL_RANGES[tipoSigno as TipoSignoVital].min);
   const [normalMax, setNormalMax] = useState(NORMAL_RANGES[tipoSigno as TipoSignoVital].max);
   const [loading, setLoading] = useState(false);
-  const [hasData, setHasData] = useState(false);
+  const [, setHasData] = useState(false);
 
   const t = tipoSigno as TipoSignoVital;
   const isTemperature = t === 'temperatura';
@@ -237,7 +236,7 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
           to: hasta.toISOString(),
           limit: limite,
           notNullColumn: columnaNotNull(t),
-        });
+        }, session?.access_token);
 
         if (cancelled) return;
 
@@ -332,7 +331,7 @@ export default function DetalleSignoScreen({route, navigation}: Props) {
 
     fetchData();
     return () => { cancelled = true; };
-  }, [vista, tipoSigno, getUserId, normalMin, normalMax, t, dayOffset, weekOffset, monthOffset]);
+  }, [vista, tipoSigno, getUserId, normalMin, normalMax, t, dayOffset, weekOffset, monthOffset, session?.access_token]);
 
   const refLineValue = useMemo(() => (normalMin + normalMax) / 2, [normalMin, normalMax]);
 
