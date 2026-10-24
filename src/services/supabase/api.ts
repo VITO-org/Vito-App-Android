@@ -252,22 +252,24 @@ export async function insertDatosRelojBatch(
 export async function getDatosReloj(
   userId: string,
   options?: { from?: string; to?: string; limit?: number; origen?: OrigenDato; notNullColumn?: string },
+  accessToken?: string | null,
 ): Promise<DatosReloj[]> {
-  let query = supabase
-    .from('datos_reloj')
-    .select('*')
-    .eq('id_usuario', userId)
-    .order('recorded_at', { ascending: false });
+  // rawRestFetch (y no supabase-js) para poder mandar el access token de
+  // sesion: con el cliente anonimo la consulta cae en el rol anon, que ve
+  // toda la base. Con el token, el RLS aplica la policy propia por auth.uid().
+  const query = [
+    'select=*',
+    `id_usuario=eq.${userId}`,
+    'order=recorded_at.desc',
+    ...(options?.origen ? [`origen=eq.${options.origen}`] : []),
+    ...(options?.from ? [`recorded_at=gte.${options.from}`] : []),
+    ...(options?.to ? [`recorded_at=lte.${options.to}`] : []),
+    ...(options?.notNullColumn ? [`${options.notNullColumn}=not.is.null`] : []),
+    ...(options?.limit ? [`limit=${options.limit}`] : []),
+  ].join('&');
 
-  if (options?.origen) query = query.eq('origen', options.origen);
-  if (options?.from) query = query.gte('recorded_at', options.from);
-  if (options?.to) query = query.lte('recorded_at', options.to);
-  if (options?.notNullColumn) query = query.not(options.notNullColumn, 'is', null);
-  if (options?.limit) query = query.limit(options.limit);
-
-  const { data, error } = await query;
-  if (error) throw error;
-  return (data as DatosReloj[]) ?? [];
+  const rows = await rawRestFetch<DatosReloj[]>('datos_reloj', { query, accessToken });
+  return rows ?? [];
 }
 
 /**
@@ -434,9 +436,10 @@ export async function insertDatoSaludMLBatch(
 export async function insertDatosRelojYML(
   dato: DatosRelojInsert,
   fuente: FuenteDato = 'dispositivo',
+  accessToken?: string | null,
 ): Promise<{ datoReloj: DatosReloj; datosML: DatoSaludML[] }> {
   const datosML = expandDatosRelojToDatoSaludML(dato, fuente);
-  const datoReloj = await insertDatosReloj(dato);
+  const datoReloj = await insertDatosReloj(dato, accessToken);
 
   try {
     const datosMLInsertados = await insertDatoSaludMLBatch(datosML);
@@ -713,6 +716,7 @@ export async function syncHealthSummaryToSupabase(
     averageBpm: number | null;
     exerciseSessions: number;
   },
+  accessToken?: string | null,
 ): Promise<DatosReloj> {
   const now = new Date().toISOString();
   const hr = normalizeVital('frecuencia_cardiaca', summary.averageBpm);
@@ -732,7 +736,7 @@ export async function syncHealthSummaryToSupabase(
     origen: 'wearable',
   };
 
-  return (await insertDatosRelojYML(dato, 'dispositivo')).datoReloj;
+  return (await insertDatosRelojYML(dato, 'dispositivo', accessToken)).datoReloj;
 }
 
 // ═══════════════════════════════════════════
@@ -767,18 +771,16 @@ export async function getAlertas(
   options?: { soloNoLeidas?: boolean; limit?: number },
   accessToken?: string | null,
 ): Promise<Alerta[]> {
-  let query = supabase
-    .from('alerta')
-    .select('*')
-    .eq('id_usuario', userId)
-    .order('created_at', { ascending: false });
+  const query = [
+    'select=*',
+    `id_usuario=eq.${userId}`,
+    'order=created_at.desc',
+    ...(options?.soloNoLeidas ? ['leida_en=is.null'] : []),
+    ...(options?.limit ? [`limit=${options.limit}`] : []),
+  ].join('&');
 
-  if (options?.soloNoLeidas) query = query.is('leida_en', null);
-  if (options?.limit) query = query.limit(options.limit);
-
-  const { data, error } = await query;
-  if (error) throw error;
-  return (data as Alerta[]) ?? [];
+  const rows = await rawRestFetch<Alerta[]>('alerta', { query, accessToken });
+  return rows ?? [];
 }
 
 /**
