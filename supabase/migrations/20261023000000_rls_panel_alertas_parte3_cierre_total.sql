@@ -26,7 +26,7 @@ DROP POLICY IF EXISTS "anon_select_suggestions" ON suggestion;
 -- 3. Defensa en profundidad: que `anon` no tenga grants directos sobre
 --    datos de pacientes. Las policies own-row de `authenticated` siguen
 --    funcionando porque PostgREST cambia el rol al validar el JWT.
-REVOKE SELECT, INSERT, UPDATE, DELETE
+REVOKE ALL PRIVILEGES
   ON alerta, datos_reloj, dispositivo_usuario, notificacion_entrega,
      preferencia_notificacion, suggestion
   FROM anon;
