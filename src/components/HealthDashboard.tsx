@@ -71,7 +71,7 @@ export const HealthDashboard: React.FC = () => {
     <ScrollView
       style={styles.scrollView}
       contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Vito Health</Text>
+      <Text style={styles.title}>Vito</Text>
 
       <StatusBanner
         status={status.text}

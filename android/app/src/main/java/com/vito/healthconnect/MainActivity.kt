@@ -21,7 +21,7 @@ class MainActivity : ReactActivity() {
     /**
      * Nombre del componente principal registrado en index.js.
      */
-    override fun getMainComponentName(): String = "VitoHealthConnect"
+    override fun getMainComponentName(): String = "Vito"
 
     /**
      * ReactActivityDelegate que puede activar la nueva arquitectura (Fabric).

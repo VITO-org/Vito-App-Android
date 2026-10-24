@@ -9,6 +9,9 @@ Cada PR futuro agrega su entrada bajo `Unreleased`. Ver DoD de releases:
 ### Agregado
 - (Tus cambios acá: `### Agregado/Cambiado/Corregido/Quitado` por PR)
 
+### Cambiado
+- Nombre visible de la app unificado a **Vito** (antes "Vito Health Connect") en Android, Expo, documentación y panel de testing.
+
 ## [1.2.0] — 2026-10-19
 
 ### Sobre esta release
@@ -120,7 +123,7 @@ históricos para análisis ML, y una vista mejorada de gráficos de reporte.
 
 ### Sobre esta release
 
-**Vito Health Connect** es una aplicación móvil de salud que permite a pacientes
+**Vito** es una aplicación móvil de salud que permite a pacientes
 monitorear y registrar sus signos vitales (frecuencia cardíaca, saturación de
 oxígeno, presión arterial, pasos, sueño y calorías quemadas), visualizar
 reportes diarios/semanales/mensuales, y registrar síntomas de forma

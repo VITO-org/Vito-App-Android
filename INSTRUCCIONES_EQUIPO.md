@@ -1,4 +1,4 @@
-# Guía de Desarrollo para el Equipo (Vito Health Connect)
+# Guía de Desarrollo para el Equipo (Vito)
 
 Esta guía explica cómo desarrollar en la aplicación y ver los cambios **en vivo en tu teléfono o emulador** sin necesidad de compilar la app localmente (es decir, **sin instalar Android Studio, Gradle, ni descargar gigabytes de SDKs**).
 
@@ -20,7 +20,7 @@ Nuestra app usa módulos nativos personalizados para comunicarse con Google Heal
 2. Ir a la pestaña **Actions** (en la parte superior).
 3. Seleccioná el workflow **"Build Android Dev Client"** a la izquierda.
 4. Hacé clic en la última ejecución exitosa (marcada con un check verde ✅).
-5. Desplazate hacia abajo hasta la sección **Artifacts** y descargá el archivo **`VitoHealth-DevClient`** (es un `.zip` de ~30MB).
+5. Desplazate hacia abajo hasta la sección **Artifacts** y descargá el archivo **`Vito-DevClient`** (es un `.zip` de ~30MB).
 6. Descomprimí el zip para obtener el archivo `app-debug.apk`.
 7. Transferí e instalá este APK en tu teléfono Android.
 
@@ -45,7 +45,7 @@ Nuestra app usa módulos nativos personalizados para comunicarse con Google Heal
 ## 🔗 Paso 3: Conectar la App en Vivo
 
 ### Opción A: Por Wi-Fi (ambos en la misma red)
-1. Abrí la app **Vito Health Connect** en tu celular.
+1. Abrí la app **Vito** en tu celular.
 2. Escaneá el código QR que muestra la terminal de tu PC.
 3. ¡Listo! Los cambios en TypeScript/JS se ven al instante (Fast Refresh).
 

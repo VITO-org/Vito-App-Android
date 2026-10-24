@@ -1,6 +1,6 @@
 # VITO Admin Panel - Testing de Alertas
 
-Panel web de administración para generar datos de prueba y verificar que el sistema de alertas de VITO Health Connect funciona correctamente.
+Panel web de administración para generar datos de prueba y verificar que el sistema de alertas de Vito funciona correctamente.
 
 ## Configuración Inicial (Supabase)
 
