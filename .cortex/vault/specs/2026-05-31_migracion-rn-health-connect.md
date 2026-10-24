@@ -1,5 +1,5 @@
 ---
-title: Migración Vito Health Connect a React Native con puente nativo para wearables
+title: Migración Vito a React Native con puente nativo para wearables
 status: approved
 date: 2026-05-31
 tags:
@@ -11,11 +11,11 @@ tags:
   - typescript
 ---
 
-# Spec: Migración Vito Health Connect → React Native + Native Modules
+# Spec: Migración Vito → React Native + Native Modules
 
 ## Goal
 
-Migrar la app **Vito Health Connect** de Android nativo (Kotlin) a **React Native como plataforma principal**, conservando la capacidad de usar **módulos nativos de Android** para Health Connect y futura integración con wearables.
+Migrar la app **Vito** de Android nativo (Kotlin) a **React Native como plataforma principal**, conservando la capacidad de usar **módulos nativos de Android** para Health Connect y futura integración con wearables.
 
 ## Requirements
 

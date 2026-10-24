@@ -1,6 +1,6 @@
 -- Schema SQL para Supabase
 -- Versión post-migración HU-92: datos orientados a ML
--- Proyecto: VITO Health Connect
+-- Proyecto: Vito
 -- Schema de referencia: refleja el estado actual de la BD en Supabase
 -- Proyecto: https://supabase.com/dashboard/project/rkgbedehkfpiylaubjbo
 

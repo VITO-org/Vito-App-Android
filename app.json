@@ -1,9 +1,9 @@
 {
-  "name": "VitoHealthConnect",
-  "displayName": "Vito Health Connect",
+  "name": "Vito",
+  "displayName": "Vito",
   "expo": {
-    "name": "Vito Health Connect",
-    "slug": "vito-health-connect",
+    "name": "Vito",
+    "slug": "vito",
     "version": "1.2.1",
     "orientation": "portrait",
     "icon": "./src/assets/launcher-icon.png",

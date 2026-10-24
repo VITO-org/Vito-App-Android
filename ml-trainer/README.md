@@ -3,7 +3,7 @@
 ## Descripción
 
 Pipeline de entrenamiento del modelo de predicción de riesgo cardiovascular
-para la app VITO Health Connect.
+para la app Vito.
 
 ## Estructura
 

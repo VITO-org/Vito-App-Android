@@ -1,4 +1,4 @@
-# Vito Health Connect
+# Vito
 
 Probando 
 
@@ -114,7 +114,7 @@ La app se instala con `com.vito.healthconnect.rn` como `applicationId` para conv
 vito-app-android/
 ├── App.tsx                          # Componente raíz React Native
 ├── index.js                         # Entry point RN (AppRegistry)
-├── app.json                         # displayName: "Vito Health Connect"
+├── app.json                         # displayName: "Vito"
 ├── package.json                     # Dependencias RN/React
 ├── tsconfig.json                    # TypeScript strict, path alias @/
 ├── metro.config.js                  # Metro bundler config
@@ -279,7 +279,7 @@ adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 
 ### Probar Health Connect
 
-1. Abrí la app **Vito Health Connect** en tu dispositivo
+1. Abrí la app **Vito** en tu dispositivo
 2. La app verifica automáticamente si Health Connect está disponible
 3. Presioná **"Conectar Health Connect"** para solicitar permisos
 4. En la pantalla de permisos de Health Connect, activá los 6 tipos de datos
