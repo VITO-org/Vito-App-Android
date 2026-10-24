@@ -3,7 +3,7 @@
   "displayName": "Vito",
   "expo": {
     "name": "Vito",
-    "slug": "vito-health-connect",
+    "slug": "vito",
     "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./src/assets/launcher-icon.png",

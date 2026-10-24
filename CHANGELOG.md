@@ -10,7 +10,7 @@ Cada PR futuro agrega su entrada bajo `Unreleased`. Ver DoD de releases:
 - (Tus cambios acá: `### Agregado/Cambiado/Corregido/Quitado` por PR)
 
 ### Cambiado
-- Nombre visible de la app unificado a **Vito** (antes "Vito Health Connect") en Android, Expo, documentación y panel de testing.
+- Nombre visible de la app unificado a **Vito** en Android, Expo, documentación y panel de testing.
 
 ## [1.2.0] — 2026-10-19
 
