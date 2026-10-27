@@ -9,8 +9,31 @@ Cada PR futuro agrega su entrada bajo `Unreleased`. Ver DoD de releases:
 ### Agregado
 - (Tus cambios acá: `### Agregado/Cambiado/Corregido/Quitado` por PR)
 
+## [1.2.2] — 2026-10-27
+
+### Sobre esta release
+
+**Release 1.2.2 — Documentación y orden del repositorio.** Parche sin cambios de
+comportamiento en la app: reorganiza la documentación en `docs/`, incorpora el
+material canónico del asistente Vittito y reescribe el README para que describa el
+producto. El APK se reconstruye con el mismo código de la 1.2.1.
+
+### Agregado
+
+- **Carpeta `docs/`** con la documentación del proyecto y un índice en
+  `docs/README.md`.
+- **`docs/ai/`** con el system prompt canónico de Vittito
+  (`vittito-system-prompt.md`) y el export del workflow de n8n (`ChatVito.json`).
+
 ### Cambiado
-- Nombre visible de la app unificado a **Vito** en Android, Expo, documentación y panel de testing.
+
+- **Documentación fuera de la raíz**: `arquitectura.md`, `DEV-SETUP.md`,
+  `INSTRUCCIONES_EQUIPO.md`, `CONFIG-JIRA-CORTEX.md` y `DOC-FIX-CORTEX-OPENCODE.md`
+  se movieron a `docs/` con el mismo contenido.
+- **README orientado a producto**: ahora explica qué es Vito, qué problema resuelve y
+  qué se puede hacer hoy, en lugar de detallar el árbol de carpetas.
+- **Nombre visible de la app** unificado a **Vito** en Android, Expo, documentación y
+  panel de testing.
 
 ## [1.2.1] — 2026-10-24
 
