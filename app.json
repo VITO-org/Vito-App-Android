@@ -1,16 +1,16 @@
 {
-  "name": "VitoHealthConnect",
-  "displayName": "Vito Health Connect",
+  "name": "Vito",
+  "displayName": "Vito",
   "expo": {
-    "name": "Vito Health Connect",
-    "slug": "vito-health-connect",
-    "version": "1.2.1",
+    "name": "Vito",
+    "slug": "vito",
+    "version": "1.2.2",
     "orientation": "portrait",
     "icon": "./src/assets/launcher-icon.png",
     "android": {
       "package": "com.vito.healthconnect.rn",
       "googleServicesFile": "./android/app/google-services.json",
-      "versionCode": 4,
+      "versionCode": 5,
       "adaptiveIcon": {
         "foregroundImage": "./src/assets/adaptive-foreground.png",
         "backgroundColor": "#0E2A2D"

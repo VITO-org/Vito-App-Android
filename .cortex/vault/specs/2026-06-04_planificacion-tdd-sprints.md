@@ -23,7 +23,7 @@ progresiva de 3 pasos** que un equipo sin experiencia en TDD pueda seguir desde 
 
 | Aspecto | Estado |
 |---------|--------|
-| Proyecto | VITO Health Connect — React Native + Kotlin nativo |
+| Proyecto | Vito — React Native + Kotlin nativo |
 | Build | Compila con `npx react-native run-android` |
 | Tests | `__tests__/` vacío — cero tests escritos |
 | Cobertura | 0% |

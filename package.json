@@ -1,6 +1,6 @@
 {
-  "name": "VitoHealthConnect",
-  "version": "1.2.1",
+  "name": "vito",
+  "version": "1.2.2",
   "private": true,
   "scripts": {
     "android": "react-native run-android",

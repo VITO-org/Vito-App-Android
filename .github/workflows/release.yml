@@ -114,7 +114,7 @@ jobs:
       - name: Upload APK artifact (para el job de release)
         uses: actions/upload-artifact@v4
         with:
-          name: VitoHealth-Release-${{ github.ref_name }}
+          name: Vito-Release-${{ github.ref_name }}
           path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 90
@@ -134,7 +134,7 @@ jobs:
       - name: Download APK artifact
         uses: actions/download-artifact@v4
         with:
-          name: VitoHealth-Release-${{ github.ref_name }}
+          name: Vito-Release-${{ github.ref_name }}
           path: ./release-artifacts
 
       - name: Extract release notes from CHANGELOG.md
@@ -184,7 +184,7 @@ jobs:
           body: |
             ## Vito ${{ github.ref_name }}
 
-            **Vito Health Connect** es una aplicación móvil de salud para Android que permite a pacientes monitorear y registrar sus signos vitales, visualizar reportes clínicos, y recibir alertas cuando algún parámetro está fuera de rango.
+            **Vito** es una aplicación móvil de salud para Android que permite a pacientes monitorear y registrar sus signos vitales, visualizar reportes clínicos, y recibir alertas cuando algún parámetro está fuera de rango.
 
             ### Qué incluye esta versión
 

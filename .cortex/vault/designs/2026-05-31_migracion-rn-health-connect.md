@@ -1,5 +1,5 @@
 ---
-title: Arquitectura React Native + Native Module para Vito Health Connect
+title: Arquitectura React Native + Native Module para Vito
 session: 2026-05-31_migracion-rn-health-connect
 spec: 2026-05-31_migracion-rn-health-connect
 status: draft
@@ -12,7 +12,7 @@ tags:
 created: 2026-05-31
 ---
 
-# Design: React Native + Native Module para Vito Health Connect
+# Design: React Native + Native Module para Vito
 
 ## Architecture Decision
 
