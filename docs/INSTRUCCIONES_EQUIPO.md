@@ -18,9 +18,9 @@ Nuestra app usa módulos nativos personalizados para comunicarse con Google Heal
 
 1. Entrá al repositorio del proyecto en **GitHub**.
 2. Ir a la pestaña **Actions** (en la parte superior).
-3. Seleccioná el workflow **"Build Android Dev Client"** a la izquierda.
+3. Seleccioná el workflow **"[Android] Debug APK (Dev Client)"** a la izquierda.
 4. Hacé clic en la última ejecución exitosa (marcada con un check verde ✅).
-5. Desplazate hacia abajo hasta la sección **Artifacts** y descargá el archivo **`Vito-DevClient`** (es un `.zip` de ~30MB).
+5. Desplazate hacia abajo hasta la sección **Artifacts** y descargá el archivo **`Vito-DEBUG-DevClient`** (es un `.zip` de ~30MB).
 6. Descomprimí el zip para obtener el archivo `app-debug.apk`.
 7. Transferí e instalá este APK en tu teléfono Android.
 
