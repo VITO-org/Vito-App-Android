@@ -9,6 +9,14 @@ Cada PR futuro agrega su entrada bajo `Unreleased`. Ver DoD de releases:
 ### Agregado
 - (Tus cambios acá: `### Agregado/Cambiado/Corregido/Quitado` por PR)
 
+### Cambiado
+- **Nombres de los workflows de build**: ahora se distingue explícitamente Debug de
+  Release en la pestaña Actions. `Build Android Dev Client APK` → `[Android] Debug APK
+  (Dev Client)`, `Build Android Preview APK` → `[Android] Release APK (Preview)` y
+  `Release` → `[Release] Tag - APK + GitHub Release`. Se agrega `run-name` para leer la
+  rama y el número de run en la lista, y los artifacts pasan a `Vito-DEBUG-DevClient` y
+  `Vito-RELEASE-Preview`. Sin cambios en triggers, steps ni firmas.
+
 ## [1.2.2] — 2026-10-27
 
 ### Sobre esta release
