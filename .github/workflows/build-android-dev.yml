@@ -1,4 +1,5 @@
-name: Build Android Preview APK
+name: "[Android] Release APK (Preview)"
+run-name: "Release APK preview - ${{ github.ref_name }} - run ${{ github.run_number }}"
 
 on:
   workflow_dispatch: # Permite ejecutar la build manualmente desde GitHub
@@ -17,7 +18,7 @@ on:
 
 jobs:
   build:
-    name: Build Release APK (preview)
+    name: Build RELEASE APK (assembleRelease)
     runs-on: ubuntu-latest
 
     steps:
@@ -50,6 +51,6 @@ jobs:
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Vito-Preview
+          name: Vito-RELEASE-Preview
           path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error

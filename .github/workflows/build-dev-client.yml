@@ -1,4 +1,5 @@
-name: Build Android Dev Client APK
+name: "[Android] Debug APK (Dev Client)"
+run-name: "Debug APK - ${{ github.ref_name }} - run ${{ github.run_number }}"
 
 on:
   workflow_dispatch: # Manual
@@ -15,7 +16,7 @@ on:
 
 jobs:
   build:
-    name: Build Debug APK (Dev Client)
+    name: Build DEBUG APK (assembleDebug)
     runs-on: ubuntu-latest
 
     steps:
@@ -55,7 +56,7 @@ jobs:
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Vito-DevClient
+          name: Vito-DEBUG-DevClient
           path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
           if-no-files-found: error

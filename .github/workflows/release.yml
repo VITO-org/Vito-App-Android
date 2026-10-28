@@ -1,4 +1,5 @@
-name: Release
+name: "[Release] Tag - APK + GitHub Release"
+run-name: "Release ${{ github.ref_name }}"
 
 # DoD DESPLIEGUE-2 + DESPLIEGUE-3 — Pipeline de release automático
 # Trigger: push de tag vX.Y.Z (semver)
