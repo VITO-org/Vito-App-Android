@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vito — Tus datos de salud, por fin claros</title>
+  <meta name="description" content="Vito convierte los datos de Google Health Connect en seguimiento claro, alertas útiles y acompañamiento diario. Pasos, sueño, pulso, oxigenación, presión y temperatura en un solo panel." />
+  <meta name="theme-color" content="#063B3B" />
+  <meta name="color-scheme" content="light" />
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="canonical" href="https://vito-landing.vercel.app/" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Vito" />
+  <meta property="og:locale" content="es_AR" />
+  <meta property="og:title" content="Vito — Tus datos de salud, por fin claros" />
+  <meta property="og:description" content="Los datos que tu teléfono ya registra, ordenados en un panel que se entiende. Con alertas útiles y un asistente que explica los números en lenguaje cotidiano." />
+  <meta property="og:url" content="https://vito-landing.vercel.app/" />
+  <meta property="og:image" content="https://vito-landing.vercel.app/assets/vito-avatar-480.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Vito — Tus datos de salud, por fin claros" />
+  <meta name="twitter:description" content="Seguimiento claro de tus signos vitales, alertas cuando algo se sale de rango y Vittito para entender qué significan los números." />
+  <meta name="twitter:image" content="https://vito-landing.vercel.app/assets/vito-avatar-480.png" />
+
+  <link rel="preload" href="assets/vito-avatar-480.png" as="image" />
+  <script>document.documentElement.classList.add('js');</script>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Saltar al contenido</a>
+
+  <header class="site-header">
+    <nav class="nav" aria-label="Navegación principal">
+      <a class="brand" href="#top" aria-label="Vito, ir al inicio">
+        <img class="brand-mark" src="assets/vito-avatar-96.png" alt="" width="40" height="40" />
+        <span class="brand-word">Vito</span>
+      </a>
+
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-menu" aria-label="Abrir menú">
+        <span class="nav-toggle-bar"></span>
+        <span class="nav-toggle-bar"></span>
+        <span class="nav-toggle-bar"></span>
+      </button>
+
+      <ul class="nav-menu" id="nav-menu">
+        <li><a href="#problema">Problema</a></li>
+        <li><a href="#capacidades">Qué hace</a></li>
+        <li><a href="#signos">Signos</a></li>
+        <li><a href="#vittito">Vittito</a></li>
+        <li><a href="#seguridad">Seguridad</a></li>
+        <li><a href="#novedades">Novedades</a></li>
+        <li><a class="nav-cta" href="#descargar">Descargar</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main id="main">
+    <!-- HERO -->
+    <section class="hero" id="top" aria-labelledby="hero-title">
+      <div class="hero-glow" aria-hidden="true"></div>
+      <div class="hero-inner">
+        <div class="hero-copy">
+          <p class="eyebrow">Salud conectada · Android + Health Connect</p>
+          <h1 id="hero-title">Tus datos de salud,<br /><span class="accent">por fin claros.</span></h1>
+          <p class="lead">
+            Vito lee lo que tu teléfono ya registra —pasos, sueño, pulso, oxigenación,
+            presión y temperatura— y lo ordena en un panel que se entiende. Sin jerga
+            clínica y con alertas cuando algo se sale de rango.
+          </p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" data-download href="https://github.com/VITO-org/Vito-App-Android/releases/latest">Descargar Vito</a>
+            <a class="btn btn-ghost" href="#capacidades">Ver qué hace</a>
+          </div>
+          <p class="hero-note">
+            Vito no diagnostica ni receta: explica tendencias y te deriva a un profesional
+            cuando corresponde.
+          </p>
+        </div>
+
+        <div class="hero-visual">
+          <div class="hero-orbit" aria-hidden="true"></div>
+          <img
+            class="hero-mascot"
+            src="assets/vito-avatar-480.png"
+            alt="Vito, el personaje que acompaña la app"
+            width="480" height="480" fetchpriority="high" decoding="async" />
+          <div class="hero-chip hero-chip--one">
+            <img src="assets/pulso-96.png" alt="" width="20" height="20" />
+            <span>Pulso 68 lpm</span>
+          </div>
+          <div class="hero-chip hero-chip--two">
+            <img src="assets/sueno-96.png" alt="" width="20" height="20" />
+            <span>7 h 20 min de sueño</span>
+          </div>
+          <div class="hero-chip hero-chip--three">
+            <img src="assets/oxigenacion-96.png" alt="" width="20" height="20" />
+            <span>SpO₂ 98 %</span>
+          </div>
+        </div>
+      </div>
+
+      <ul class="hero-stats" aria-label="Resumen del producto">
+        <li>
+          <strong>6</strong>
+          <span>signos vitales conectados</span>
+        </li>
+        <li>
+          <strong>1</strong>
+          <span>panel para todo tu día</span>
+        </li>
+        <li>
+          <strong>24/7</strong>
+          <span>alertas cuando algo se sale de rango</span>
+        </li>
+        <li>
+          <strong>0</strong>
+          <span>jerga clínica innecesaria</span>
+        </li>
+      </ul>
+    </section>
+
+    <!-- PROBLEMA -->
+    <section class="section" id="problema" aria-labelledby="problema-title">
+      <div class="section-head">
+        <p class="eyebrow eyebrow--dark">El problema</p>
+        <h2 id="problema-title">El reloj mide. El teléfono acumula.<br />Vos no ves nada.</h2>
+        <p class="section-lead">
+          Los datos de salud están fragmentados: cada dispositivo guarda su parte y
+          nadie los junta. Vito toma esa información, la normaliza a unidades canónicas
+          y la presenta en un solo lugar, con contexto.
+        </p>
+      </div>
+
+      <div class="card-grid card-grid--three">
+        <article class="card">
+          <span class="card-index">01</span>
+          <h3>Datos dispersos</h3>
+          <p>
+            El reloj mide, el teléfono acumula y la app de turno muestra un número
+            suelto. No hay una vista que cuente la semana completa.
+          </p>
+        </article>
+        <article class="card">
+          <span class="card-index">02</span>
+          <h3>Números sin contexto</h3>
+          <p>
+            Un pulso de 96 no dice nada si no sabés cuál es tu rango habitual.
+            Vito calcula tu baseline y compara contra él.
+          </p>
+        </article>
+        <article class="card">
+          <span class="card-index">03</span>
+          <h3>Alertas que no llegan</h3>
+          <p>
+            Cuando un valor se sale de rango, enterarte tres días después no sirve.
+            Vito evalúa cada medición y avisa a tiempo.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <!-- CAPACIDADES -->
+    <section class="section section--tint" id="capacidades" aria-labelledby="capacidades-title">
+      <div class="section-head">
+        <p class="eyebrow eyebrow--dark">Qué hace Vito</p>
+        <h2 id="capacidades-title">Todo tu día, en un solo lugar</h2>
+        <p class="section-lead">
+          Desde el resumen de la mañana hasta el detalle de cada medición. Pensado para
+          entender tu cuerpo sin abrir cinco apps distintas.
+        </p>
+      </div>
+
+      <div class="card-grid card-grid--four">
+        <article class="feature">
+          <img src="assets/graficos-96.png" alt="" width="44" height="44" loading="lazy" decoding="async" />
+          <h3>Panel del día</h3>
+          <p>Resumen de los signos registrados hoy, con estado general y accesos rápidos.</p>
+        </article>
+        <article class="feature">
+          <img src="assets/pulso-96.png" alt="" width="44" height="44" loading="lazy" decoding="async" />
+          <h3>Todos los signos</h3>
+          <p>Vista completa de cada signo con su última medición y su tendencia.</p>
+        </article>
+        <article class="feature">
+          <img src="assets/graficos-96.png" alt="" width="44" height="44" loading="lazy" decoding="async" />
+          <h3>Detalle y gráficos</h3>
+          <p>Serie temporal por signo, con rangos y tooltip al tocar cada punto.</p>
+        </article>
+        <article class="feature">
+          <img src="assets/historial-96.png" alt="" width="44" height="44" loading="lazy" decoding="async" />
+          <h3>Historial</h3>
+          <p>Consulta de mediciones anteriores por fecha, sin perder el contexto.</p>
+        </article>
+        <article class="feature">
+          <img src="assets/alertas-96.png" alt="" width="44" height="44" loading="lazy" decoding="async" />
+          <h3>Alertas</h3>
+          <p>Detección de valores fuera de rango y aviso al usuario cuando importa.</p>
+        </article>
+        <article class="feature">
+          <img src="assets/sintomas-96.png" alt="" width="44" height="44" loading="lazy" decoding="async" />
+          <h3>Síntomas</h3>
+          <p>Registro de síntomas para dar contexto a las mediciones del día.</p>
+        </article>
+        <article class="feature">
+          <img src="assets/contactos-96.png" alt="" width="44" height="44" loading="lazy" decoding="async" />
+          <h3>Contactos de confianza</h3>
+          <p>Personas a notificar ante una alerta relevante.</p>
+        </article>
+        <article class="feature">
+          <img src="assets/microfono-96.png" alt="" width="44" height="44" loading="lazy" decoding="async" />
+          <h3>Vittito</h3>
+          <p>Asistente conversacional que explica tus datos en lenguaje cotidiano.</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- SIGNOS -->
+    <section class="section" id="signos" aria-labelledby="signos-title">
+      <div class="section-head">
+        <p class="eyebrow eyebrow--dark">Signos vitales</p>
+        <h2 id="signos-title">Lo que Vito lee de Health Connect</h2>
+        <p class="section-lead">
+          Seis métricas que tu teléfono ya registra, normalizadas a unidades canónicas
+          y guardadas en UTC para que el historial no se rompa al cambiar de zona horaria.
+        </p>
+      </div>
+
+      <div class="vitals">
+        <article class="vital">
+          <img src="assets/pasos-96.png" alt="" width="40" height="40" loading="lazy" decoding="async" />
+          <div>
+            <h3>Pasos</h3>
+            <p class="vital-origin"><code>StepsRecord.COUNT_TOTAL</code></p>
+          </div>
+          <span class="vital-unit">pasos</span>
+        </article>
+        <article class="vital">
+          <img src="assets/distancia-96.png" alt="" width="40" height="40" loading="lazy" decoding="async" />
+          <div>
+            <h3>Distancia</h3>
+            <p class="vital-origin"><code>DistanceRecord.DISTANCE_TOTAL</code></p>
+          </div>
+          <span class="vital-unit">km</span>
+        </article>
+        <article class="vital">
+          <img src="assets/calorias-96.png" alt="" width="40" height="40" loading="lazy" decoding="async" />
+          <div>
+            <h3>Calorías</h3>
+            <p class="vital-origin"><code>TotalCaloriesBurnedRecord</code></p>
+          </div>
+          <span class="vital-unit">kcal</span>
+        </article>
+        <article class="vital">
+          <img src="assets/sueno-96.png" alt="" width="40" height="40" loading="lazy" decoding="async" />
+          <div>
+            <h3>Sueño</h3>
+            <p class="vital-origin"><code>SleepSessionRecord</code></p>
+          </div>
+          <span class="vital-unit">h y min</span>
+        </article>
+        <article class="vital">
+          <img src="assets/pulso-96.png" alt="" width="40" height="40" loading="lazy" decoding="async" />
+          <div>
+            <h3>Pulso medio</h3>
+            <p class="vital-origin"><code>HeartRateRecord.samples</code></p>
+          </div>
+          <span class="vital-unit">lpm</span>
+        </article>
+        <article class="vital">
+          <img src="assets/graficos-96.png" alt="" width="40" height="40" loading="lazy" decoding="async" />
+          <div>
+            <h3>Ejercicios</h3>
+            <p class="vital-origin"><code>ExerciseSessionRecord</code></p>
+          </div>
+          <span class="vital-unit">sesiones</span>
+        </article>
+      </div>
+
+      <p class="canonical-note">
+        Unidades canónicas del dominio: frecuencia cardíaca en <strong>lpm</strong>,
+        presión arterial en <strong>mmHg</strong>, saturación de oxígeno en
+        <strong>%</strong> y temperatura en <strong>°C</strong>.
+      </p>
+    </section>
+
+    <!-- VITTITO -->
+    <section class="section section--dark" id="vittito" aria-labelledby="vittito-title">
+      <div class="vittito">
+        <div class="vittito-copy">
+          <p class="eyebrow">Asistente conversacional</p>
+          <h2 id="vittito-title">Vittito explica los números</h2>
+          <p class="section-lead">
+            Un motor de reglas calcula umbrales personalizados a partir de tu baseline.
+            Encima, Vittito interpreta el contexto de la conversación y te cuenta qué
+            está pasando en lenguaje cotidiano. Si algo requiere atención, te lo dice
+            y te deriva a un profesional.
+          </p>
+
+          <ul class="chat-chips" aria-label="Ejemplos de preguntas">
+            <li>¿Cómo dormí esta semana?</li>
+            <li>¿Por qué me avisó de la presión?</li>
+            <li>¿Qué significa mi pulso en reposo?</li>
+          </ul>
+
+          <div class="disclaimer">
+            <strong>Importante:</strong> Vito describe tendencias, explica alertas y
+            deriva. No diagnostica, no receta y no reemplaza una consulta médica.
+          </div>
+        </div>
+
+        <div class="vittito-visual">
+          <img
+            src="assets/vittito-360.png"
+            alt="Vittito, el asistente de Vito"
+            width="335" height="360" loading="lazy" decoding="async" />
+        </div>
+      </div>
+    </section>
+
+    <!-- SEGURIDAD -->
+    <section class="section section--tint" id="seguridad" aria-labelledby="seguridad-title">
+      <div class="section-head">
+        <p class="eyebrow eyebrow--dark">Privacidad y seguridad</p>
+        <h2 id="seguridad-title">Tus datos son tuyos</h2>
+        <p class="section-lead">
+          La información de salud es sensible. Vito la protege en el servidor y en el
+          dispositivo, sin atajos.
+        </p>
+      </div>
+
+      <div class="card-grid card-grid--three">
+        <article class="card card--icon">
+          <img src="assets/seguridad-96.png" alt="" width="40" height="40" loading="lazy" decoding="async" />
+          <h3>Row Level Security</h3>
+          <p>
+            Las seis tablas de pacientes tienen RLS activo: cada usuario accede
+            únicamente a sus propias mediciones, alertas y preferencias.
+          </p>
+        </article>
+        <article class="card card--icon">
+          <img src="assets/dispositivos-96.png" alt="" width="40" height="40" loading="lazy" decoding="async" />
+          <h3>Acceso anónimo cerrado</h3>
+          <p>
+            La clave pública de Supabase no habilita lectura de datos. El acceso
+            anónimo a mediciones y alertas fue revocado explícitamente.
+          </p>
+        </article>
+        <article class="card card--icon">
+          <img src="assets/contactos-96.png" alt="" width="40" height="40" loading="lazy" decoding="async" />
+          <h3>Credenciales en el servidor</h3>
+          <p>
+            Las claves sensibles viven en Supabase Secrets y en Edge Functions.
+            Nunca se incluyen en el paquete de la app.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <!-- NOVEDADES -->
+    <section class="section" id="novedades" aria-labelledby="novedades-title">
+      <div class="section-head">
+        <p class="eyebrow eyebrow--dark">Novedades</p>
+        <h2 id="novedades-title">Qué cambió en la última versión</h2>
+        <p class="section-lead">
+          Cada release se publica acá. La versión actual se actualiza junto con el
+          repositorio de la app.
+        </p>
+      </div>
+
+      <div class="release" id="release-panel" aria-live="polite">
+        <div class="release-head">
+          <span class="release-badge" id="release-version">v1.2.2</span>
+          <span class="release-date" id="release-date">27 de octubre de 2026</span>
+        </div>
+        <ul class="release-list" id="release-highlights">
+          <li>Panel del día con resumen de signos y estado general.</li>
+          <li>Alertas por signo vital con severidad y conteos.</li>
+          <li>Vittito con contexto de las mediciones del usuario.</li>
+          <li>Seguridad reforzada: RLS en Supabase y acceso anónimo cerrado.</li>
+        </ul>
+      </div>
+
+      <div class="release-history">
+        <h3>Versiones anteriores</h3>
+        <ol class="release-timeline" id="release-history"></ol>
+      </div>
+
+      <noscript>
+        <p class="canonical-note">
+          Activá JavaScript para ver el historial completo de versiones, o consultá el
+          <a href="https://github.com/VITO-org/Vito-App-Android/blob/main/CHANGELOG.md">CHANGELOG</a>.
+        </p>
+      </noscript>
+    </section>
+
+    <!-- DESCARGA -->
+    <section class="cta" id="descargar" aria-labelledby="descargar-title">
+      <div class="cta-inner">
+        <p class="eyebrow">Probalo en tu Android</p>
+        <h2 id="descargar-title">Empezá a entender tus datos</h2>
+        <p class="section-lead">
+          Requiere Android 14 o superior y Google Health Connect. Al instalar, habilitá
+          los permisos de lectura para que Vito pueda mostrar tus signos.
+        </p>
+        <div class="hero-actions hero-actions--center">
+          <a class="btn btn-primary" data-download href="https://github.com/VITO-org/Vito-App-Android/releases/latest">Descargar el APK</a>
+          <a class="btn btn-ghost btn-ghost--dark" href="https://github.com/VITO-org/Vito-App-Android">Ver el repositorio</a>
+        </div>
+        <p class="hero-note">
+          Vito no diagnostica ni receta. Ante cualquier duda de salud, consultá a un
+          profesional.
+        </p>
+      </div>
+      <img
+        class="cta-peek"
+        src="assets/vito-peek-1200.png"
+        alt=""
+        width="1200" height="675" loading="lazy" decoding="async" aria-hidden="true" />
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <img src="assets/vito-avatar-96.png" alt="" width="36" height="36" loading="lazy" decoding="async" />
+        <div>
+          <strong>Vito</strong>
+          <p>Seguimiento claro, alertas útiles y acompañamiento diario.</p>
+        </div>
+      </div>
+
+      <nav class="footer-nav" aria-label="Enlaces del pie">
+        <a href="#problema">Problema</a>
+        <a href="#capacidades">Qué hace</a>
+        <a href="#signos">Signos</a>
+        <a href="#vittito">Vittito</a>
+        <a href="#seguridad">Seguridad</a>
+        <a href="#novedades">Novedades</a>
+      </nav>
+
+      <div class="footer-meta">
+        <a href="https://github.com/VITO-org/Vito-App-Android">GitHub</a>
+        <a href="https://github.com/VITO-org/Vito-App-Android/blob/main/CHANGELOG.md">Changelog</a>
+        <p>© <span id="year">2026</span> Vito. Todos los derechos reservados.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="config.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

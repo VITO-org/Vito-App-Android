@@ -46,6 +46,9 @@ ml-trainer/models/
 /src/services/vitals.test.ts
 /src/services/supabase/api.test.ts
 
+# Vercel (link local con orgId/projectId)
+.vercel/
+
 # Cortex AI cache (transient)
 .cortex/memory/
 .cortex/sessions/
@@ -62,3 +65,6 @@ ml-trainer/data/dataset_*
 ml-trainer/data/features*
 informe-prediccion-riesgo.md
 supabase/.temp/
+
+.vercel
+.env*

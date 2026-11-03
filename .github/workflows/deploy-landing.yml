@@ -1,0 +1,95 @@
+name: Deploy Landing (Vercel)
+
+# La rama a publicar queda declarada acá, no en el dashboard de Vercel.
+# Producción: push a `landing` → deployment de producción.
+# Previews: pull request hacia `landing` → deployment de preview con URL propia.
+
+on:
+  push:
+    branches: [landing]
+    paths:
+      - "landing/**"
+      - "vercel.json"
+      - ".github/workflows/deploy-landing.yml"
+  pull_request:
+    branches: [landing]
+    paths:
+      - "landing/**"
+      - "vercel.json"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-landing-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  deploy:
+    name: Build y deploy
+    runs-on: ubuntu-latest
+    # Los PR desde forks no reciben secrets: se omiten en vez de fallar.
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Instalar Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Definir entorno de deploy
+        id: env
+        run: |
+          if [ "${GITHUB_REF}" = "refs/heads/landing" ]; then
+            echo "target=production" >> "$GITHUB_OUTPUT"
+            echo "flag=--prod" >> "$GITHUB_OUTPUT"
+          else
+            echo "target=preview" >> "$GITHUB_OUTPUT"
+            echo "flag=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Vercel pull
+        run: vercel pull --yes --environment=${{ steps.env.outputs.target }} --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Vercel build
+        run: vercel build ${{ steps.env.outputs.flag }} --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy
+        id: deploy
+        run: |
+          if [ "${GITHUB_REF}" = "refs/heads/landing" ]; then
+            url=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})
+          else
+            url=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }})
+          fi
+          echo "url=${url}" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Landing publicada"
+            echo ""
+            echo "${url}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comentar la URL del preview en el PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const url = '${{ steps.deploy.outputs.url }}';
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `Preview de la landing: ${url}`
+            });
