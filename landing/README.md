@@ -105,7 +105,8 @@ de `landing/` en el canal `live` del sitio default.
 
 ### Dominio y metadatos
 
-El sitio queda en `https://vito-39dda.web.app` (proyecto `vito-39dda`).
+El sitio queda en `https://vito-app-project.web.app` (target `landing` de
+`.firebaserc`, proyecto `vito-39dda`).
 Actualizá `canonical`, `og:url`, `og:image` y `twitter:image` en
 `landing/index.html` con esa URL. Para un dominio propio: **Hosting → Add
 custom domain** y seguí los registros DNS que indique Firebase (SSL incluido).

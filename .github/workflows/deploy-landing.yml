@@ -1,8 +1,8 @@
 name: Deploy Landing (Firebase)
 
-# Producción: push a `landing` → canal `live`.
-# Previews: pull request hacia `landing` → canal temporal con URL propia.
-# La configuración de hosting vive en `firebase.json` (raíz, public: "landing").
+# ProducciÃ³n: push a `landing` â†’ canal `live`.
+# Previews: pull request hacia `landing` â†’ canal temporal con URL propia.
+# La configuraciÃ³n de hosting vive en `firebase.json` (raÃ­z, public: "landing").
 
 on:
   push:
@@ -10,12 +10,14 @@ on:
     paths:
       - "landing/**"
       - "firebase.json"
+      - ".firebaserc"
       - ".github/workflows/deploy-landing.yml"
   pull_request:
     branches: [landing]
     paths:
       - "landing/**"
       - "firebase.json"
+      - ".firebaserc"
   workflow_dispatch:
 
 concurrency:
@@ -39,7 +41,7 @@ jobs:
         uses: actions/checkout@v4
 
       # Fail-fast con mensaje claro en vez de un error opaco del CLI.
-      - name: Verificar configuración de Firebase
+      - name: Verificar configuraciÃ³n de Firebase
         env:
           PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
           SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
@@ -55,7 +57,7 @@ jobs:
           fi
           test -f landing/index.html
           test -f firebase.json
-          echo "Configuración presente."
+          echo "ConfiguraciÃ³n presente."
 
       - name: Deploy preview (PR)
         if: github.event_name == 'pull_request'
@@ -64,14 +66,16 @@ jobs:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           projectId: ${{ vars.FIREBASE_PROJECT_ID }}
+          target: landing
           channelId: pr-${{ github.event.number }}
           expires: 7d
 
-      - name: Deploy producción
+      - name: Deploy producciÃ³n
         if: github.event_name != 'pull_request'
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           projectId: ${{ vars.FIREBASE_PROJECT_ID }}
+          target: landing
           channelId: live

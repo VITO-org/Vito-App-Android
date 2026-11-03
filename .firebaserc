@@ -1,0 +1,12 @@
+{
+  "projects": {
+    "default": "vito-39dda"
+  },
+  "targets": {
+    "vito-39dda": {
+      "hosting": {
+        "landing": ["vito-app-project"]
+      }
+    }
+  }
+}
