@@ -48,24 +48,10 @@
   }
 
   /* ----------------------------------------------------------------------
-     CTA de descarga
+     CTA de disponibilidad
+     La landing no ofrece descarga mientras la app esté en beta cerrada.
+     Para habilitarla, ver "Acceso anticipado" en README.md.
      ---------------------------------------------------------------------- */
-  var downloadUrl = config.downloadUrl;
-  if (downloadUrl) {
-    document.querySelectorAll('[data-download]').forEach(function (link) {
-      link.setAttribute('href', downloadUrl);
-      link.setAttribute('rel', 'noopener');
-    });
-  }
-
-  var repoUrl = config.repoUrl;
-  if (repoUrl) {
-    document
-      .querySelectorAll('[data-repo]')
-      .forEach(function (link) {
-        link.setAttribute('href', repoUrl);
-      });
-  }
 
   /* ----------------------------------------------------------------------
      Año del footer

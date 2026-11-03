@@ -15,7 +15,7 @@ landing/
 ├── index.html          # Página completa (una sola página con anclas)
 ├── styles.css          # Identidad visual y responsive
 ├── script.js           # Menú móvil, novedades y animaciones
-├── config.js           # URL de descarga y fallback de releases
+├── config.js           # Fallback de releases y config del CTA
 ├── releases.json       # Versión actual + historial (fuente de "Novedades")
 ├── favicon.svg
 └── assets/             # Derivados optimizados de src/assets/icons/
@@ -135,8 +135,7 @@ La landing se actualiza **en la rama `landing`**, no en `dev`.
 1. Actualizá `landing/releases.json` con la versión y las novedades.
 2. Actualizá `releasesFallback` en `landing/config.js` con los mismos datos
    (es el respaldo cuando no hay servidor).
-3. Si cambió el canal de descarga, ajustá `downloadUrl` en `config.js`.
-4. Commit y push a `landing`.
+3. Commit y push a `landing`.
 
 ```powershell
 git checkout landing
@@ -164,6 +163,51 @@ git push origin landing
 
 Si solo querés las novedades (sin arrastrar código de la app), editá
 `releases.json` a mano y evitá el merge.
+
+## Acceso anticipado (pendiente)
+
+Hoy la landing **no ofrece descarga**: el CTA es un botón deshabilitado
+("Próximamente en Play Store") y no hay enlaces al repositorio ni al APK.
+Motivo: la app sigue en beta cerrada y las bases de datos son de prueba.
+
+Cuando quieras abrir el acceso de a poco, la alternativa planificada es una
+**lista de espera**. Pasos:
+
+1. Crear un formulario (Google Forms, Tally o Formspree) que pida nombre,
+   email y modelo de teléfono.
+2. Agregar la URL en `config.js`:
+
+   ```js
+   waitlistUrl: 'https://forms.gle/...',
+   ```
+
+3. En `index.html`, reemplazar el botón deshabilitado por un enlace:
+
+   ```html
+   <a class="btn btn-primary" data-waitlist href="#">Quiero probarla</a>
+   ```
+
+4. En `script.js`, dentro del bloque "CTA de disponibilidad", hidratar el
+   enlace:
+
+   ```js
+   if (config.waitlistUrl) {
+     document.querySelectorAll('[data-waitlist]').forEach(function (link) {
+       link.setAttribute('href', config.waitlistUrl);
+       link.setAttribute('rel', 'noopener');
+     });
+   }
+   ```
+
+5. Ajustar el copy: "Muy pronto en Android" → "Acceso anticipado", y la nota
+   del hero a "Beta cerrada · acceso por invitación".
+6. Invitar de a uno y compartir el APK por **link privado** (release de GitHub
+   marcada como *pre-release*). No volver a enlazar el APK desde la landing.
+
+Cuando la app esté en Play Store, el último paso es reemplazar `waitlistUrl`
+por `storeUrl` y apuntar el botón ahí. Si la lista de espera no se implementa,
+alcanza con cambiar el botón deshabilitado por un enlace directo a la ficha
+de Play Store.
 
 ## Pull requests
 

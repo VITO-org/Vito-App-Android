@@ -1,18 +1,16 @@
 /**
  * Configuración editable de la landing.
  *
- * Para actualizar el destino del botón de descarga sin tocar el HTML,
- * cambiá `downloadUrl`. Cuando exista ficha en Play Store, apuntala acá.
+ * La landing NO ofrece descarga mientras la app esté en beta cerrada: el CTA
+ * es un botón deshabilitado ("Próximamente en Play Store"). Cuando exista una
+ * lista de espera o la ficha de Play Store, el destino se configura acá.
+ * Ver "Acceso anticipado" en README.md para el paso a paso.
  *
  * `releasesFallback` se usa cuando `releases.json` no puede leerse
  * (por ejemplo al abrir `index.html` con file://). Mantenelo en sincronía
  * con `releases.json` al publicar una release.
  */
 window.VITO_CONFIG = {
-  downloadUrl: 'https://github.com/VITO-org/Vito-App-Android/releases/latest',
-  repoUrl: 'https://github.com/VITO-org/Vito-App-Android',
-  changelogUrl:
-    'https://github.com/VITO-org/Vito-App-Android/blob/main/CHANGELOG.md',
   releasesFallback: {
     current: '1.2.2',
     releasedAt: '2026-10-27',
