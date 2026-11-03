@@ -5,7 +5,7 @@
   "targets": {
     "vito-39dda": {
       "hosting": {
-        "landing": ["vito-app-project"]
+        "landing": ["vito-oficial"]
       }
     }
   }
