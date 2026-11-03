@@ -31,11 +31,14 @@ derivados antes de tocar el HTML.
 
 | Derivado | Origen | Uso |
 |---|---|---|
-| `vito-avatar-96.png` | `VITO-Completo.png` | Nav y footer |
+| `vito-avatar-96.png` | `VITO-Completo.png` | Nav, footer y cabecera del chat |
 | `vito-avatar-480.png` | `VITO-Completo.png` | Hero |
-| `vittito-360.png` | `ic-vito-personaje.png` | Sección Vittito |
 | `vito-peek-1200.png` | `VITO-borde-inferior.png` | CTA final |
 | `*-96.png` | `ic-*.png` | Iconos de signos y capacidades |
+
+> **Vittito es Vito**: el asistente no tiene un personaje aparte. La sección
+> Vittito es un mockup de conversación y usa `vito-avatar-96.png` en la cabecera
+> del chat. No hay asset propio de Vittito.
 
 ## Ver la landing en local
 

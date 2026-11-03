@@ -167,7 +167,7 @@
     document.documentElement.classList.contains('js')
   ) {
     var targets = document.querySelectorAll(
-      '.section-head, .card, .feature, .vital, .release, .vittito-copy, .vittito-visual, .cta-inner'
+      '.section-head, .card, .feature, .vital, .release, .vittito-copy, .chat, .cta-inner'
     );
 
     var observer = new IntersectionObserver(

@@ -701,15 +701,110 @@ code {
   max-width: 52ch;
 }
 
-.vittito-visual {
-  display: grid;
-  place-items: center;
+.chat {
+  width: 100%;
+  max-width: 430px;
+  margin: 0 auto;
+  padding: 20px;
+  text-align: left;
+  background: rgba(4, 33, 28, 0.42);
+  border: 1px solid rgba(123, 201, 154, 0.28);
+  border-radius: 26px;
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
-.vittito-visual img {
-  width: min(300px, 82%);
-  filter: drop-shadow(0 24px 48px rgba(0, 0, 0, 0.35));
-  animation: float 8s ease-in-out infinite;
+.chat-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 14px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid rgba(234, 248, 239, 0.14);
+}
+
+.chat-head img {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+}
+
+.chat-id {
+  display: grid;
+  line-height: 1.25;
+}
+
+.chat-id strong {
+  color: #ffffff;
+  font-size: 0.95rem;
+}
+
+.chat-id span {
+  font-size: 0.74rem;
+  color: rgba(234, 248, 239, 0.6);
+}
+
+.chat-status {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--green-soft);
+}
+
+.chat-status::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 8px var(--green);
+}
+
+.chat-body {
+  display: grid;
+  gap: 10px;
+}
+
+.msg {
+  max-width: 90%;
+  margin: 0;
+  padding: 11px 15px;
+  border-radius: 16px;
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.msg--user {
+  justify-self: end;
+  background: var(--green);
+  color: #04211c;
+  font-weight: 600;
+  border-bottom-right-radius: 6px;
+}
+
+.msg--bot {
+  justify-self: start;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(234, 248, 239, 0.08);
+  color: #eaf8ef;
+  border-bottom-left-radius: 6px;
+}
+
+.msg--bot strong {
+  color: #ffffff;
+}
+
+.chat-foot {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(234, 248, 239, 0.14);
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: rgba(234, 248, 239, 0.55);
 }
 
 .chat-chips {
