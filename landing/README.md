@@ -98,10 +98,7 @@ workflow.
 ### 4. Primer deploy
 
 Push a `landing`. El workflow `Deploy Landing (Firebase)` publica el contenido
-de `landing/` en el canal `live` del sitio default.
-
-> `vercel.json` y el proyecto de Vercel se mantienen como respaldo hasta
-> verificar el primer deploy en Firebase. Una vez confirmado, se eliminan.
+de `landing/` en el canal `live` del sitio `vito-oficial`.
 
 ### Dominio y metadatos
 
