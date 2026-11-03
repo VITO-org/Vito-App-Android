@@ -123,10 +123,12 @@ GitHub App no tiene acceso al repo.
 
 ### 7. Dominio y metadatos
 
-El HTML asume `https://vito-landing.vercel.app/` en `<link rel="canonical">`,
-`og:url`, `og:image` y `twitter:image`. Cuando definas el dominio real (o el
-nombre del proyecto en Vercel), actualizá esas cuatro URLs en
-`landing/index.html`. Un canonical incorrecto perjudica el SEO.
+El HTML apunta a `https://vito-landing-orcin.vercel.app/` (el alias de
+producción que asigna Vercel) en `<link rel="canonical">`, `og:url`,
+`og:image` y `twitter:image`. Cuando definas un dominio propio, actualizá esas
+cuatro URLs en `landing/index.html`. Un canonical incorrecto perjudica el SEO.
+
+> `vito-landing.vercel.app` pertenece a otro proyecto. No usar ese dominio.
 
 ## Actualizar por release
 
