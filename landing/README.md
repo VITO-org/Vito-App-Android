@@ -3,10 +3,9 @@
 Sitio público de presentación de Vito. Es una página estática: **HTML + CSS + JS
 vanilla, sin build step y sin dependencias npm**.
 
-Se publica en **Vercel** mediante GitHub Actions, desde la rama de larga vida
-`landing`. La rama a deployar está declarada en
-`.github/workflows/deploy-landing.yml`, así que no depende del selector de ramas
-del dashboard.
+Se publica en **Firebase Hosting** mediante GitHub Actions, desde la rama de
+larga vida `landing`. La configuración de hosting vive en `firebase.json`
+(`public: "landing"`) y el deploy en `.github/workflows/deploy-landing.yml`.
 
 ## Estructura
 
@@ -57,78 +56,59 @@ Luego abrí `http://localhost:3000` (serve) o `http://localhost:4173`.
 > `fetch()` sobre `file://`. En ese caso `script.js` usa el fallback de
 > `config.js` y las novedades se ven igual.
 
-## Publicar en Vercel (una sola vez)
+## Publicar en Firebase Hosting (una sola vez)
 
-### 1. Crear y pushear la rama
+### 1. Crear el proyecto y el sitio
 
-Vercel **no puede seleccionar una rama que no existe en el remoto**. Este es el
-motivo más común del problema "no puedo elegir la rama que quiero deployar".
+1. En [console.firebase.google.com](https://console.firebase.google.com) creá el
+   proyecto (o usá uno existente).
+2. **Build → Hosting → Comenzar**. Se crea el sitio default
+   `<project-id>.web.app`. Si la consola no lo crea, desde la CLI:
 
-```powershell
-git checkout -b landing
-git push -u origin landing
-```
+   ```powershell
+   npx --yes firebase-tools login
+   npx --yes firebase-tools hosting:sites:create <project-id> --project <project-id>
+   ```
 
-### 2. Verificar el acceso de la GitHub App
+3. Anotá el **Project ID** (⚙️ Project settings → General). No es el nombre
+   visible del proyecto.
 
-En GitHub: **Settings → Applications → Vercel → Repository Access**.
-El repositorio `VITO-org/Vito-App-Android` tiene que estar en la lista. Si no
-está, Vercel no ve ni las ramas ni los commits.
+> "Agregar app" (Apple/Android/Web) **no** crea un sitio de hosting: registra una
+> app para usar los SDKs de Firebase. Para una landing estática no hace falta.
 
-### 3. Crear el proyecto en Vercel
+### 2. Service account para GitHub Actions
 
-1. **Add New → Project → Import Git Repository** y elegí el repo.
-2. Configuración del proyecto:
-   - **Root Directory**: raíz del repositorio (dejar vacío / `./`).
-   - **Framework Preset**: `Other`.
-   - **Build Command**: vacío.
-   - **Output Directory**: `landing`.
-   - **Install Command**: vacío.
-3. Deploy inicial (puede hacerse desde el dashboard; el workflow lo reemplaza
-   después).
+1. [console.cloud.google.com](https://console.cloud.google.com) → el mismo
+   proyecto → **IAM & Admin → Service Accounts → Create service account**.
+2. Nombre `github-actions-hosting`, rol **Firebase Hosting Admin**.
+3. **Keys → Add key → Create new key → JSON** y descargá el archivo.
 
-> ¿Por qué la raíz y no `landing/`? Porque `vercel.json` vive en la raíz y
-> declara `outputDirectory: "landing"`. Si se configura `landing/` como Root
-> Directory, Vercel ignora ese `vercel.json` y busca otro dentro de la carpeta.
+### 3. Cargar secret y variable
 
-### 4. Obtener los IDs del proyecto
+En **Settings → Secrets and variables → Actions**:
 
-```powershell
-npx vercel link
-```
+| Tipo | Nombre | Valor |
+|---|---|---|
+| Secret | `FIREBASE_SERVICE_ACCOUNT` | JSON completo de la service account |
+| Variable | `FIREBASE_PROJECT_ID` | Project ID (`vito-xxxxx`) |
 
-Eso crea `.vercel/project.json` (ignorado por git) con `orgId` y `projectId`.
-También están en **Project Settings → General**.
+El Project ID no es secreto; va como variable para no hardcodearlo en el
+workflow.
 
-### 5. Cargar los secrets en GitHub
+### 4. Primer deploy
 
-En **Settings → Secrets and variables → Actions → New repository secret**:
+Push a `landing`. El workflow `Deploy Landing (Firebase)` publica el contenido
+de `landing/` en el canal `live` del sitio default.
 
-| Secret | Dónde se obtiene |
-|---|---|
-| `VERCEL_TOKEN` | Vercel → Account Settings → Tokens → Create |
-| `VERCEL_ORG_ID` | `orgId` de `.vercel/project.json` o Team Settings |
-| `VERCEL_PROJECT_ID` | `projectId` de `.vercel/project.json` |
+> `vercel.json` y el proyecto de Vercel se mantienen como respaldo hasta
+> verificar el primer deploy en Firebase. Una vez confirmado, se eliminan.
 
-Nunca commitees estos valores.
+### Dominio y metadatos
 
-### 6. (Opcional) Production Branch en el dashboard
-El workflow ya fuerza `--prod` cuando la rama es `landing`, pero para que el
-dashboard muestre el entorno correcto:
-
-**Settings → Environments → Production → Branch Tracking** → `landing`.
-
-Si el desplegable no muestra la rama, es porque el paso 1 no se hizo o la
-GitHub App no tiene acceso al repo.
-
-### 7. Dominio y metadatos
-
-El HTML apunta a `https://vito-landing-orcin.vercel.app/` (el alias de
-producción que asigna Vercel) en `<link rel="canonical">`, `og:url`,
-`og:image` y `twitter:image`. Cuando definas un dominio propio, actualizá esas
-cuatro URLs en `landing/index.html`. Un canonical incorrecto perjudica el SEO.
-
-> `vito-landing.vercel.app` pertenece a otro proyecto. No usar ese dominio.
+El sitio queda en `https://<project-id>.web.app`. Actualizá `canonical`,
+`og:url`, `og:image` y `twitter:image` en `landing/index.html` con esa URL. Para
+un dominio propio: **Hosting → Add custom domain** y seguí los registros DNS que
+indique Firebase (SSL incluido).
 
 ## Actualizar por release
 
@@ -150,7 +130,7 @@ git commit -m "docs(landing): novedades de la vX.Y.Z"
 git push origin landing
 ```
 
-El push dispara `Deploy Landing (Vercel)` y publica en producción.
+El push dispara `Deploy Landing (Firebase)` y publica en el canal `live`.
 
 ### Sincronizar con la app
 
@@ -213,23 +193,26 @@ de Play Store.
 
 ## Pull requests
 
-Un PR hacia `landing` que toque `landing/**` o `vercel.json` genera un
-**Preview Deployment** y comenta la URL en el PR. Los PR desde forks se omiten
-porque no reciben secrets.
+Un PR hacia `landing` que toque `landing/**` o `firebase.json` crea un **canal
+de preview** de Firebase (expira a los 7 días) y comenta la URL en el PR. Los PR
+desde forks se omiten porque no reciben secrets.
 
-## Límites de Vercel a tener en cuenta
+## Límites de Firebase Hosting a tener en cuenta
 
-- **Hobby**: 200 proyectos, 100 deployments por día, **1 deployment
-  concurrente**. Los builds en exceso se encolan, no fallan.
-- Un sitio estático sin framework **no consume minutos de build**.
-- Hobby es para uso personal/no comercial.
+- **Plan Spark (gratis)**: 10 GB de storage y 360 MB/día de transferencia,
+  **por proyecto** (no por sitio). Alcanza para ~12.000 visitas/mes de esta
+  landing.
+- Si se supera la transferencia, los sitios se deshabilitan hasta el mes
+  siguiente.
+- Dominios propios con SSL y hasta 36 sitios por proyecto, sin tarjeta.
+- Los deploys son estáticos: no consumen build minutes.
 
 ## Troubleshooting
 
 | Síntoma | Causa probable | Solución |
 |---|---|---|
-| La rama no aparece en Vercel | No existe en el remoto | `git push -u origin landing` |
-| El workflow falla en `vercel pull` | Falta un secret o el token expiró | Regenerar `VERCEL_TOKEN` y los IDs |
-| El deploy publica una página 404 | Output Directory mal configurado | Debe ser `landing` con Root Directory en la raíz |
-| El workflow no se dispara | El push no tocó `landing/**` ni `vercel.json` | Verificar `paths` del workflow |
+| El workflow falla en "Verificar configuración" | Falta `FIREBASE_SERVICE_ACCOUNT` o `FIREBASE_PROJECT_ID` | Cargarlos en Settings → Secrets and variables → Actions |
+| El deploy publica una página 404 | `public` mal configurado en `firebase.json` | Debe ser `"landing"` |
+| Firebase responde "site not found" | El sitio default no existe todavía | `firebase hosting:sites:create <project-id> --project <project-id>` |
+| El workflow no se dispara | El push no tocó `landing/**` ni `firebase.json` | Verificar `paths` del workflow |
 | `fetch('releases.json')` falla en local | `file://` bloquea fetch | Usar un servidor estático (ver arriba) |

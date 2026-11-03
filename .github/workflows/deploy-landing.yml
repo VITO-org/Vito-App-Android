@@ -1,21 +1,21 @@
-name: Deploy Landing (Vercel)
+name: Deploy Landing (Firebase)
 
-# La rama a publicar queda declarada acá, no en el dashboard de Vercel.
-# Producción: push a `landing` → deployment de producción.
-# Previews: pull request hacia `landing` → deployment de preview con URL propia.
+# Producción: push a `landing` → canal `live`.
+# Previews: pull request hacia `landing` → canal temporal con URL propia.
+# La configuración de hosting vive en `firebase.json` (raíz, public: "landing").
 
 on:
   push:
     branches: [landing]
     paths:
       - "landing/**"
-      - "vercel.json"
+      - "firebase.json"
       - ".github/workflows/deploy-landing.yml"
   pull_request:
     branches: [landing]
     paths:
       - "landing/**"
-      - "vercel.json"
+      - "firebase.json"
   workflow_dispatch:
 
 concurrency:
@@ -28,68 +28,50 @@ permissions:
 
 jobs:
   deploy:
-    name: Build y deploy
+    name: Deploy a Firebase Hosting
     runs-on: ubuntu-latest
     # Los PR desde forks no reciben secrets: se omiten en vez de fallar.
     if: >-
       github.event_name != 'pull_request' ||
       github.event.pull_request.head.repo.full_name == github.repository
-    env:
-      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      - name: Instalar Vercel CLI
-        run: npm install --global vercel@latest
-
-      - name: Definir entorno de deploy
-        id: env
+      # Fail-fast con mensaje claro en vez de un error opaco del CLI.
+      - name: Verificar configuración de Firebase
+        env:
+          PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
+          SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
-          if [ "${GITHUB_REF}" = "refs/heads/landing" ]; then
-            echo "target=production" >> "$GITHUB_OUTPUT"
-            echo "flag=--prod" >> "$GITHUB_OUTPUT"
-          else
-            echo "target=preview" >> "$GITHUB_OUTPUT"
-            echo "flag=" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          if [ -z "${PROJECT_ID}" ]; then
+            echo "::error::Falta la variable de repositorio FIREBASE_PROJECT_ID (Settings > Secrets and variables > Actions > Variables)."
+            exit 1
           fi
-
-      - name: Vercel pull
-        run: vercel pull --yes --environment=${{ steps.env.outputs.target }} --token=${{ secrets.VERCEL_TOKEN }}
-
-      - name: Vercel build
-        run: vercel build ${{ steps.env.outputs.flag }} --token=${{ secrets.VERCEL_TOKEN }}
-
-      - name: Deploy
-        id: deploy
-        run: |
-          if [ "${GITHUB_REF}" = "refs/heads/landing" ]; then
-            url=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})
-          else
-            url=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }})
+          if [ -z "${SERVICE_ACCOUNT}" ]; then
+            echo "::error::Falta el secret FIREBASE_SERVICE_ACCOUNT (JSON de la service account)."
+            exit 1
           fi
-          echo "url=${url}" >> "$GITHUB_OUTPUT"
-          {
-            echo "### Landing publicada"
-            echo ""
-            echo "${url}"
-          } >> "$GITHUB_STEP_SUMMARY"
+          test -f landing/index.html
+          test -f firebase.json
+          echo "Configuración presente."
 
-      - name: Comentar la URL del preview en el PR
+      - name: Deploy preview (PR)
         if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+        uses: FirebaseExtended/action-hosting-deploy@v0
         with:
-          script: |
-            const url = '${{ steps.deploy.outputs.url }}';
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: `Preview de la landing: ${url}`
-            });
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: ${{ vars.FIREBASE_PROJECT_ID }}
+          channelId: pr-${{ github.event.number }}
+          expires: 7d
+
+      - name: Deploy producción
+        if: github.event_name != 'pull_request'
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: ${{ vars.FIREBASE_PROJECT_ID }}
+          channelId: live
