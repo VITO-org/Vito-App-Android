@@ -111,6 +111,17 @@ Actualizá `canonical`, `og:url`, `og:image` y `twitter:image` en
 `landing/index.html` con esa URL. Para un dominio propio: **Hosting → Add
 custom domain** y seguí los registros DNS que indique Firebase (SSL incluido).
 
+### Redirección del sitio default
+
+El sitio default `<project-id>.web.app` no se puede borrar. Para que no sirva
+contenido viejo, `firebase.redirect.json` lo convierte en un 301 hacia
+`vito-oficial.web.app` (página de respaldo en `hosting-redirect/`). Se publica
+**una sola vez**, a mano; el workflow no lo toca:
+
+```powershell
+npx --yes firebase-tools deploy --only hosting:default-site --config firebase.redirect.json --project vito-39dda
+```
+
 ## Actualizar por release
 
 La landing se actualiza **en la rama `landing`**, no en `dev`.
