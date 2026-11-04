@@ -20,15 +20,15 @@ vault_scope: local
 # RB — Publicación y reversión del dashboard de alertas (panel QA)
 
 Runbook operativo para publicar y revertir el panel QA de alertas
-(`vito-alert-dashboard/`, rama `test` → GitHub Pages).
+(`vito-alert-dashboard/`, rama `test` → Firebase Hosting).
 
-## 0. Estado al 2026-10-20 (verificado)
+## 0. Estado al 2026-11-03 (verificado)
 
 | Dato | Valor |
 |---|---|
-| URL pública | `https://vito-org.github.io/Vito-App-Android/` |
-| Rama de código | `test` (HEAD `5227e5a` — "deploy a Pages con .env del repo (demo)") |
-| Rama publicada | `origin/gh-pages` (`beba335`, deploy de `5227e5a`) |
+| URL pública | `https://vito-panel-admin.web.app` |
+| Rama de código | `test` |
+| Sitio Firebase | `vito-panel-admin` (target `panel` en `.firebaserc`) |
 | Workflow | `.github/workflows/deploy-panel.yml` (push a `test`) |
 | Proyecto Supabase | `rkgbedehkfpiylaubjbo` (el mismo que usa la app) |
 | Credencial en el bundle | `sb_publishable_…` inlineada por Vite |
@@ -162,7 +162,7 @@ Después:
 gh secret set VITE_SUPABASE_ANON_KEY --repo VITO-org/Vito-App-Android
 ```
 
-### Paso 6 — Mergear a `test` y dejar que Pages despliegue
+### Paso 6 — Mergear a `test` y dejar que Firebase despliegue
 
 ```bash
 git checkout test
@@ -193,22 +193,26 @@ done
 # WHERE 'anon' = ANY(roles);
 
 # 3. El bundle publicado tiene una sola credencial
-git fetch origin gh-pages
-git show origin/gh-pages:index.html          # referencia al bundle
-git show origin/gh-pages:assets/index-*.js | grep -oE 'sb_publishable_[A-Za-z0-9_-]{10,}' | sort -u
+curl -s https://vito-panel-admin.web.app/ | grep -oE 'assets/index-[^"]+\.js'
+# y sobre ese asset:
+curl -s https://vito-panel-admin.web.app/assets/<hash>.js | grep -oE 'sb_publishable_[A-Za-z0-9_-]{10,}' | sort -u
 ```
 
 ## 4. Reversión
 
-### 4.1 Revertir el deploy de Pages
+### 4.1 Revertir el deploy del panel
+
+Firebase guarda el historial de versiones:
+
+1. [Firebase Console](https://console.firebase.google.com/project/vito-39dda/hosting/sites/vito-panel-admin)
+   → **Hosting** → sitio `vito-panel-admin` → **Release history**.
+2. Elegí la versión anterior → **Rollback**.
+
+También sirve revertir el commit en `test` y dejar que el workflow redeploye:
 
 ```bash
-git log --oneline origin/gh-pages | head -5      # commits publicados
-git push origin <commit-anterior>:gh-pages --force
+git revert <commit> && git push origin test
 ```
-
-O, desde GitHub: Settings → Pages → "Deploy from a branch" → elegir el
-commit anterior.
 
 ### 4.2 Revertir las policies (dejar el acceso anónimo como estaba)
 

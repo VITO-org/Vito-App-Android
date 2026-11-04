@@ -36,6 +36,7 @@ const TOKEN_TTL_MS = 8 * 60 * 60 * 1000;
 
 /** Origenes permitidos para CORS (el panel publicado + dev local). */
 const ORIGENES_PERMITIDOS = [
+  "https://vito-panel-admin.web.app",
   "https://vito-org.github.io",
   "http://localhost:5173",
   "http://127.0.0.1:5173",
