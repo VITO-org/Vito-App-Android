@@ -1,22 +1,29 @@
-name: Deploy panel-admin a Pages
+name: Deploy panel-admin (Firebase)
+
+# El panel vive en la rama `test`. Cada push que toque el panel se compila
+# y se publica en el sitio `vito-panel-admin` de Firebase Hosting.
 
 on:
   push:
     branches: [test]
     paths:
       - 'vito-alert-dashboard/**'
+      - 'firebase.json'
+      - '.firebaserc'
       - '.github/workflows/deploy-panel.yml'
+  workflow_dispatch:
 
-# Un solo deploy a la vez: evita que dos pushes se pisen el artefacto de Pages.
+# Un solo deploy a la vez: evita que dos pushes se pisen.
 concurrency:
-  group: pages-panel-alertas
+  group: deploy-panel-firebase
   cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   build-deploy:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -24,27 +31,31 @@ jobs:
         with:
           node-version: 20
 
-      # Las credenciales NO viajan en el repo: se leen de secrets.
-      # Si falta alguna el deploy falla acá (fail-fast), en vez de publicar
-      # un bundle roto.
-      - name: Verificar credenciales en secrets
+      # Fail-fast: sin credenciales el bundle sale roto y el deploy no sirve.
+      - name: Verificar credenciales y configuracion
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_PROFILES_TABLE: ${{ secrets.VITE_PROFILES_TABLE }}
+          PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
+          SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
           set -euo pipefail
           faltan=()
           [ -n "${VITE_SUPABASE_URL}" ] || faltan+=("VITE_SUPABASE_URL")
           [ -n "${VITE_SUPABASE_ANON_KEY}" ] || faltan+=("VITE_SUPABASE_ANON_KEY")
           [ -n "${VITE_PROFILES_TABLE}" ] || faltan+=("VITE_PROFILES_TABLE")
+          [ -n "${PROJECT_ID}" ] || faltan+=("FIREBASE_PROJECT_ID (variable)")
+          [ -n "${SERVICE_ACCOUNT}" ] || faltan+=("FIREBASE_SERVICE_ACCOUNT (secret)")
           if [ "${#faltan[@]}" -gt 0 ]; then
-            echo "::error::Faltan secrets de Actions: ${faltan[*]}. Configuralos en Settings > Secrets and variables > Actions."
+            echo "::error::Faltan: ${faltan[*]}. Configuralos en Settings > Secrets and variables > Actions."
             exit 1
           fi
-          echo "Credenciales presentes en secrets."
+          test -f firebase.json
+          test -f .firebaserc
+          echo "Configuracion presente."
 
-      # .env efímero en el runner. Nunca se commitea: el repo ya no lo tiene.
+      # .env efimero en el runner. Nunca se commitea: el repo ya no lo tiene.
       - name: Generar .env efimero desde secrets
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
@@ -92,7 +103,11 @@ jobs:
           fi
           echo "OK: el bundle contiene exactamente la credencial de secrets."
 
-      - uses: peaceiris/actions-gh-pages@v4
+      - name: Deploy a Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./vito-alert-dashboard/dist
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: ${{ vars.FIREBASE_PROJECT_ID }}
+          target: panel
+          channelId: live

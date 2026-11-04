@@ -53,3 +53,8 @@ ml-trainer/models/
 
 *.deb
 *.apk
+
+# Firebase
+.firebase/
+firebase-debug.log
+serviceAccount*.json

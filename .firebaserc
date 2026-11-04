@@ -1,0 +1,12 @@
+{
+  "projects": {
+    "default": "vito-39dda"
+  },
+  "targets": {
+    "vito-39dda": {
+      "hosting": {
+        "panel": ["vito-panel-admin"]
+      }
+    }
+  }
+}

@@ -1,8 +1,8 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-// base relativa: se sirve desde subruta de GitHub Pages.
+// Se sirve desde la raíz del sitio de Firebase Hosting.
 export default defineConfig({
   plugins: [react()],
-  base: './',
+  base: '/',
 });

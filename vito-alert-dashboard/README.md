@@ -10,17 +10,19 @@ inspeccionar el delivery log y el horario silencioso.
 
 ## Publicación
 
-El dashboard se publica en GitHub Pages desde la rama `test`:
+El dashboard se publica en Firebase Hosting desde la rama `test`:
 
 | Pieza | Dónde |
 |---|---|
-| URL pública | `https://vito-org.github.io/Vito-App-Android/` |
+| URL pública | `https://vito-panel-admin.web.app` |
 | Código | `vito-alert-dashboard/` (rama `test`) |
 | Deploy | `.github/workflows/deploy-panel.yml` (push a `test`) |
-| Artefacto | rama `gh-pages` (`origin/gh-pages`) |
+| Config | `firebase.json` + `.firebaserc` (target `panel`) |
+| Credenciales | secrets `VITE_SUPABASE_*` y `FIREBASE_SERVICE_ACCOUNT` |
 
-El deploy corre en cada push a `test` que toque `vito-alert-dashboard/**`
-o el propio workflow.
+El deploy corre en cada push a `test` que toque `vito-alert-dashboard/**`,
+`firebase.json`, `.firebaserc` o el propio workflow. El sitio es `noindex`
+y no se enlaza desde la landing.
 
 ## Acceso: el gate `panel-acceso`
 
