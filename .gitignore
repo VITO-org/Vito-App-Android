@@ -68,3 +68,8 @@ supabase/.temp/
 
 .vercel
 .env*
+
+# Firebase
+.firebase/
+firebase-debug.log
+serviceAccount*.json
